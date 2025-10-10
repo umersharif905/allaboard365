@@ -1,6 +1,8 @@
 const { getPool, sql } = require('../shared/db');
 const DimeService = require('../shared/dimeService');
 const { createLogger } = require('../shared/logger');
+const fs = require('fs');
+const path = require('path');
 
 /**
  * Monthly Payment Scheduler
@@ -21,6 +23,8 @@ module.exports = async function (context, myTimer) {
     updated: 0,
     unchanged: 0,
     failed: 0,
+    emailsSent: 0,
+    emailsFailed: 0,
     errors: []
   };
 
@@ -217,6 +221,131 @@ module.exports = async function (context, myTimer) {
             logger.success(`  Updated: $${group.CurrentAmount} → $${newAmount}`);
             results.updated++;
           }
+          
+          // Send invoice email
+          try {
+            logger.info(`  Sending invoice email...`);
+            
+            // Get enrollment details for the invoice
+            const enrollmentsQuery = `
+              SELECT 
+                m.FirstName + ' ' + m.LastName as MemberName,
+                p.Name as ProductName,
+                e.PremiumAmount
+              FROM oe.Enrollments e
+              INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+              INNER JOIN oe.Products p ON e.ProductId = p.ProductId
+              WHERE e.GroupId = @groupId
+                AND e.Status = 'Active'
+                AND e.EffectiveDate <= @billingDate
+                AND (e.TerminationDate IS NULL OR e.TerminationDate > @billingDate)
+              ORDER BY m.LastName, m.FirstName
+            `;
+            
+            const enrollmentsResult = await pool.request()
+              .input('groupId', sql.UniqueIdentifier, group.GroupId)
+              .input('billingDate', sql.DateTime2, billingDate)
+              .query(enrollmentsQuery);
+            
+            // Build enrollment list HTML
+            let enrollmentListHtml = '';
+            if (enrollmentsResult.recordset.length > 0) {
+              enrollmentsResult.recordset.forEach(enrollment => {
+                enrollmentListHtml += `
+                  <tr>
+                    <td style="padding:12px;border-bottom:1px solid #e9ecef;font-size:14px;color:#333333;">
+                      ${enrollment.MemberName}
+                    </td>
+                    <td style="padding:12px;border-bottom:1px solid #e9ecef;font-size:14px;color:#333333;">
+                      ${enrollment.ProductName}
+                    </td>
+                    <td style="padding:12px;border-bottom:1px solid #e9ecef;font-size:14px;color:#333333;text-align:right;">
+                      $${parseFloat(enrollment.PremiumAmount).toFixed(2)}
+                    </td>
+                  </tr>
+                `;
+              });
+            } else {
+              enrollmentListHtml = `
+                <tr>
+                  <td colspan="3" style="padding:12px;text-align:center;color:#666666;font-size:14px;">
+                    No detailed enrollment information available
+                  </td>
+                </tr>
+              `;
+            }
+            
+            // Get tenant info
+            const tenantQuery = `
+              SELECT TenantId FROM oe.Groups WHERE GroupId = @groupId
+            `;
+            const tenantResult = await pool.request()
+              .input('groupId', sql.UniqueIdentifier, group.GroupId)
+              .query(tenantQuery);
+            const tenantId = tenantResult.recordset[0]?.TenantId;
+            
+            // Load and process email template
+            const templatePath = path.join(__dirname, '..', '..', 'backend', 'templates', 'emails', 'monthly-invoice.html');
+            let emailHtml = fs.readFileSync(templatePath, 'utf8');
+            
+            // Format dates and currency
+            const formatDate = (date) => new Date(date).toLocaleDateString('en-US', {
+              year: 'numeric',
+              month: 'long',
+              day: 'numeric'
+            });
+            
+            // Replace template variables
+            const variables = {
+              groupName: group.GroupName,
+              contactName: group.PrimaryContact.split(' ')[0],
+              totalAmount: `$${parseFloat(newAmount).toFixed(2)}`,
+              enrollmentCount: activeEnrollmentCount.toString(),
+              billingDate: formatDate(billingDate),
+              nextBillingDate: formatDate(nextBillingDate),
+              currentYear: new Date().getFullYear().toString(),
+              enrollmentList: enrollmentListHtml
+            };
+            
+            // Simple template processing
+            Object.keys(variables).forEach(key => {
+              const regex = new RegExp(`\\{\\{${key}\\}\\}`, 'g');
+              emailHtml = emailHtml.replace(regex, variables[key] || '');
+            });
+            
+            // Handle conditional blocks for enrollmentList
+            if (enrollmentListHtml) {
+              emailHtml = emailHtml.replace(/\{\{#enrollmentList\}\}([\s\S]*?)\{\{\/enrollmentList\}\}/g, '$1');
+            } else {
+              emailHtml = emailHtml.replace(/\{\{#enrollmentList\}\}[\s\S]*?\{\{\/enrollmentList\}\}/g, '');
+            }
+            
+            // Queue email in MessageQueue
+            const messageId = require('crypto').randomUUID();
+            await pool.request()
+              .input('messageId', sql.UniqueIdentifier, messageId)
+              .input('tenantId', sql.UniqueIdentifier, tenantId)
+              .input('recipientAddress', sql.NVarChar, group.ContactEmail)
+              .input('subject', sql.NVarChar, `Monthly Benefits Invoice - ${group.GroupName}`)
+              .input('body', sql.NVarChar, emailHtml)
+              .query(`
+                INSERT INTO oe.MessageQueue (
+                  MessageId, TenantId, MessageType, RecipientAddress, 
+                  Subject, Body, Status, RetryCount, CreatedDate, CreatedBy
+                ) VALUES (
+                  @messageId, @tenantId, 'Email', @recipientAddress,
+                  @subject, @body, 'Pending', 0, GETUTCDATE(), 
+                  '00000000-0000-0000-0000-000000000000'
+                )
+              `);
+            
+            logger.success(`  Invoice email queued: ${messageId}`);
+            results.emailsSent++;
+          } catch (emailError) {
+            logger.error(`  Failed to send invoice email: ${emailError.message}`);
+            results.emailsFailed++;
+            // Don't fail the whole process if email fails
+          }
         } else {
           logger.error(`  Failed to create schedule: ${newSchedule.error.message}`);
           results.failed++;
@@ -244,6 +373,8 @@ module.exports = async function (context, myTimer) {
     logger.success(`Updated: ${results.updated} groups`);
     logger.info(`Unchanged: ${results.unchanged} groups`);
     logger.error(`Failed: ${results.failed} groups`);
+    logger.success(`Emails Sent: ${results.emailsSent}`);
+    logger.error(`Emails Failed: ${results.emailsFailed}`);
     
     if (results.errors.length > 0) {
       logger.subsection('Errors');
