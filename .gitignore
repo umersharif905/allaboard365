@@ -6,3 +6,6 @@ local.settings.json
 bin/
 obj/
 
+# Test output files
+tests/test-invoice-output.html
+
