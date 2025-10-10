@@ -2,7 +2,6 @@
   "name": "oe-payment-manager",
   "version": "1.0.0",
   "description": "Azure Functions for OpenEnroll group payment processing",
-  "main": "index.js",
   "scripts": {
     "start": "func start",
     "deploy": "func azure functionapp publish open-enroll-payment-manager",

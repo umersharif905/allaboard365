@@ -186,12 +186,11 @@ module.exports = async function (context, myTimer) {
         if (newSchedule.success) {
           logger.success(`  Created new schedule: ${newSchedule.scheduleId}`);
           
-          // Deactivate old schedules in database
+          // Delete ALL existing schedules for this group (cleaner than update)
           await pool.request()
             .input('groupId', sql.UniqueIdentifier, group.GroupId)
             .query(`
-              UPDATE oe.GroupRecurringPaymentPlans 
-              SET IsActive = 0, ModifiedDate = GETUTCDATE()
+              DELETE FROM oe.GroupRecurringPaymentPlans 
               WHERE GroupId = @groupId
             `);
           

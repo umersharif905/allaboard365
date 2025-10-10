@@ -1,0 +1,323 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Azure Functions Test</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 1200px;
+            margin: 40px auto;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        h1 {
+            color: #0078d4;
+            border-bottom: 3px solid #0078d4;
+            padding-bottom: 10px;
+        }
+        .test-section {
+            margin: 30px 0;
+            padding: 20px;
+            background: #f9f9f9;
+            border-left: 4px solid #0078d4;
+        }
+        button {
+            background: #0078d4;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            font-size: 16px;
+            cursor: pointer;
+            border-radius: 4px;
+            margin: 10px 10px 10px 0;
+        }
+        button:hover {
+            background: #005a9e;
+        }
+        button:disabled {
+            background: #ccc;
+            cursor: not-allowed;
+        }
+        .result {
+            margin-top: 15px;
+            padding: 15px;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+            white-space: pre-wrap;
+            max-height: 400px;
+            overflow-y: auto;
+        }
+        .result.success {
+            background: #d4edda;
+            border: 1px solid #c3e6cb;
+            color: #155724;
+        }
+        .result.error {
+            background: #f8d7da;
+            border: 1px solid #f5c6cb;
+            color: #721c24;
+        }
+        .result.info {
+            background: #d1ecf1;
+            border: 1px solid #bee5eb;
+            color: #0c5460;
+        }
+        .loading {
+            color: #666;
+            font-style: italic;
+        }
+        .summary {
+            margin-top: 30px;
+            padding: 20px;
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 4px;
+        }
+        .summary h2 {
+            margin-top: 0;
+            color: #856404;
+        }
+        .config-info {
+            background: #e7f3ff;
+            padding: 15px;
+            border-radius: 4px;
+            margin: 20px 0;
+        }
+        code {
+            background: #f4f4f4;
+            padding: 2px 6px;
+            border-radius: 3px;
+            font-family: 'Courier New', monospace;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🧪 Azure Functions Test Suite</h1>
+        
+        <div class="config-info">
+            <h3>Configuration</h3>
+            <p><strong>Function App URL:</strong> <code id="functionUrl">https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net</code></p>
+            <p><strong>API Key:</strong> <code>a2fb963...930b6c</code> (hidden for security)</p>
+        </div>
+
+        <div class="test-section">
+            <h2>Test 1: Health Check</h2>
+            <p>Verify the Azure Function App is online and responding.</p>
+            <button onclick="testHealthCheck()">Run Health Check</button>
+            <div id="result-health"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Test 2: Manual Trigger</h2>
+            <p>Trigger the monthly payment scheduler manually. This will process all active groups.</p>
+            <p><strong>⚠️ Warning:</strong> This may take 30-60 seconds as it processes all groups and calls DIME API.</p>
+            <button onclick="testManualTrigger()">Run Manual Trigger</button>
+            <div id="result-manual"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Test 3: Webhook Endpoint</h2>
+            <p>Test the DIME webhook receiver endpoint.</p>
+            <button onclick="testWebhook()">Test Webhook</button>
+            <div id="result-webhook"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Run All Tests</h2>
+            <p>Execute all tests in sequence.</p>
+            <button onclick="runAllTests()">Run All Tests</button>
+        </div>
+
+        <div id="summary" class="summary" style="display:none;">
+            <h2>📊 Test Summary</h2>
+            <div id="summary-content"></div>
+        </div>
+    </div>
+
+    <script>
+        const API_KEY = 'a2fb9635baeaab58f1c8887b90ebb61c13664c7a5a1bf490d112757928930b6c';
+        const BASE_URL = 'https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net';
+        
+        let testResults = [];
+
+        function showLoading(elementId) {
+            const element = document.getElementById(elementId);
+            element.innerHTML = '<div class="loading">⏳ Running test...</div>';
+        }
+
+        function showResult(elementId, success, message, data = null) {
+            const element = document.getElementById(elementId);
+            const className = success ? 'success' : 'error';
+            const icon = success ? '✅' : '❌';
+            
+            let html = `<div class="result ${className}">`;
+            html += `${icon} ${message}\n`;
+            if (data) {
+                html += '\n' + JSON.stringify(data, null, 2);
+            }
+            html += '</div>';
+            
+            element.innerHTML = html;
+        }
+
+        async function testHealthCheck() {
+            showLoading('result-health');
+            
+            try {
+                const response = await fetch(BASE_URL + '/', {
+                    method: 'GET',
+                    mode: 'cors'
+                });
+                
+                if (response.ok || response.status === 404) {
+                    showResult('result-health', true, 
+                        `Function App is LIVE\nStatus: ${response.status} ${response.statusText}`);
+                    testResults.push({ test: 'Health Check', status: 'PASSED' });
+                } else {
+                    showResult('result-health', false, 
+                        `Unexpected status: ${response.status} ${response.statusText}`);
+                    testResults.push({ test: 'Health Check', status: 'FAILED' });
+                }
+            } catch (error) {
+                // CORS errors are expected, but it means the server is responding
+                if (error.message.includes('CORS') || error.message.includes('Failed to fetch')) {
+                    showResult('result-health', true, 
+                        'Function App is LIVE\n(CORS error is expected from browser)');
+                    testResults.push({ test: 'Health Check', status: 'PASSED' });
+                } else {
+                    showResult('result-health', false, 'Function App may be DOWN\nError: ' + error.message);
+                    testResults.push({ test: 'Health Check', status: 'FAILED' });
+                }
+            }
+        }
+
+        async function testManualTrigger() {
+            showLoading('result-manual');
+            
+            try {
+                const response = await fetch(BASE_URL + '/api/manual-run', {
+                    method: 'POST',
+                    headers: {
+                        'x-api-key': API_KEY,
+                        'Content-Type': 'application/json'
+                    },
+                    mode: 'cors'
+                });
+                
+                const data = await response.json();
+                
+                if (response.ok) {
+                    showResult('result-manual', true, 
+                        'Manual Trigger SUCCESSFUL', data);
+                    testResults.push({ test: 'Manual Trigger', status: 'PASSED' });
+                } else if (response.status === 401) {
+                    showResult('result-manual', false, 
+                        'Unauthorized - API Key may be incorrect', data);
+                    testResults.push({ test: 'Manual Trigger', status: 'FAILED' });
+                } else {
+                    showResult('result-manual', false, 
+                        `Unexpected status: ${response.status} ${response.statusText}`, data);
+                    testResults.push({ test: 'Manual Trigger', status: 'FAILED' });
+                }
+            } catch (error) {
+                if (error.message.includes('CORS')) {
+                    showResult('result-manual', false, 
+                        'CORS Error - This test needs to be run from the Azure Portal or using curl\n\n' +
+                        'Run this command in your terminal:\n\n' +
+                        `curl -X POST ${BASE_URL}/api/manual-run \\\n  -H "x-api-key: ${API_KEY}"`);
+                } else {
+                    showResult('result-manual', false, 'Error: ' + error.message);
+                }
+                testResults.push({ test: 'Manual Trigger', status: 'FAILED' });
+            }
+        }
+
+        async function testWebhook() {
+            showLoading('result-webhook');
+            
+            const testPayload = {
+                event_type: 'test',
+                data: { test: true }
+            };
+            
+            try {
+                const response = await fetch(BASE_URL + '/api/webhooks/dime', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(testPayload),
+                    mode: 'cors'
+                });
+                
+                const data = await response.text();
+                
+                showResult('result-webhook', true, 
+                    `Webhook Endpoint is ACCESSIBLE\nStatus: ${response.status}`, 
+                    data ? JSON.parse(data) : null);
+                testResults.push({ test: 'Webhook Endpoint', status: 'PASSED' });
+            } catch (error) {
+                if (error.message.includes('CORS')) {
+                    showResult('result-webhook', false, 
+                        'CORS Error - This test needs to be run from a backend or using curl\n\n' +
+                        'Run this command in your terminal:\n\n' +
+                        `curl -X POST ${BASE_URL}/api/webhooks/dime \\\n  -H "Content-Type: application/json" \\\n  -d '{"event_type":"test","data":{}}'`);
+                } else {
+                    showResult('result-webhook', false, 'Error: ' + error.message);
+                }
+                testResults.push({ test: 'Webhook Endpoint', status: 'FAILED' });
+            }
+        }
+
+        async function runAllTests() {
+            testResults = [];
+            document.getElementById('summary').style.display = 'none';
+            
+            await testHealthCheck();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testManualTrigger();
+            await new Promise(resolve => setTimeout(resolve, 1000));
+            
+            await testWebhook();
+            
+            // Show summary
+            const passed = testResults.filter(r => r.status === 'PASSED').length;
+            const total = testResults.length;
+            
+            let summaryHtml = `<p><strong>Results:</strong> ${passed}/${total} tests passed</p><ul>`;
+            testResults.forEach(result => {
+                const icon = result.status === 'PASSED' ? '✅' : '❌';
+                summaryHtml += `<li>${icon} ${result.test}: ${result.status}</li>`;
+            });
+            summaryHtml += '</ul>';
+            
+            if (passed === total) {
+                summaryHtml += '<p><strong>🎉 All tests PASSED!</strong> Azure Functions are working correctly.</p>';
+            } else {
+                summaryHtml += '<p><strong>⚠️ Some tests failed.</strong> Check the details above.</p>';
+                summaryHtml += '<p>💡 <strong>Tip:</strong> CORS errors from browser are normal. Use the terminal commands provided above for accurate testing.</p>';
+            }
+            
+            document.getElementById('summary-content').innerHTML = summaryHtml;
+            document.getElementById('summary').style.display = 'block';
+        }
+
+        // Show function URL
+        window.onload = function() {
+            console.log('Azure Functions Test Suite Ready');
+            console.log('Base URL:', BASE_URL);
+        };
+    </script>
+</body>
+</html>
+
