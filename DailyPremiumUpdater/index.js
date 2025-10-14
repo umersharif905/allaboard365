@@ -29,10 +29,22 @@ module.exports = async function (context, myTimer) {
     pool = await getPool();
     logger.success('Database connected');
     
-    // Calculate the billing date (use today for daily calculation)
+    // Calculate the billing date for next billing cycle
+    // If we're past the 5th, calculate for next month
+    // If before the 5th, calculate for this month
     const today = new Date();
-    const billingDate = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    logger.info(`Calculation Date: ${billingDate.toISOString().split('T')[0]}`);
+    const currentDay = today.getDate();
+    
+    let billingDate;
+    if (currentDay >= 5) {
+      // Past the 5th, so calculate for next month's billing
+      billingDate = new Date(today.getFullYear(), today.getMonth() + 1, 5);
+    } else {
+      // Before the 5th, so calculate for this month's billing
+      billingDate = new Date(today.getFullYear(), today.getMonth(), 5);
+    }
+    
+    logger.info(`Billing Date (Next Cycle): ${billingDate.toISOString().split('T')[0]}`);
     
     // Get all active groups with recurring payment plans
     const groupsQuery = `

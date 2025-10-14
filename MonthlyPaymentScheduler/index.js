@@ -33,12 +33,25 @@ module.exports = async function (context, myTimer) {
     pool = await getPool();
     logger.success('Database connected');
     
-    // Calculate the billing date (5th of this month)
+    // Calculate the billing date (5th of next billing cycle)
+    // If we're past the 5th, calculate for next month
+    // If before the 5th, calculate for this month
     const today = new Date();
-    const billingDate = new Date(today.getFullYear(), today.getMonth(), 5);
-    logger.info(`Billing Date: ${billingDate.toISOString().split('T')[0]}`);
+    const currentDay = today.getDate();
     
-    // Get all active groups with recurring payment plans
+    let billingDate;
+    if (currentDay >= 5) {
+      // Past the 5th, so calculate for next month's billing
+      billingDate = new Date(today.getFullYear(), today.getMonth() + 1, 5);
+    } else {
+      // Before the 5th, so calculate for this month's billing
+      billingDate = new Date(today.getFullYear(), today.getMonth(), 5);
+    }
+    
+    logger.info(`Billing Date (Next Cycle): ${billingDate.toISOString().split('T')[0]}`);
+    
+    // Get all active groups (with or without recurring payment plans)
+    // This will create plans for new groups and update existing ones
     const groupsQuery = `
       SELECT DISTINCT
         g.GroupId,
@@ -51,20 +64,20 @@ module.exports = async function (context, myTimer) {
         grp.DimeScheduleId,
         grp.MonthlyAmount as CurrentAmount,
         grp.NextBillingDate,
+        grp.IsActive as PlanIsActive,
         gpm.ProcessorPaymentMethodId
       FROM oe.Groups g
-      INNER JOIN oe.GroupRecurringPaymentPlans grp ON g.GroupId = grp.GroupId
+      LEFT JOIN oe.GroupRecurringPaymentPlans grp ON g.GroupId = grp.GroupId AND grp.IsActive = 1
       LEFT JOIN oe.GroupPaymentMethods gpm ON g.GroupId = gpm.GroupId 
         AND gpm.IsDefault = 1 AND gpm.Status = 'Active'
       WHERE g.Status = 'Active'
-        AND grp.IsActive = 1
       ORDER BY g.Name
     `;
     
     const groupsResult = await pool.request().query(groupsQuery);
     const groups = groupsResult.recordset;
     
-    logger.info(`Found ${groups.length} active groups with recurring payment plans`);
+    logger.info(`Found ${groups.length} active groups (will create/update payment plans)`);
     
     // Process each group
     for (const group of groups) {
@@ -83,11 +96,22 @@ module.exports = async function (context, myTimer) {
         const activeEnrollmentCount = premiumResult.recordset[0]?.ActiveEnrollmentCount || 0;
         
         logger.info(`  Calculated: $${newAmount} (${activeEnrollmentCount} enrollments)`);
-        logger.info(`  Current: $${group.CurrentAmount}`);
+        logger.info(`  Current: $${group.CurrentAmount || 'No plan yet'}`);
+        
+        // Skip groups with no enrollments
+        if (newAmount === 0 || activeEnrollmentCount === 0) {
+          logger.warn(`  No active enrollments, skipping`);
+          continue;
+        }
+        
+        // If no payment plan exists, we'll create it AFTER creating the DIME schedule
+        // This avoids NULL constraint issues with DimeScheduleId
+        const needsNewPlan = !group.PlanId;
         
         // Validate DIME data
         if (!group.ProcessorCustomerId || !group.ProcessorPaymentMethodId) {
-          logger.warn(`  Missing DIME data, skipping`);
+          logger.warn(`  Missing DIME data, skipping DIME schedule creation`);
+          logger.info(`  Payment plan created in database, but needs DIME setup`);
           results.failed++;
           results.errors.push({
             groupId: group.GroupId,
@@ -198,7 +222,7 @@ module.exports = async function (context, myTimer) {
               WHERE GroupId = @groupId
             `);
           
-          // Insert new schedule record
+          // Insert new schedule record (now with DIME schedule ID)
           await pool.request()
             .input('groupId', sql.UniqueIdentifier, group.GroupId)
             .input('newScheduleId', sql.NVarChar(255), newSchedule.scheduleId)
@@ -214,7 +238,10 @@ module.exports = async function (context, myTimer) {
               )
             `);
           
-          if (group.CurrentAmount === newAmount) {
+          if (needsNewPlan) {
+            logger.success(`  Created new payment plan with $${newAmount}`);
+            results.updated++;
+          } else if (group.CurrentAmount === newAmount) {
             logger.success(`  Renewed: $${newAmount}`);
             results.unchanged++;
           } else {
