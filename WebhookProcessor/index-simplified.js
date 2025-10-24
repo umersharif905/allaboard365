@@ -3,15 +3,28 @@
  * All payment events stored in oe.Payments table
  */
 
+const sql = require('mssql');
 const crypto = require('crypto');
-const { getPool, sql } = require('../shared/db');
-const { createLogger } = require('../shared/logger');
+
+// Database configuration
+const config = {
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  server: process.env.DB_SERVER,
+  database: process.env.DB_NAME,
+  options: {
+    encrypt: true,
+    trustServerCertificate: true
+  }
+};
 
 module.exports = async function (context, req) {
-  const logger = createLogger(context);
-  logger.info('Webhook received');
-
-  let pool;
+  const logger = {
+    info: (...args) => context.log.info(...args),
+    warn: (...args) => context.log.warn(...args),
+    error: (...args) => context.log.error(...args),
+    success: (...args) => context.log.info('✅', ...args)
+  };
 
   try {
     // Verify webhook signature
@@ -20,21 +33,22 @@ module.exports = async function (context, req) {
     
     if (!verifyWebhookSignature(signature, payload)) {
       logger.error('Invalid webhook signature');
-      context.res = { status: 401, body: { error: 'Invalid signature' } };
-      return;
+      return {
+        status: 401,
+        body: { error: 'Invalid signature' }
+      };
     }
 
     const { event_type, data } = req.body;
-    logger.info(`Event type: ${event_type}`);
+    logger.info(`DIME Webhook received: ${event_type}`, data);
 
     // Connect to database
-    pool = await getPool();
+    const pool = await sql.connect(config);
     let webhookEventId = null;
 
     try {
       // Store webhook event
       webhookEventId = await storeWebhookEvent(pool, event_type, data);
-      logger.info(`Stored webhook event: ${webhookEventId}`);
 
       // Process based on event type
       switch (event_type) {
@@ -89,7 +103,10 @@ module.exports = async function (context, req) {
       // Mark webhook as processed
       await markWebhookProcessed(pool, webhookEventId, true);
 
-      context.res = { status: 200, body: { success: true, event_type, processed: true } };
+      return {
+        status: 200,
+        body: { success: true, event_type, processed: true }
+      };
 
     } catch (error) {
       logger.error(`Error processing webhook: ${error.message}`);
@@ -98,23 +115,26 @@ module.exports = async function (context, req) {
         await markWebhookProcessed(pool, webhookEventId, false, error.message);
       }
       
-      context.res = { status: 200, body: { success: false, error: error.message } };
+      return {
+        status: 200, // Return 200 to DIME even on error
+        body: { success: false, error: error.message }
+      };
+    } finally {
+      await pool.close();
     }
 
   } catch (error) {
     logger.error(`Webhook processing failed: ${error.message}`);
-    context.res = { status: 500, body: { error: 'Internal server error' } };
-  } finally {
-    if (pool) {
-      await pool.close();
-    }
+    return {
+      status: 500,
+      body: { error: 'Internal server error' }
+    };
   }
 };
 
 function verifyWebhookSignature(signature, payload) {
-  if (!process.env.DIME_WEBHOOK_SECRET) {
-    console.warn('DIME_WEBHOOK_SECRET not set, skipping signature verification');
-    return true; // Allow in development
+  if (!signature || !process.env.DIME_WEBHOOK_SECRET) {
+    return false;
   }
 
   const expectedSignature = crypto
@@ -180,6 +200,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
 
   // Insert payment record
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), status)
@@ -190,11 +211,11 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date())
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -225,6 +246,7 @@ async function handleCreditCardRefund(pool, data, webhookEventId, logger) {
 
   // Insert refund record (negative amount)
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'Refund')
     .input('amount', sql.Decimal(10,2), -amount) // Negative amount for refund
     .input('status', sql.NVarChar(50), 'Completed')
@@ -236,11 +258,11 @@ async function handleCreditCardRefund(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date())
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, OriginalPaymentId, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @originalPaymentId, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -290,6 +312,7 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
 
   // Insert chargeback record (negative amount)
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'Chargeback')
     .input('amount', sql.Decimal(10,2), -amount) // Negative amount for chargeback
     .input('status', sql.NVarChar(50), 'Open')
@@ -302,11 +325,11 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date())
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, OriginalPaymentId, ChargebackReason, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @originalPaymentId, @chargebackReason, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -324,6 +347,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
 
   // Insert payment record
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), status)
@@ -334,11 +358,11 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date())
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -370,6 +394,7 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
 
   // Insert ACH return record (negative amount)
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'ACH_Return')
     .input('amount', sql.Decimal(10,2), -amount) // Negative amount for return
     .input('status', sql.NVarChar(50), 'Open')
@@ -383,11 +408,11 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date())
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, OriginalPaymentId, ACHReturnCode, ACHReturnReason, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @originalPaymentId, @achReturnCode, @achReturnReason, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -418,6 +443,7 @@ async function handleACHRefund(pool, data, webhookEventId, logger) {
 
   // Insert refund record (negative amount)
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'Refund')
     .input('amount', sql.Decimal(10,2), -amount) // Negative amount for refund
     .input('status', sql.NVarChar(50), 'Completed')
@@ -429,11 +455,11 @@ async function handleACHRefund(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date())
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, OriginalPaymentId, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @originalPaymentId, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -451,6 +477,7 @@ async function handleDepositSent(pool, data, webhookEventId, logger) {
 
   // Insert deposit record
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'Deposit')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), 'Sent')
@@ -461,11 +488,11 @@ async function handleDepositSent(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date(depositDate))
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -497,6 +524,7 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
 
   // Insert payment record
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), 'Completed')
@@ -507,11 +535,11 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     .input('paymentDate', sql.DateTime2, new Date())
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -544,6 +572,7 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
 
   // Insert failed payment record
   await pool.request()
+    .input('paymentId', sql.UniqueIdentifier, sql.UniqueIdentifier())
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), 'Failed')
@@ -555,11 +584,11 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     .input('paymentDate', sql.DateTime2, new Date())
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
+        @paymentId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate,
         GETUTCDATE(), GETUTCDATE()
       )
