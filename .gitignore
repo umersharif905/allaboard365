@@ -9,3 +9,6 @@ obj/
 # Test output files
 tests/test-invoice-output.html
 
+# Test scripts directory
+tests/
+

@@ -212,6 +212,19 @@ Need more details? Check these docs:
 
 ---
 
+## 🌐 Azure Production URL
+
+**Function App URL:**
+```
+https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net
+```
+
+**Test Production Manual Trigger:**
+```bash
+curl -X POST https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/manual-run \
+  -H "x-api-key: a2fb9635baeaab58f1c8887b90ebb61c13664c7a5a1bf490d112757928930b6c"
+```
+
 ## 🎉 What's Next?
 
 After successful local testing:
