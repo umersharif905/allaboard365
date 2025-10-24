@@ -18,11 +18,14 @@ module.exports = async function (context, req) {
     const signature = req.headers['x-dime-signature'];
     const payload = JSON.stringify(req.body);
     
-    if (!verifyWebhookSignature(signature, payload)) {
-      logger.error('Invalid webhook signature');
+    const signatureResult = verifyWebhookSignature(signature, payload);
+    if (!signatureResult.valid) {
+      logger.error(`Invalid webhook signature from ${signatureResult.environment} environment`);
       context.res = { status: 401, body: { error: 'Invalid signature' } };
       return;
     }
+    
+    logger.info(`Webhook verified from ${signatureResult.environment} environment`);
 
     const { event_type, data } = req.body;
     logger.info(`Event type: ${event_type}`);
@@ -33,8 +36,8 @@ module.exports = async function (context, req) {
 
     try {
       // Store webhook event
-      webhookEventId = await storeWebhookEvent(pool, event_type, data);
-      logger.info(`Stored webhook event: ${webhookEventId}`);
+      webhookEventId = await storeWebhookEvent(pool, event_type, data, signatureResult.environment);
+      logger.info(`Stored webhook event: ${webhookEventId} from ${signatureResult.environment} environment`);
 
       // Process based on event type
       switch (event_type) {
@@ -112,20 +115,43 @@ module.exports = async function (context, req) {
 };
 
 function verifyWebhookSignature(signature, payload) {
-  if (!process.env.DIME_WEBHOOK_SECRET) {
-    console.warn('DIME_WEBHOOK_SECRET not set, skipping signature verification');
-    return true; // Allow in development
+  const demoSecret = process.env.DIME_DEMO_WEBHOOK_SECRET;
+  const prodSecret = process.env.DIME_WEBHOOK_SECRET;
+  
+  // Try demo environment first
+  if (demoSecret) {
+    const expectedSignature = crypto
+      .createHmac('sha256', demoSecret)
+      .update(payload)
+      .digest('hex');
+    
+    if (signature === `sha256=${expectedSignature}`) {
+      return { valid: true, environment: 'demo' };
+    }
   }
-
-  const expectedSignature = crypto
-    .createHmac('sha256', process.env.DIME_WEBHOOK_SECRET)
-    .update(payload)
-    .digest('hex');
-
-  return signature === `sha256=${expectedSignature}`;
+  
+  // Try production environment
+  if (prodSecret) {
+    const expectedSignature = crypto
+      .createHmac('sha256', prodSecret)
+      .update(payload)
+      .digest('hex');
+    
+    if (signature === `sha256=${expectedSignature}`) {
+      return { valid: true, environment: 'production' };
+    }
+  }
+  
+  // No valid signature found
+  if (!demoSecret && !prodSecret) {
+    console.warn('No DIME webhook secrets configured, skipping signature verification');
+    return { valid: true, environment: 'development' };
+  }
+  
+  return { valid: false, environment: 'unknown' };
 }
 
-async function storeWebhookEvent(pool, eventType, data) {
+async function storeWebhookEvent(pool, eventType, data, environment = 'unknown') {
   const result = await pool.request()
     .input('eventType', sql.NVarChar(100), eventType)
     .input('eventId', sql.NVarChar(255), data.event_id || data.id || `webhook_${Date.now()}`)
@@ -171,12 +197,43 @@ async function markWebhookProcessed(pool, webhookEventId, success, errorMessage 
 // WEBHOOK EVENT HANDLERS - SIMPLIFIED SINGLE TABLE APPROACH
 // ============================================================================
 
+// Helper function to get GroupId and TenantId from enrollment context
+async function getEnrollmentContext(pool, enrollmentId, logger) {
+  if (!enrollmentId) return { groupId: null, tenantId: null };
+  
+  try {
+    const enrollmentContext = await pool.request()
+      .input('enrollmentId', sql.UniqueIdentifier, enrollmentId)
+      .query(`
+        SELECT m.GroupId, g.TenantId
+        FROM oe.Enrollments e
+        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+        INNER JOIN oe.Groups g ON m.GroupId = g.GroupId
+        WHERE e.EnrollmentId = @enrollmentId
+      `);
+    
+    if (enrollmentContext.recordset.length > 0) {
+      return {
+        groupId: enrollmentContext.recordset[0].GroupId,
+        tenantId: enrollmentContext.recordset[0].TenantId
+      };
+    }
+  } catch (error) {
+    logger.warn(`Could not get enrollment context: ${error.message}`);
+  }
+  
+  return { groupId: null, tenantId: null };
+}
+
 async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
   const transactionId = data.transaction_id || data.transactionNumber;
   const amount = data.amount;
   const status = data.status === 'completed' ? 'Completed' : 'Failed';
 
   logger.info(`Credit Card Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}`);
+
+  // Get GroupId and TenantId from enrollment context
+  const { groupId, tenantId } = await getEnrollmentContext(pool, data.enrollment_id, logger);
 
   // Insert payment record
   await pool.request()
@@ -188,14 +245,16 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     .input('paymentMethod', sql.NVarChar(50), 'CreditCard')
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -214,7 +273,7 @@ async function handleCreditCardRefund(pool, data, webhookEventId, logger) {
   const originalPayment = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), originalTransactionId)
     .query(`
-      SELECT PaymentId FROM oe.Payments 
+      SELECT PaymentId, GroupId, TenantId FROM oe.Payments 
       WHERE ProcessorTransactionId = @processorTransactionId 
         AND TransactionType = 'Payment'
     `);
@@ -222,6 +281,11 @@ async function handleCreditCardRefund(pool, data, webhookEventId, logger) {
   if (originalPayment.recordset.length === 0) {
     throw new Error(`Original payment not found: ${originalTransactionId}`);
   }
+
+  const originalPaymentData = originalPayment.recordset[0];
+  const originalPaymentId = originalPaymentData.PaymentId;
+  const groupId = originalPaymentData.GroupId;
+  const tenantId = originalPaymentData.TenantId;
 
   // Insert refund record (negative amount)
   await pool.request()
@@ -231,17 +295,19 @@ async function handleCreditCardRefund(pool, data, webhookEventId, logger) {
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .input('paymentMethod', sql.NVarChar(50), 'CreditCard')
-    .input('originalPaymentId', sql.UniqueIdentifier, originalPayment.recordset[0].PaymentId)
+    .input('originalPaymentId', sql.UniqueIdentifier, originalPaymentId)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, OriginalPaymentId, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, OriginalPaymentId, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @originalPaymentId, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @originalPaymentId, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -279,7 +345,7 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
   const originalPayment = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .query(`
-      SELECT PaymentId FROM oe.Payments 
+      SELECT PaymentId, GroupId, TenantId FROM oe.Payments 
       WHERE ProcessorTransactionId = @processorTransactionId 
         AND TransactionType = 'Payment'
     `);
@@ -287,6 +353,11 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
   if (originalPayment.recordset.length === 0) {
     throw new Error(`Original payment not found: ${transactionId}`);
   }
+
+  const originalPaymentData = originalPayment.recordset[0];
+  const originalPaymentId = originalPaymentData.PaymentId;
+  const groupId = originalPaymentData.GroupId;
+  const tenantId = originalPaymentData.TenantId;
 
   // Insert chargeback record (negative amount)
   await pool.request()
@@ -296,18 +367,20 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .input('paymentMethod', sql.NVarChar(50), 'CreditCard')
-    .input('originalPaymentId', sql.UniqueIdentifier, originalPayment.recordset[0].PaymentId)
+    .input('originalPaymentId', sql.UniqueIdentifier, originalPaymentId)
     .input('chargebackReason', sql.NVarChar(sql.MAX), reason)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, OriginalPaymentId, ChargebackReason, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, OriginalPaymentId, ChargebackReason, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @originalPaymentId, @chargebackReason, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @originalPaymentId, @chargebackReason, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -322,6 +395,9 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
 
   logger.info(`ACH Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}`);
 
+  // Get GroupId and TenantId from enrollment context
+  const { groupId, tenantId } = await getEnrollmentContext(pool, data.enrollment_id, logger);
+
   // Insert payment record
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
@@ -332,14 +408,16 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     .input('paymentMethod', sql.NVarChar(50), 'ACH')
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -359,7 +437,7 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
   const originalPayment = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .query(`
-      SELECT PaymentId FROM oe.Payments 
+      SELECT PaymentId, GroupId, TenantId FROM oe.Payments 
       WHERE ProcessorTransactionId = @processorTransactionId 
         AND TransactionType = 'Payment'
     `);
@@ -367,6 +445,11 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
   if (originalPayment.recordset.length === 0) {
     throw new Error(`Original payment not found: ${transactionId}`);
   }
+
+  const originalPaymentData = originalPayment.recordset[0];
+  const originalPaymentId = originalPaymentData.PaymentId;
+  const groupId = originalPaymentData.GroupId;
+  const tenantId = originalPaymentData.TenantId;
 
   // Insert ACH return record (negative amount)
   await pool.request()
@@ -376,19 +459,21 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .input('paymentMethod', sql.NVarChar(50), 'ACH')
-    .input('originalPaymentId', sql.UniqueIdentifier, originalPayment.recordset[0].PaymentId)
+    .input('originalPaymentId', sql.UniqueIdentifier, originalPaymentId)
     .input('achReturnCode', sql.NVarChar(50), returnCode)
     .input('achReturnReason', sql.NVarChar(sql.MAX), returnReason)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, OriginalPaymentId, ACHReturnCode, ACHReturnReason, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, OriginalPaymentId, ACHReturnCode, ACHReturnReason, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @originalPaymentId, @achReturnCode, @achReturnReason, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @originalPaymentId, @achReturnCode, @achReturnReason, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -407,7 +492,7 @@ async function handleACHRefund(pool, data, webhookEventId, logger) {
   const originalPayment = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), originalTransactionId)
     .query(`
-      SELECT PaymentId FROM oe.Payments 
+      SELECT PaymentId, GroupId, TenantId FROM oe.Payments 
       WHERE ProcessorTransactionId = @processorTransactionId 
         AND TransactionType = 'Payment'
     `);
@@ -415,6 +500,11 @@ async function handleACHRefund(pool, data, webhookEventId, logger) {
   if (originalPayment.recordset.length === 0) {
     throw new Error(`Original payment not found: ${originalTransactionId}`);
   }
+
+  const originalPaymentData = originalPayment.recordset[0];
+  const originalPaymentId = originalPaymentData.PaymentId;
+  const groupId = originalPaymentData.GroupId;
+  const tenantId = originalPaymentData.TenantId;
 
   // Insert refund record (negative amount)
   await pool.request()
@@ -424,17 +514,19 @@ async function handleACHRefund(pool, data, webhookEventId, logger) {
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .input('paymentMethod', sql.NVarChar(50), 'ACH')
-    .input('originalPaymentId', sql.UniqueIdentifier, originalPayment.recordset[0].PaymentId)
+    .input('originalPaymentId', sql.UniqueIdentifier, originalPaymentId)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, OriginalPaymentId, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, OriginalPaymentId, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @originalPaymentId, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @originalPaymentId, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -449,6 +541,9 @@ async function handleDepositSent(pool, data, webhookEventId, logger) {
 
   logger.info(`Deposit Sent: Deposit ${depositId}, Amount: $${amount}`);
 
+  // Get GroupId and TenantId from enrollment context if available
+  const { groupId, tenantId } = await getEnrollmentContext(pool, data.enrollment_id, logger);
+
   // Insert deposit record
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Deposit')
@@ -459,14 +554,16 @@ async function handleDepositSent(pool, data, webhookEventId, logger) {
     .input('paymentMethod', sql.NVarChar(50), 'Deposit')
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date(depositDate))
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -485,15 +582,18 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
   const groupResult = await pool.request()
     .input('scheduleId', sql.NVarChar(255), scheduleId)
     .query(`
-      SELECT GroupId FROM oe.GroupRecurringPaymentPlans 
-      WHERE DimeScheduleId = @scheduleId
+      SELECT g.GroupId, g.TenantId FROM oe.GroupRecurringPaymentPlans grp
+      INNER JOIN oe.Groups g ON grp.GroupId = g.GroupId
+      WHERE grp.DimeScheduleId = @scheduleId
     `);
 
   if (groupResult.recordset.length === 0) {
     throw new Error(`Group not found for schedule: ${scheduleId}`);
   }
 
-  const groupId = groupResult.recordset[0].GroupId;
+  const groupData = groupResult.recordset[0];
+  const groupId = groupData.GroupId;
+  const tenantId = groupData.TenantId;
 
   // Insert payment record
   await pool.request()
@@ -505,14 +605,16 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     .input('paymentMethod', sql.NVarChar(50), 'Recurring')
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -532,15 +634,18 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
   const groupResult = await pool.request()
     .input('scheduleId', sql.NVarChar(255), scheduleId)
     .query(`
-      SELECT GroupId FROM oe.GroupRecurringPaymentPlans 
-      WHERE DimeScheduleId = @scheduleId
+      SELECT g.GroupId, g.TenantId FROM oe.GroupRecurringPaymentPlans grp
+      INNER JOIN oe.Groups g ON grp.GroupId = g.GroupId
+      WHERE grp.DimeScheduleId = @scheduleId
     `);
 
   if (groupResult.recordset.length === 0) {
     throw new Error(`Group not found for schedule: ${scheduleId}`);
   }
 
-  const groupId = groupResult.recordset[0].GroupId;
+  const groupData = groupResult.recordset[0];
+  const groupId = groupData.GroupId;
+  const tenantId = groupData.TenantId;
 
   // Insert failed payment record
   await pool.request()
@@ -553,14 +658,16 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     .input('failureReason', sql.NVarChar(sql.MAX), failureReason)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
+    .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate,
+        ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate, GroupId, TenantId,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate,
+        @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate, @groupId, @tenantId,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
