@@ -226,13 +226,58 @@ async function getEnrollmentContext(pool, enrollmentId, logger) {
   return { groupId: null, tenantId: null };
 }
 
+// Helper function to get failure attempt information for a payment
+async function getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger) {
+  try {
+    if (!groupId || !tenantId) {
+      return { attemptNumber: 1, consecutiveFailures: 0, originalPaymentId: null };
+    }
+
+    // Find the most recent failed payment for this group/tenant with same amount/method
+    const failureResult = await pool.request()
+      .input('groupId', sql.UniqueIdentifier, groupId)
+      .input('tenantId', sql.UniqueIdentifier, tenantId)
+      .input('amount', sql.Decimal(10,2), amount)
+      .input('paymentMethod', sql.NVarChar(50), paymentMethod)
+      .query(`
+        SELECT TOP 1 
+          PaymentId,
+          AttemptNumber,
+          ConsecutiveFailureCount,
+          OriginalPaymentId
+        FROM oe.Payments
+        WHERE GroupId = @groupId 
+          AND TenantId = @tenantId
+          AND Amount = @amount
+          AND PaymentMethod = @paymentMethod
+          AND Status = 'Failed'
+          AND TransactionType = 'Payment'
+        ORDER BY CreatedDate DESC
+      `);
+
+    if (failureResult.recordset.length === 0) {
+      // First attempt
+      return { attemptNumber: 1, consecutiveFailures: 0, originalPaymentId: null };
+    }
+
+    const lastFailure = failureResult.recordset[0];
+    const lastAttempt = lastFailure.AttemptNumber || 1;
+    const lastConsecutiveFailures = lastFailure.ConsecutiveFailureCount || 0;
+    const originalPaymentId = lastFailure.OriginalPaymentId || lastFailure.PaymentId;
+
+    return {
+      attemptNumber: lastAttempt + 1,
+      consecutiveFailures: lastConsecutiveFailures + 1,
+      originalPaymentId: originalPaymentId
+    };
+  } catch (error) {
+    logger.warn(`Could not get failure attempt info: ${error.message}`);
+    return { attemptNumber: 1, consecutiveFailures: 0, originalPaymentId: null };
+  }
+}
+
 // Helper function to send payment failure notification email
-// TODO: Re-enable when email services are properly integrated with Azure Functions
 async function sendPaymentFailureNotification(pool, paymentData, logger) {
-  logger.info('⚠️  Email notification disabled - TODO: Fix MessageQueueService import path in Azure Functions');
-  
-  // TODO: Uncomment when email services are properly integrated
-  /*
   try {
     // Get member information for the payment
     const memberResult = await pool.request()
@@ -259,30 +304,69 @@ async function sendPaymentFailureNotification(pool, paymentData, logger) {
 
     const member = memberResult.recordset[0];
     
-    // Send payment failure notification
-    await MessageQueueService.sendPaymentFailureNotification({
-      tenantId: member.TenantId,
-      memberId: member.MemberId,
-      memberUserId: member.UserId,
-      memberName: `${member.FirstName} ${member.LastName}`.trim(),
-      memberEmail: member.Email,
-      paymentAmount: paymentData.amount,
-      paymentDate: new Date().toISOString(),
-      paymentMethod: paymentData.payment_method || 'Unknown',
-      transactionId: paymentData.transaction_id,
-      failureReason: paymentData.failure_reason,
-      achReturnCode: paymentData.return_code,
-      achReturnReason: paymentData.return_reason,
-      chargebackReason: paymentData.chargeback_reason,
-      createdBy: null // System-generated notification
-    });
+    // Generate email content - MessageCenter expects plain HTML
+    const subject = `Payment Failed - $${paymentData.amount}`;
+    const emailBody = `
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Payment Failed</title>
+</head>
+<body style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px;">
+    <div style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); padding: 20px;">
+        <h2 style="color: #dc2626; margin-top: 0;">Payment Failed</h2>
+        <p>Your payment has failed for the following reason:</p>
+        <div style="background-color: #f9fafb; border-left: 4px solid #dc2626; padding: 15px; margin: 20px 0;">
+            <p style="margin: 5px 0;"><strong>Amount:</strong> $${paymentData.amount}</p>
+            <p style="margin: 5px 0;"><strong>Payment Method:</strong> ${paymentData.payment_method || 'Unknown'}</p>
+            <p style="margin: 5px 0;"><strong>Transaction ID:</strong> ${paymentData.transaction_id || 'N/A'}</p>
+            <p style="margin: 5px 0;"><strong>Failure Reason:</strong> ${paymentData.failure_reason || 'Unknown'}</p>
+            ${paymentData.return_code ? `<p style="margin: 5px 0;"><strong>ACH Return Code:</strong> ${paymentData.return_code}</p>` : ''}
+            ${paymentData.return_reason ? `<p style="margin: 5px 0;"><strong>ACH Return Reason:</strong> ${paymentData.return_reason}</p>` : ''}
+            ${paymentData.chargeback_reason ? `<p style="margin: 5px 0;"><strong>Chargeback Reason:</strong> ${paymentData.chargeback_reason}</p>` : ''}
+        </div>
+        <p><strong>Next Steps:</strong></p>
+        <ul>
+            <li>Update your payment method</li>
+            <li>Check with your bank or card issuer</li>
+            <li>Contact support if the issue persists</li>
+        </ul>
+        <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">This is an automated notification from your insurance administrator.</p>
+    </div>
+</body>
+</html>
+    `;
+    
+    // Insert directly into MessageQueue
+    const messageId = require('crypto').randomUUID();
+    await pool.request()
+      .input('messageId', sql.UniqueIdentifier, messageId)
+      .input('tenantId', sql.UniqueIdentifier, member.TenantId)
+      .input('recipientId', sql.UniqueIdentifier, member.UserId)
+      .input('messageType', sql.NVarChar, 'Email')
+      .input('recipientAddress', sql.NVarChar, member.Email)
+      .input('subject', sql.NVarChar, subject)
+      .input('body', sql.NVarChar(sql.MAX), emailBody)
+      .input('status', sql.NVarChar, 'Pending')
+      .input('createdBy', sql.NVarChar, 'System')
+      .query(`
+        INSERT INTO oe.MessageQueue (
+          MessageId, TenantId, RecipientId, MessageType,
+          RecipientAddress, Subject, Body, Status,
+          RetryCount, CreatedDate, CreatedBy
+        ) VALUES (
+          @messageId, @tenantId, @recipientId, @messageType,
+          @recipientAddress, @subject, @body, @status,
+          0, GETUTCDATE(), @createdBy
+        )
+      `);
 
-    logger.info(`Payment failure notification sent to ${member.Email}`);
+    logger.info(`✅ Payment failure notification queued for ${member.Email}`);
   } catch (error) {
     logger.error('Error sending payment failure notification:', error);
     // Don't throw - email failure shouldn't break webhook processing
   }
-  */
 }
 
 async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
@@ -296,6 +380,13 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
   // Get GroupId and TenantId from enrollment context
   const { groupId, tenantId } = await getEnrollmentContext(pool, data.enrollment_id, logger);
 
+  // Get failure attempt tracking info if payment failed
+  let attemptInfo = { attemptNumber: null, consecutiveFailures: null, originalPaymentId: null };
+  if (status === 'Failed') {
+    attemptInfo = await getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger);
+    logger.info(`Payment failure attempt ${attemptInfo.attemptNumber} (${attemptInfo.consecutiveFailures} consecutive failures)`);
+  }
+
   // Insert payment record
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
@@ -308,19 +399,26 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date())
     .input('groupId', sql.UniqueIdentifier, groupId)
     .input('tenantId', sql.UniqueIdentifier, tenantId)
+    .input('attemptNumber', sql.Int, attemptInfo.attemptNumber)
+    .input('originalPaymentId', sql.UniqueIdentifier, attemptInfo.originalPaymentId)
+    .input('consecutiveFailures', sql.Int, attemptInfo.consecutiveFailures)
+    .input('failureReason', sql.NVarChar(sql.MAX), data.failure_reason || null)
+    .input('lastFailureDate', sql.DateTime2, status === 'Failed' ? new Date() : null)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
+        ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate, 
+        GroupId, TenantId, AttemptNumber, OriginalPaymentId, ConsecutiveFailureCount, LastFailureDate,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
+        @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate, 
+        @groupId, @tenantId, @attemptNumber, @originalPaymentId, @consecutiveFailures, @lastFailureDate,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
 
-  logger.success(`Credit card charge processed: ${transactionId}`);
+  logger.success(`Credit card charge processed: ${transactionId}${attemptInfo.attemptNumber ? ` (Attempt ${attemptInfo.attemptNumber})` : ''}`);
   
   // Send email notification if payment failed
   if (status === 'Failed') {
