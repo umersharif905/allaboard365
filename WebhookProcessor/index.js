@@ -6,6 +6,7 @@
 const crypto = require('crypto');
 const { getPool, sql } = require('../shared/db');
 const { createLogger } = require('../shared/logger');
+// const MessageQueueService = require('../../backend/services/messageQueue.service'); // TODO: Fix import path for Azure Functions
 
 module.exports = async function (context, req) {
   const logger = createLogger(context);
@@ -35,12 +36,12 @@ module.exports = async function (context, req) {
     let webhookEventId = null;
 
     try {
-      // Store webhook event
+    // Store webhook event
       webhookEventId = await storeWebhookEvent(pool, event_type, data, signatureResult.environment);
       logger.info(`Stored webhook event: ${webhookEventId} from ${signatureResult.environment} environment`);
 
-      // Process based on event type
-      switch (event_type) {
+    // Process based on event type
+    switch (event_type) {
         // Credit Card Events
         case 'credit_card_charge':
           await handleCreditCardCharge(pool, data, webhookEventId, logger);
@@ -72,22 +73,22 @@ module.exports = async function (context, req) {
           break;
 
         // Recurring Payment Events
-        case 'recurring_payment.success':
-          await handleRecurringPaymentSuccess(pool, data, webhookEventId, logger);
-          break;
-        case 'recurring_payment.failed':
-          await handleRecurringPaymentFailed(pool, data, webhookEventId, logger);
-          break;
-        case 'recurring_payment.schedule_updated':
-          logger.info('Schedule updated event received (informational only)');
-          break;
+      case 'recurring_payment.success':
+        await handleRecurringPaymentSuccess(pool, data, webhookEventId, logger);
+        break;
+      case 'recurring_payment.failed':
+        await handleRecurringPaymentFailed(pool, data, webhookEventId, logger);
+        break;
+      case 'recurring_payment.schedule_updated':
+        logger.info('Schedule updated event received (informational only)');
+        break;
         case 'recurring_payment.schedule_canceled':
           logger.info('Schedule canceled event received (informational only)');
           break;
 
-        default:
-          logger.warn(`Unknown event type: ${event_type}`);
-      }
+      default:
+        logger.warn(`Unknown event type: ${event_type}`);
+    }
 
       // Mark webhook as processed
       await markWebhookProcessed(pool, webhookEventId, true);
@@ -132,11 +133,11 @@ function verifyWebhookSignature(signature, payload) {
   
   // Try production environment
   if (prodSecret) {
-    const expectedSignature = crypto
+  const expectedSignature = crypto
       .createHmac('sha256', prodSecret)
-      .update(payload)
-      .digest('hex');
-    
+    .update(payload)
+    .digest('hex');
+
     if (signature === `sha256=${expectedSignature}`) {
       return { valid: true, environment: 'production' };
     }
@@ -225,12 +226,72 @@ async function getEnrollmentContext(pool, enrollmentId, logger) {
   return { groupId: null, tenantId: null };
 }
 
+// Helper function to send payment failure notification email
+// TODO: Re-enable when email services are properly integrated with Azure Functions
+async function sendPaymentFailureNotification(pool, paymentData, logger) {
+  logger.info('⚠️  Email notification disabled - TODO: Fix MessageQueueService import path in Azure Functions');
+  
+  // TODO: Uncomment when email services are properly integrated
+  /*
+  try {
+    // Get member information for the payment
+    const memberResult = await pool.request()
+      .input('enrollmentId', sql.UniqueIdentifier, paymentData.enrollment_id)
+      .query(`
+        SELECT 
+          m.MemberId,
+          m.UserId,
+          u.FirstName,
+          u.LastName,
+          u.Email,
+          g.TenantId
+        FROM oe.Enrollments e
+        LEFT JOIN oe.Members m ON e.MemberId = m.MemberId
+        LEFT JOIN oe.Users u ON m.UserId = u.UserId
+        LEFT JOIN oe.Groups g ON m.GroupId = g.GroupId
+        WHERE e.EnrollmentId = @enrollmentId
+      `);
+
+    if (memberResult.recordset.length === 0) {
+      logger.warn('No member found for payment failure notification');
+      return;
+    }
+
+    const member = memberResult.recordset[0];
+    
+    // Send payment failure notification
+    await MessageQueueService.sendPaymentFailureNotification({
+      tenantId: member.TenantId,
+      memberId: member.MemberId,
+      memberUserId: member.UserId,
+      memberName: `${member.FirstName} ${member.LastName}`.trim(),
+      memberEmail: member.Email,
+      paymentAmount: paymentData.amount,
+      paymentDate: new Date().toISOString(),
+      paymentMethod: paymentData.payment_method || 'Unknown',
+      transactionId: paymentData.transaction_id,
+      failureReason: paymentData.failure_reason,
+      achReturnCode: paymentData.return_code,
+      achReturnReason: paymentData.return_reason,
+      chargebackReason: paymentData.chargeback_reason,
+      createdBy: null // System-generated notification
+    });
+
+    logger.info(`Payment failure notification sent to ${member.Email}`);
+  } catch (error) {
+    logger.error('Error sending payment failure notification:', error);
+    // Don't throw - email failure shouldn't break webhook processing
+  }
+  */
+}
+
 async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
   const transactionId = data.transaction_id || data.transactionNumber;
   const amount = data.amount;
   const status = data.status === 'completed' ? 'Completed' : 'Failed';
+  const paymentMethod = data.payment_method || data.paymentMethod || 'Credit Card';
 
-  logger.info(`Credit Card Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}`);
+  logger.info(`Credit Card Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}, Method: ${paymentMethod}`);
 
   // Get GroupId and TenantId from enrollment context
   const { groupId, tenantId } = await getEnrollmentContext(pool, data.enrollment_id, logger);
@@ -242,7 +303,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     .input('status', sql.NVarChar(50), status)
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
-    .input('paymentMethod', sql.NVarChar(50), 'CreditCard')
+    .input('paymentMethod', sql.NVarChar(50), paymentMethod)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
     .input('groupId', sql.UniqueIdentifier, groupId)
@@ -260,6 +321,21 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     `);
 
   logger.success(`Credit card charge processed: ${transactionId}`);
+  
+  // Send email notification if payment failed
+  if (status === 'Failed') {
+    try {
+      await sendPaymentFailureNotification(pool, {
+        enrollment_id: data.enrollment_id,
+        amount: amount,
+        payment_method: paymentMethod,
+        transaction_id: transactionId,
+        failure_reason: data.failure_reason
+      }, logger);
+    } catch (emailError) {
+      logger.error('Failed to send payment failure notification:', emailError);
+    }
+  }
 }
 
 async function handleCreditCardRefund(pool, data, webhookEventId, logger) {
@@ -360,7 +436,7 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
   const tenantId = originalPaymentData.TenantId;
 
   // Insert chargeback record (negative amount)
-  await pool.request()
+    await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Chargeback')
     .input('amount', sql.Decimal(10,2), -amount) // Negative amount for chargeback
     .input('status', sql.NVarChar(50), 'Open')
@@ -371,7 +447,7 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
     .input('chargebackReason', sql.NVarChar(sql.MAX), reason)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
-    .input('groupId', sql.UniqueIdentifier, groupId)
+      .input('groupId', sql.UniqueIdentifier, groupId)
     .input('tenantId', sql.UniqueIdentifier, tenantId)
     .query(`
       INSERT INTO oe.Payments (
@@ -386,14 +462,28 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
     `);
 
   logger.success(`Credit card chargeback processed: ${transactionId}`);
+  
+  // Send email notification for chargeback (payment failure)
+  try {
+    await sendPaymentFailureNotification(pool, {
+      enrollment_id: null, // We don't have enrollment_id for chargebacks
+      amount: amount,
+      payment_method: 'Credit Card',
+      transaction_id: transactionId,
+      chargeback_reason: reason
+    }, logger);
+  } catch (emailError) {
+    logger.error('Failed to send chargeback notification:', emailError);
+  }
 }
 
 async function handleACHCharge(pool, data, webhookEventId, logger) {
   const transactionId = data.transaction_id || data.transactionNumber;
   const amount = data.amount;
   const status = data.status === 'completed' ? 'Completed' : 'Failed';
+  const paymentMethod = data.payment_method || data.paymentMethod || 'ACH';
 
-  logger.info(`ACH Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}`);
+  logger.info(`ACH Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}, Method: ${paymentMethod}`);
 
   // Get GroupId and TenantId from enrollment context
   const { groupId, tenantId } = await getEnrollmentContext(pool, data.enrollment_id, logger);
@@ -401,11 +491,11 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
   // Insert payment record
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
-    .input('amount', sql.Decimal(10,2), amount)
+      .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), status)
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
-    .input('paymentMethod', sql.NVarChar(50), 'ACH')
+    .input('paymentMethod', sql.NVarChar(50), paymentMethod)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
     .input('groupId', sql.UniqueIdentifier, groupId)
@@ -423,6 +513,21 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     `);
 
   logger.success(`ACH charge processed: ${transactionId}`);
+  
+  // Send email notification if payment failed
+  if (status === 'Failed') {
+    try {
+      await sendPaymentFailureNotification(pool, {
+        enrollment_id: data.enrollment_id,
+        amount: amount,
+        payment_method: paymentMethod,
+        transaction_id: transactionId,
+        failure_reason: data.failure_reason
+      }, logger);
+    } catch (emailError) {
+      logger.error('Failed to send payment failure notification:', emailError);
+    }
+  }
 }
 
 async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
@@ -430,8 +535,9 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
   const amount = data.amount;
   const returnCode = data.return_code || data.code;
   const returnReason = data.return_reason || data.reason || 'Unknown';
+  const paymentMethod = data.payment_method || data.paymentMethod || 'ACH';
 
-  logger.error(`ACH Payment Return: Transaction ${transactionId}, Amount: $${amount}, Code: ${returnCode}`);
+  logger.error(`ACH Payment Return: Transaction ${transactionId}, Amount: $${amount}, Code: ${returnCode}, Method: ${paymentMethod}`);
 
   // Find original payment
   const originalPayment = await pool.request()
@@ -479,6 +585,20 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
     `);
 
   logger.success(`ACH payment return processed: ${transactionId}`);
+  
+  // Send email notification for ACH return (payment failure)
+  try {
+    await sendPaymentFailureNotification(pool, {
+      enrollment_id: null, // We don't have enrollment_id for returns
+      amount: amount,
+      payment_method: 'ACH',
+      transaction_id: transactionId,
+      return_code: returnCode,
+      return_reason: returnReason
+    }, logger);
+  } catch (emailError) {
+    logger.error('Failed to send ACH return notification:', emailError);
+  }
 }
 
 async function handleACHRefund(pool, data, webhookEventId, logger) {
@@ -519,7 +639,7 @@ async function handleACHRefund(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date())
     .input('groupId', sql.UniqueIdentifier, groupId)
     .input('tenantId', sql.UniqueIdentifier, tenantId)
-    .query(`
+      .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, OriginalPaymentId, WebhookEventId, PaymentDate, GroupId, TenantId,
@@ -545,7 +665,7 @@ async function handleDepositSent(pool, data, webhookEventId, logger) {
   const { groupId, tenantId } = await getEnrollmentContext(pool, data.enrollment_id, logger);
 
   // Insert deposit record
-  await pool.request()
+    await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Deposit')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), 'Sent')
@@ -556,7 +676,7 @@ async function handleDepositSent(pool, data, webhookEventId, logger) {
     .input('paymentDate', sql.DateTime2, new Date(depositDate))
     .input('groupId', sql.UniqueIdentifier, groupId)
     .input('tenantId', sql.UniqueIdentifier, tenantId)
-    .query(`
+      .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
@@ -623,32 +743,32 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
 }
 
 async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) {
-  const scheduleId = data.schedule_id || data.recurring_payment_id;
-  const transactionId = data.transaction_id;
+    const scheduleId = data.schedule_id || data.recurring_payment_id;
+    const transactionId = data.transaction_id;
   const amount = data.amount;
   const failureReason = data.failure_reason || 'Unknown';
 
   logger.error(`Recurring Payment Failed: Schedule ${scheduleId}, Transaction ${transactionId}, Amount: $${amount}, Reason: ${failureReason}`);
 
   // Find the group associated with this schedule
-  const groupResult = await pool.request()
-    .input('scheduleId', sql.NVarChar(255), scheduleId)
-    .query(`
+    const groupResult = await pool.request()
+      .input('scheduleId', sql.NVarChar(255), scheduleId)
+      .query(`
       SELECT g.GroupId, g.TenantId FROM oe.GroupRecurringPaymentPlans grp
       INNER JOIN oe.Groups g ON grp.GroupId = g.GroupId
       WHERE grp.DimeScheduleId = @scheduleId
-    `);
+      `);
 
-  if (groupResult.recordset.length === 0) {
+    if (groupResult.recordset.length === 0) {
     throw new Error(`Group not found for schedule: ${scheduleId}`);
-  }
+    }
 
   const groupData = groupResult.recordset[0];
   const groupId = groupData.GroupId;
   const tenantId = groupData.TenantId;
 
   // Insert failed payment record
-  await pool.request()
+    await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), 'Failed')
@@ -658,9 +778,9 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     .input('failureReason', sql.NVarChar(sql.MAX), failureReason)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
-    .input('groupId', sql.UniqueIdentifier, groupId)
+      .input('groupId', sql.UniqueIdentifier, groupId)
     .input('tenantId', sql.UniqueIdentifier, tenantId)
-    .query(`
+      .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate, GroupId, TenantId,
@@ -673,4 +793,17 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     `);
 
   logger.error(`Recurring payment failure processed for group: ${groupId}`);
+  
+  // Send email notification for payment failure
+  try {
+    await sendPaymentFailureNotification(pool, {
+      enrollment_id: null, // Recurring payments don't have enrollment_id
+      amount: amount,
+      payment_method: 'Recurring',
+      transaction_id: transactionId,
+      failure_reason: failureReason
+    }, logger);
+  } catch (emailError) {
+    logger.error('Failed to send payment failure notification:', emailError);
+  }
 }
