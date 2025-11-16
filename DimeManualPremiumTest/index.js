@@ -1,4 +1,4 @@
-const dailyUpdater = require('../DailyPremiumUpdater');
+const dailyUpdater = require('../DimePremiumCalculator');
 
 /**
  * Manual Daily Test

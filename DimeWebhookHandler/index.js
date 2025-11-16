@@ -311,7 +311,7 @@ async function getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMet
 }
 
 // Helper function to send payment failure notification email
-async function sendPaymentFailureNotification(pool, paymentData, logger, groupId, tenantId) {
+async function sendPaymentFailureNotification(pool, paymentData, logger, groupId, tenantId, isIndividualRecurring = false, locationId = null) {
   try {
     logger.info(`sendPaymentFailureNotification called - GroupId: ${groupId}, TenantId: ${tenantId}, EnrollmentId: ${paymentData.enrollment_id}`);
     
@@ -375,39 +375,95 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
       return;
     }
 
-    // Fetch payment method details (last 4 digits)
+    // Fetch payment method details (last 4 digits) from the actual payment method used
     let paymentMethodLast4 = null;
     let paymentMethodType = paymentData.payment_method || 'Unknown';
-    if (groupId) {
+    let paymentMethodDisplay = paymentMethodType;
+    
+    if (groupId && !isIndividualRecurring) {
       try {
-        // Look for the most recent default payment method for this group
+        // For group payments, look for payment method by location (if locationId provided) or default
         const paymentMethodResult = await pool.request()
           .input('groupId', sql.UniqueIdentifier, groupId)
-          .input('paymentMethodType', sql.NVarChar(50), paymentMethodType)
+          .input('locationId', sql.UniqueIdentifier, locationId)
           .query(`
             SELECT TOP 1 
               CardLast4, 
               AccountNumberLast4,
-              Type
+              Type,
+              CardBrand
             FROM oe.GroupPaymentMethods
             WHERE GroupId = @groupId
               AND Status = 'Active'
-              AND Type = @paymentMethodType
-            ORDER BY IsDefault DESC, CreatedDate DESC
+              AND (LocationId = @locationId OR (@locationId IS NULL AND IsDefault = 1))
+            ORDER BY 
+              CASE WHEN LocationId = @locationId THEN 1 ELSE 2 END,
+              IsDefault DESC, 
+              CreatedDate DESC
           `);
         
         if (paymentMethodResult.recordset.length > 0) {
           const pm = paymentMethodResult.recordset[0];
           paymentMethodLast4 = pm.CardLast4 || pm.AccountNumberLast4 || null;
           paymentMethodType = pm.Type || paymentMethodType;
+          
+          // Format payment method display with last 4 digits
+          if (paymentMethodLast4) {
+            if (pm.Type === 'Card' || pm.Type === 'CreditCard') {
+              paymentMethodDisplay = `${pm.CardBrand || 'Card'} ending in ${paymentMethodLast4}`;
+            } else if (pm.Type === 'ACH') {
+              paymentMethodDisplay = `Bank Account ending in ${paymentMethodLast4}`;
+            } else {
+              paymentMethodDisplay = `${paymentMethodType} ending in ${paymentMethodLast4}`;
+            }
+          } else {
+            paymentMethodDisplay = paymentMethodType;
+          }
         }
       } catch (pmError) {
         logger.warn(`Could not fetch payment method details: ${pmError.message}`);
       }
+    } else if (isIndividualRecurring && paymentData.enrollment_id) {
+      // For individual payments, try to get payment method from enrollment/household
+      try {
+        const individualPaymentMethodResult = await pool.request()
+          .input('enrollmentId', sql.UniqueIdentifier, paymentData.enrollment_id)
+          .query(`
+            SELECT TOP 1 
+              hpm.CardLast4,
+              hpm.AccountNumberLast4,
+              hpm.Type,
+              hpm.CardBrand
+            FROM oe.Enrollments e
+            INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+            LEFT JOIN oe.HouseholdPaymentMethods hpm ON m.HouseholdId = hpm.HouseholdId
+              AND hpm.IsDefault = 1
+              AND hpm.Status = 'Active'
+            WHERE e.EnrollmentId = @enrollmentId
+          `);
+        
+        if (individualPaymentMethodResult.recordset.length > 0) {
+          const pm = individualPaymentMethodResult.recordset[0];
+          paymentMethodLast4 = pm.CardLast4 || pm.AccountNumberLast4 || null;
+          paymentMethodType = pm.Type || paymentMethodType;
+          
+          if (paymentMethodLast4) {
+            if (pm.Type === 'Card' || pm.Type === 'CreditCard') {
+              paymentMethodDisplay = `${pm.CardBrand || 'Card'} ending in ${paymentMethodLast4}`;
+            } else if (pm.Type === 'ACH') {
+              paymentMethodDisplay = `Bank Account ending in ${paymentMethodLast4}`;
+            } else {
+              paymentMethodDisplay = `${paymentMethodType} ending in ${paymentMethodLast4}`;
+            }
+          }
+        }
+      } catch (pmError) {
+        logger.warn(`Could not fetch individual payment method details: ${pmError.message}`);
+      }
     }
 
-    // Get tenant settings for dashboard URL
-    let dashboardUrl = 'https://open-enroll.com/member/dashboard'; // Default fallback
+    // Get tenant settings for base URL - let frontend route decide where to go
+    let baseUrl = 'https://open-enroll.com'; // Default fallback
     try {
       const tenantResult = await pool.request()
         .input('tenantId', sql.UniqueIdentifier, tenantId)
@@ -437,12 +493,15 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
         // Use custom domain if available and verified
         if (customDomain && 
             (verificationStatus?.toLowerCase() === 'verified' || !verificationStatus)) {
-          dashboardUrl = `https://${customDomain}${userId ? '/member/dashboard' : '/group-admin/dashboard'}`;
+          baseUrl = `https://${customDomain}`;
         }
       }
     } catch (urlError) {
-      logger.warn(`Could not fetch tenant settings for dashboard URL: ${urlError.message}`);
+      logger.warn(`Could not fetch tenant settings for base URL: ${urlError.message}`);
     }
+    
+    // Let frontend route decide - just go to dashboard, frontend will redirect based on role
+    const dashboardUrl = `${baseUrl}/dashboard`;
 
     // For group payments, RecipientId can be NULL
     let recipientId = userId || null;
@@ -473,11 +532,6 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
 
     logger.info(`TenantId validated: ${tenantIdStr}`);
     finalTenantId = tenantIdStr;
-
-    // Format payment method display
-    const paymentMethodDisplay = paymentMethodLast4 
-      ? `${paymentMethodType} ending in ${paymentMethodLast4}`
-      : paymentMethodType;
     
     // Format attempt number display
     const attemptDisplay = paymentData.attempt_number 
@@ -571,6 +625,15 @@ ${paymentData.attempt_number ? `<p style="margin:5px 0;font-size:14px;color:#666
     const escapeSqlString = (str) => String(str).replace(/'/g, "''"); // Escape single quotes for SQL
     const recipientIdValue = cleanRecipientId ? `'${escapeSqlString(cleanRecipientId)}'` : 'NULL';
     
+    // Minify HTML to remove whitespace (exact same method as MonthlyPaymentScheduler)
+    const minifiedEmailBody = emailBody
+      .replace(/\r\n/g, '') // Remove Windows line breaks
+      .replace(/\n/g, '') // Remove Unix line breaks
+      .replace(/\r/g, '') // Remove Mac line breaks
+      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
+      .replace(/>\s+</g, '><') // Remove spaces between tags
+      .trim(); // Remove leading/trailing whitespace
+    
     const query = `
       INSERT INTO oe.MessageQueue (
         MessageId, TenantId, RecipientId, MessageType,
@@ -590,7 +653,7 @@ ${paymentData.attempt_number ? `<p style="margin:5px 0;font-size:14px;color:#666
     request.input('messageType', sql.NVarChar, 'Email');
     request.input('recipientAddress', sql.NVarChar, groupContactEmail);
     request.input('subject', sql.NVarChar, subject);
-    request.input('body', sql.NVarChar(sql.MAX), emailBody);
+    request.input('body', sql.NVarChar(sql.MAX), minifiedEmailBody);
     
     logger.info(`Executing MessageQueue INSERT - TenantId: ${cleanTenantId} (embedded), RecipientId: ${cleanRecipientId || 'NULL'}`);
     
@@ -1122,15 +1185,18 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
 
   logger.info(`Recurring Payment Success: Schedule ${scheduleId}, Transaction ${transactionId}, Amount: $${amount}`);
 
-  // Find the group associated with this schedule and get enrollment context
+  // First, try to find if this is a GROUP recurring payment (with invoice linkage)
   const groupResult = await pool.request()
     .input('scheduleId', sql.NVarChar(255), scheduleId)
     .query(`
       SELECT 
         g.GroupId, 
         g.TenantId,
+        grp.LocationId,
+        grp.InvoiceId,
         e.EnrollmentId,
-        e.AgentId
+        e.AgentId,
+        NULL as HouseholdId
       FROM oe.GroupRecurringPaymentPlans grp
       INNER JOIN oe.Groups g ON grp.GroupId = g.GroupId
       LEFT JOIN (
@@ -1145,51 +1211,125 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
       WHERE grp.DimeScheduleId = @scheduleId
     `);
 
-  if (groupResult.recordset.length === 0) {
-    throw new Error(`Group not found for schedule: ${scheduleId}`);
+  let groupId = null;
+  let tenantId = null;
+  let locationId = null;
+  let invoiceId = null;
+  let enrollmentId = null;
+  let agentId = null;
+  let householdId = null;
+  let isIndividualRecurring = false;
+
+  if (groupResult.recordset.length > 0) {
+    // GROUP recurring payment
+    const groupData = groupResult.recordset[0];
+    groupId = groupData.GroupId;
+    tenantId = groupData.TenantId;
+    locationId = groupData.LocationId || null;
+    invoiceId = groupData.InvoiceId || null;
+    enrollmentId = groupData.EnrollmentId || null;
+    agentId = groupData.AgentId || null;
+    logger.info(`Found GROUP recurring payment for GroupId: ${groupId}, LocationId: ${locationId}, InvoiceId: ${invoiceId}`);
+  } else {
+    // Not a group payment - check if it's an INDIVIDUAL recurring payment
+    // Look for existing payment record with this RecurringScheduleId
+    const individualResult = await pool.request()
+      .input('scheduleId', sql.NVarChar(255), scheduleId)
+      .query(`
+        SELECT TOP 1 
+          p.HouseholdId,
+          p.EnrollmentId,
+          p.GroupId,
+          p.TenantId,
+          p.AgentId
+        FROM oe.Payments p
+        WHERE p.RecurringScheduleId = @scheduleId
+        ORDER BY p.CreatedDate DESC
+      `);
+
+    if (individualResult.recordset.length === 0) {
+      throw new Error(`No group or individual payment found for recurring schedule: ${scheduleId}`);
+    }
+
+    const individualData = individualResult.recordset[0];
+    householdId = individualData.HouseholdId;
+    enrollmentId = individualData.EnrollmentId;
+    groupId = individualData.GroupId;
+    tenantId = individualData.TenantId;
+    agentId = individualData.AgentId;
+    isIndividualRecurring = true;
+    logger.info(`Found INDIVIDUAL recurring payment for HouseholdId: ${householdId}`);
   }
 
-  const groupData = groupResult.recordset[0];
-  const groupId = groupData.GroupId;
-  const tenantId = groupData.TenantId;
-  const enrollmentId = groupData.EnrollmentId || null;
-  const agentId = groupData.AgentId || null;
-
-  // For recurring payments, aggregate pricing from all active group enrollments
-  // Recurring payments represent total premiums for the entire group
+  // Get pricing information based on payment type (group vs individual)
   let netRate = 0;
   let commission = 0;
   let overrideRate = 0;
   let systemFees = 0;
 
   try {
-    const pricingResult = await pool.request()
-      .input('groupId', sql.UniqueIdentifier, groupId)
-      .query(`
-        SELECT 
-          SUM(COALESCE(e.NetRate, 0)) as NetRate,
-          SUM(COALESCE(e.Commission, 0)) as Commission,
-          SUM(COALESCE(e.OverrideRate, 0)) as OverrideRate,
-          SUM(COALESCE(e.SystemFees, 0)) as SystemFees
-        FROM oe.Enrollments e
-        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
-        WHERE m.GroupId = @groupId
-          AND e.Status = 'Active'
-          AND e.EffectiveDate <= GETUTCDATE()
-          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
-      `);
-    
-    if (pricingResult.recordset.length > 0) {
-      netRate = pricingResult.recordset[0].NetRate || 0;
-      commission = pricingResult.recordset[0].Commission || 0;
-      overrideRate = pricingResult.recordset[0].OverrideRate || 0;
-      systemFees = pricingResult.recordset[0].SystemFees || 0;
+    if (isIndividualRecurring && householdId) {
+      // Individual recurring payment - get pricing from household enrollments
+      const pricingResult = await pool.request()
+        .input('householdId', sql.UniqueIdentifier, householdId)
+        .query(`
+          SELECT 
+            SUM(COALESCE(e.NetRate, 0)) as NetRate,
+            SUM(COALESCE(e.Commission, 0)) as Commission,
+            SUM(COALESCE(e.OverrideRate, 0)) as OverrideRate,
+            SUM(COALESCE(e.SystemFees, 0)) as SystemFees
+          FROM oe.Enrollments e
+          WHERE e.HouseholdId = @householdId
+            AND e.Status = 'Active'
+            AND e.EffectiveDate <= GETUTCDATE()
+            AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+        `);
+      
+      if (pricingResult.recordset.length > 0) {
+        netRate = pricingResult.recordset[0].NetRate || 0;
+        commission = pricingResult.recordset[0].Commission || 0;
+        overrideRate = pricingResult.recordset[0].OverrideRate || 0;
+        systemFees = pricingResult.recordset[0].SystemFees || 0;
+      }
+      logger.info(`Aggregated pricing for individual household: NetRate=${netRate}, Commission=${commission}`);
+    } else if (groupId) {
+      // Group recurring payment - aggregate from all group enrollments
+      const pricingResult = await pool.request()
+        .input('groupId', sql.UniqueIdentifier, groupId)
+        .query(`
+          SELECT 
+            SUM(COALESCE(e.NetRate, 0)) as NetRate,
+            SUM(COALESCE(e.Commission, 0)) as Commission,
+            SUM(COALESCE(e.OverrideRate, 0)) as OverrideRate,
+            SUM(COALESCE(e.SystemFees, 0)) as SystemFees
+          FROM oe.Enrollments e
+          INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+          WHERE m.GroupId = @groupId
+            AND e.Status = 'Active'
+            AND e.EffectiveDate <= GETUTCDATE()
+            AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+        `);
+      
+      if (pricingResult.recordset.length > 0) {
+        netRate = pricingResult.recordset[0].NetRate || 0;
+        commission = pricingResult.recordset[0].Commission || 0;
+        overrideRate = pricingResult.recordset[0].OverrideRate || 0;
+        systemFees = pricingResult.recordset[0].SystemFees || 0;
+      }
+      logger.info(`Aggregated pricing for group: NetRate=${netRate}, Commission=${commission}`);
     }
   } catch (error) {
-    logger.warn(`Could not aggregate pricing for group ${groupId}: ${error.message}`);
+    logger.warn(`Could not aggregate pricing: ${error.message}`);
   }
 
-  // Insert payment record
+  // Calculate next billing date (1 month from now)
+  const nextBillingDate = new Date();
+  nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
+  nextBillingDate.setDate(1); // Set to 1st of next month
+  
+  logger.info(`Calculated next billing date: ${nextBillingDate.toISOString().split('T')[0]}`);
+
+  // Insert payment record with LocationId, InvoiceId, RecurringScheduleId and NextBillingDate
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
@@ -1197,133 +1337,262 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .input('paymentMethod', sql.NVarChar(50), 'Recurring')
+    .input('recurringScheduleId', sql.NVarChar(255), scheduleId)
+    .input('nextBillingDate', sql.Date, nextBillingDate)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
     .input('enrollmentId', sql.UniqueIdentifier, enrollmentId)
     .input('agentId', sql.UniqueIdentifier, agentId)
+    .input('householdId', sql.UniqueIdentifier, householdId)
     .input('groupId', sql.UniqueIdentifier, groupId)
     .input('tenantId', sql.UniqueIdentifier, tenantId)
+    .input('locationId', sql.UniqueIdentifier, locationId)
+    .input('invoiceId', sql.UniqueIdentifier, invoiceId)
     .input('netRate', sql.Decimal(10,2), netRate)
     .input('commission', sql.Decimal(10,2), commission)
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
+        PaymentId, EnrollmentId, AgentId, HouseholdId, GroupId, TenantId, LocationId, InvoiceId,
+        TransactionType, Amount, Status, Processor, 
+        ProcessorTransactionId, PaymentMethod, RecurringScheduleId, NextBillingDate, WebhookEventId, PaymentDate,
         NetRate, Commission, OverrideRate, SystemFees,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), @enrollmentId, @agentId, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
+        NEWID(), @enrollmentId, @agentId, @householdId, @groupId, @tenantId, @locationId, @invoiceId,
+        @transactionType, @amount, @status, @processor,
+        @processorTransactionId, @paymentMethod, @recurringScheduleId, @nextBillingDate, @webhookEventId, @paymentDate,
         @netRate, @commission, @overrideRate, @systemFees,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
 
-  logger.success(`Recurring payment success processed for group: ${groupId}`);
+  logger.success(`Recurring payment success processed for ${isIndividualRecurring ? 'household' : 'group'}: ${isIndividualRecurring ? householdId : groupId}, next billing: ${nextBillingDate.toISOString().split('T')[0]}`);
+  
+  // Update invoice status to Paid (for group payments with invoices)
+  if (invoiceId) {
+    try {
+      await pool.request()
+        .input('invoiceId', sql.UniqueIdentifier, invoiceId)
+        .input('amount', sql.Decimal(12,2), amount)
+        .query(`
+          UPDATE oe.Invoices
+          SET Status = 'Paid',
+              PaidAmount = @amount,
+              PaymentReceivedDate = GETUTCDATE(),
+              ModifiedDate = GETUTCDATE()
+          WHERE InvoiceId = @invoiceId
+        `);
+      logger.success(`  Invoice ${invoiceId} marked as Paid`);
+    } catch (invoiceError) {
+      logger.error(`  Failed to update invoice status: ${invoiceError.message}`);
+    }
+  }
 }
 
 async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) {
-    const scheduleId = data.schedule_id || data.recurring_payment_id;
-    const transactionId = data.transaction_id;
+  const scheduleId = data.schedule_id || data.recurring_payment_id;
+  const transactionId = data.transaction_id;
   const amount = data.amount;
   const failureReason = data.failure_reason || 'Unknown';
 
   logger.error(`Recurring Payment Failed: Schedule ${scheduleId}, Transaction ${transactionId}, Amount: $${amount}, Reason: ${failureReason}`);
 
-  // Find the group associated with this schedule
-    const groupResult = await pool.request()
-      .input('scheduleId', sql.NVarChar(255), scheduleId)
-      .query(`
-      SELECT g.GroupId, g.TenantId FROM oe.GroupRecurringPaymentPlans grp
+  // First, try to find if this is a GROUP recurring payment (with invoice linkage)
+  const groupResult = await pool.request()
+    .input('scheduleId', sql.NVarChar(255), scheduleId)
+    .query(`
+      SELECT 
+        g.GroupId, 
+        g.TenantId,
+        grp.LocationId,
+        grp.InvoiceId
+      FROM oe.GroupRecurringPaymentPlans grp
       INNER JOIN oe.Groups g ON grp.GroupId = g.GroupId
       WHERE grp.DimeScheduleId = @scheduleId
+    `);
+
+  let groupId = null;
+  let tenantId = null;
+  let locationId = null;
+  let invoiceId = null;
+  let enrollmentId = null;
+  let householdId = null;
+  let agentId = null;
+  let isIndividualRecurring = false;
+
+  if (groupResult.recordset.length > 0) {
+    // GROUP recurring payment
+    const groupData = groupResult.recordset[0];
+    groupId = groupData.GroupId;
+    tenantId = groupData.TenantId;
+    locationId = groupData.LocationId || null;
+    invoiceId = groupData.InvoiceId || null;
+    logger.info(`Found GROUP recurring payment failure for GroupId: ${groupId}, LocationId: ${locationId}, InvoiceId: ${invoiceId}`);
+  } else {
+    // Not a group payment - check if it's an INDIVIDUAL recurring payment
+    const individualResult = await pool.request()
+      .input('scheduleId', sql.NVarChar(255), scheduleId)
+      .query(`
+        SELECT TOP 1 
+          p.HouseholdId,
+          p.EnrollmentId,
+          p.GroupId,
+          p.TenantId,
+          p.AgentId
+        FROM oe.Payments p
+        WHERE p.RecurringScheduleId = @scheduleId
+        ORDER BY p.CreatedDate DESC
       `);
 
-    if (groupResult.recordset.length === 0) {
-    throw new Error(`Group not found for schedule: ${scheduleId}`);
+    if (individualResult.recordset.length === 0) {
+      throw new Error(`No group or individual payment found for recurring schedule: ${scheduleId}`);
     }
 
-  const groupData = groupResult.recordset[0];
-  const groupId = groupData.GroupId;
-  const tenantId = groupData.TenantId;
+    const individualData = individualResult.recordset[0];
+    householdId = individualData.HouseholdId;
+    enrollmentId = individualData.EnrollmentId;
+    groupId = individualData.GroupId;
+    tenantId = individualData.TenantId;
+    agentId = individualData.AgentId;
+    isIndividualRecurring = true;
+    logger.info(`Found INDIVIDUAL recurring payment failure for HouseholdId: ${householdId}`);
+  }
 
-  // For recurring payments, aggregate pricing from all active group enrollments
+  // Get pricing information based on payment type (group vs individual)
   let netRate = 0;
   let commission = 0;
   let overrideRate = 0;
   let systemFees = 0;
 
   try {
-    const pricingResult = await pool.request()
-      .input('groupId', sql.UniqueIdentifier, groupId)
-      .query(`
-        SELECT 
-          SUM(COALESCE(e.NetRate, 0)) as NetRate,
-          SUM(COALESCE(e.Commission, 0)) as Commission,
-          SUM(COALESCE(e.OverrideRate, 0)) as OverrideRate,
-          SUM(COALESCE(e.SystemFees, 0)) as SystemFees
-        FROM oe.Enrollments e
-        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
-        WHERE m.GroupId = @groupId
-          AND e.Status = 'Active'
-          AND e.EffectiveDate <= GETUTCDATE()
-          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
-      `);
-    
-    if (pricingResult.recordset.length > 0) {
-      netRate = pricingResult.recordset[0].NetRate || 0;
-      commission = pricingResult.recordset[0].Commission || 0;
-      overrideRate = pricingResult.recordset[0].OverrideRate || 0;
-      systemFees = pricingResult.recordset[0].SystemFees || 0;
+    if (isIndividualRecurring && householdId) {
+      // Individual recurring payment - get pricing from household enrollments
+      const pricingResult = await pool.request()
+        .input('householdId', sql.UniqueIdentifier, householdId)
+        .query(`
+          SELECT 
+            SUM(COALESCE(e.NetRate, 0)) as NetRate,
+            SUM(COALESCE(e.Commission, 0)) as Commission,
+            SUM(COALESCE(e.OverrideRate, 0)) as OverrideRate,
+            SUM(COALESCE(e.SystemFees, 0)) as SystemFees
+          FROM oe.Enrollments e
+          WHERE e.HouseholdId = @householdId
+            AND e.Status = 'Active'
+            AND e.EffectiveDate <= GETUTCDATE()
+            AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+        `);
+      
+      if (pricingResult.recordset.length > 0) {
+        netRate = pricingResult.recordset[0].NetRate || 0;
+        commission = pricingResult.recordset[0].Commission || 0;
+        overrideRate = pricingResult.recordset[0].OverrideRate || 0;
+        systemFees = pricingResult.recordset[0].SystemFees || 0;
+      }
+    } else if (groupId) {
+      // Group recurring payment - aggregate from all group enrollments
+      const pricingResult = await pool.request()
+        .input('groupId', sql.UniqueIdentifier, groupId)
+        .query(`
+          SELECT 
+            SUM(COALESCE(e.NetRate, 0)) as NetRate,
+            SUM(COALESCE(e.Commission, 0)) as Commission,
+            SUM(COALESCE(e.OverrideRate, 0)) as OverrideRate,
+            SUM(COALESCE(e.SystemFees, 0)) as SystemFees
+          FROM oe.Enrollments e
+          INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+          WHERE m.GroupId = @groupId
+            AND e.Status = 'Active'
+            AND e.EffectiveDate <= GETUTCDATE()
+            AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+        `);
+      
+      if (pricingResult.recordset.length > 0) {
+        netRate = pricingResult.recordset[0].NetRate || 0;
+        commission = pricingResult.recordset[0].Commission || 0;
+        overrideRate = pricingResult.recordset[0].OverrideRate || 0;
+        systemFees = pricingResult.recordset[0].SystemFees || 0;
+      }
     }
   } catch (error) {
-    logger.warn(`Could not aggregate pricing for group ${groupId}: ${error.message}`);
+    logger.warn(`Could not aggregate pricing: ${error.message}`);
   }
 
-  // Insert failed payment record
-    await pool.request()
+  // Calculate next retry date (1 week from now for failed payments)
+  const nextRetryDate = new Date();
+  nextRetryDate.setDate(nextRetryDate.getDate() + 7);
+  
+  logger.info(`Next retry date set to: ${nextRetryDate.toISOString().split('T')[0]}`);
+
+  // Insert failed payment record with LocationId, InvoiceId, RecurringScheduleId and retry info
+  await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), 'Failed')
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .input('paymentMethod', sql.NVarChar(50), 'Recurring')
+    .input('recurringScheduleId', sql.NVarChar(255), scheduleId)
     .input('failureReason', sql.NVarChar(sql.MAX), failureReason)
+    .input('retryDate', sql.DateTime2, nextRetryDate)
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
-      .input('groupId', sql.UniqueIdentifier, groupId)
+    .input('enrollmentId', sql.UniqueIdentifier, enrollmentId)
+    .input('householdId', sql.UniqueIdentifier, householdId)
+    .input('agentId', sql.UniqueIdentifier, agentId)
+    .input('groupId', sql.UniqueIdentifier, groupId)
     .input('tenantId', sql.UniqueIdentifier, tenantId)
+    .input('locationId', sql.UniqueIdentifier, locationId)
+    .input('invoiceId', sql.UniqueIdentifier, invoiceId)
     .input('netRate', sql.Decimal(10,2), netRate)
     .input('commission', sql.Decimal(10,2), commission)
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
-      .query(`
+    .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate, GroupId, TenantId,
+        PaymentId, EnrollmentId, AgentId, HouseholdId, GroupId, TenantId, LocationId, InvoiceId,
+        TransactionType, Amount, Status, Processor, 
+        ProcessorTransactionId, PaymentMethod, RecurringScheduleId, FailureReason, RetryDate, WebhookEventId, PaymentDate,
         NetRate, Commission, OverrideRate, SystemFees,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), NULL, NULL, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate, @groupId, @tenantId,
+        NEWID(), @enrollmentId, @agentId, @householdId, @groupId, @tenantId, @locationId, @invoiceId,
+        @transactionType, @amount, @status, @processor,
+        @processorTransactionId, @paymentMethod, @recurringScheduleId, @failureReason, @retryDate, @webhookEventId, @paymentDate,
         @netRate, @commission, @overrideRate, @systemFees,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
 
-  logger.error(`Recurring payment failure processed for group: ${groupId}`);
+  logger.error(`Recurring payment failure processed for ${isIndividualRecurring ? 'household' : 'group'}: ${isIndividualRecurring ? householdId : groupId}, retry scheduled for: ${nextRetryDate.toISOString().split('T')[0]}`);
+  
+  // Update invoice status to Unpaid (for group payments with invoices)
+  if (invoiceId) {
+    try {
+      await pool.request()
+        .input('invoiceId', sql.UniqueIdentifier, invoiceId)
+        .query(`
+          UPDATE oe.Invoices
+          SET Status = 'Unpaid',
+              ModifiedDate = GETUTCDATE()
+          WHERE InvoiceId = @invoiceId
+        `);
+      logger.error(`  Invoice ${invoiceId} marked as Unpaid`);
+    } catch (invoiceError) {
+      logger.error(`  Failed to update invoice status: ${invoiceError.message}`);
+    }
+  }
   
   // Send email notification for payment failure
   try {
     await sendPaymentFailureNotification(pool, {
-      enrollment_id: null, // Recurring payments don't have enrollment_id
+      enrollment_id: enrollmentId,
       amount: amount,
       payment_method: 'Recurring',
       transaction_id: transactionId,
       failure_reason: failureReason
-    }, logger);
+    }, logger, groupId, tenantId, isIndividualRecurring, locationId);
   } catch (emailError) {
     logger.error('Failed to send payment failure notification:', emailError);
   }

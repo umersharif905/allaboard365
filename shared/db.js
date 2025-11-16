@@ -28,6 +28,20 @@ function getDbConfig() {
  */
 async function getPool() {
   const config = getDbConfig();
+  
+  // 🚨 SAFETY: Prevent production DB usage in local/development mode
+  const isLocalDev = process.env.NODE_ENV === 'development' || !process.env.NODE_ENV;
+  const isProductionDB = config.database === 'open-enroll';
+  
+  if (isLocalDev && isProductionDB) {
+    throw new Error(
+      '🚨 BLOCKED: Cannot connect to production database (open-enroll) in development mode!\n' +
+      '   Current DB: ' + config.database + '\n' +
+      '   NODE_ENV: ' + (process.env.NODE_ENV || 'undefined') + '\n' +
+      '   ✅ Update local.settings.json to use "open-enroll-dev" for local testing'
+    );
+  }
+  
   const pool = new sql.ConnectionPool(config);
   await pool.connect();
   return pool;

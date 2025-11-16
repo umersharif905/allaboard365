@@ -7,6 +7,14 @@ const { createLogger } = require('../shared/logger');
  * 
  * Updates MonthlyAmount in GroupRecurringPaymentPlans based on current enrollments
  * Does NOT interact with DIME - only updates the database
+ * 
+ * MULTI-LOCATION BILLING:
+ * See docs/group-payments/MULTI_LOCATION_BILLING.md for full implementation details
+ * 
+ * TODO: Update to use sp_CalculateLocationPremiums for location-based billing
+ * - Calculate premiums per-location (not just group total)
+ * - Store location-specific amounts for separate invoicing
+ * - Support fallback logic when members have no LocationId
  */
 module.exports = async function (context, myTimer) {
   const logger = createLogger(context);

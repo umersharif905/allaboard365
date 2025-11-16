@@ -1,34 +1,106 @@
 const axios = require('axios');
+const { getPool, sql } = require('./db');
+const encryptionService = require('./encryptionService');
 
 /**
  * DIME Payments Service - Azure Functions Edition
- * Focused on recurring payment schedule management
+ * Focused on recurring payment schedule management with per-tenant credentials
  */
 class DimeService {
   /**
-   * Get DIME configuration based on environment
+   * Get DIME configuration for a specific tenant from database
+   * @param {string} tenantId - The tenant UUID
+   * @returns {Promise<Object>} Configuration object with apiToken, sid, and baseUrl
+   * @throws {Error} If tenant credentials are not configured
    */
-  static getConfig() {
-    const isProduction = process.env.NODE_ENV === 'production';
-    
-    return {
-      apiToken: isProduction 
-        ? process.env.DIME_PROD_API_TOKEN 
-        : process.env.DIME_DEMO_API_TOKEN,
-      sid: isProduction 
-        ? process.env.DIME_PROD_SID 
-        : process.env.DIME_DEMO_SID,
-      baseUrl: isProduction 
-        ? process.env.DIME_PROD_API_BASE_URL 
-        : process.env.DIME_DEMO_API_BASE_URL
-    };
+  static async getConfigForTenant(tenantId) {
+    if (!tenantId) {
+      throw new Error('Tenant ID is required for DIME operations');
+    }
+
+    try {
+      const pool = await getPool();
+      
+      const result = await pool.request()
+        .input('tenantId', sql.UniqueIdentifier, tenantId)
+        .query(`
+          SELECT PaymentProcessorSettings
+          FROM oe.Tenants
+          WHERE TenantId = @tenantId
+        `);
+
+      if (result.recordset.length === 0) {
+        throw new Error(`Tenant not found: ${tenantId}`);
+      }
+
+      const settingsJson = result.recordset[0].PaymentProcessorSettings;
+      
+      if (!settingsJson) {
+        throw new Error(`DIME credentials not configured for tenant: ${tenantId}. Please configure payment processor settings in tenant admin settings.`);
+      }
+
+      const settings = JSON.parse(settingsJson);
+      
+      if (!settings.processors?.openenroll?.enabled) {
+        throw new Error(`Open Enroll payment processor not enabled for tenant: ${tenantId}`);
+      }
+
+      const dimeConfig = settings.processors.openenroll.dime;
+      
+      if (!dimeConfig) {
+        throw new Error(`DIME configuration missing for tenant: ${tenantId}`);
+      }
+
+      // Decrypt sensitive fields
+      const apiToken = dimeConfig.apiTokenEncrypted 
+        ? encryptionService.decrypt(dimeConfig.apiTokenEncrypted)
+        : dimeConfig.apiToken;
+        
+      const webhookSecret = dimeConfig.webhookSecretEncrypted
+        ? encryptionService.decrypt(dimeConfig.webhookSecretEncrypted)
+        : dimeConfig.webhookSecret;
+
+      // Determine environment and base URL
+      const environment = dimeConfig.environment;
+      
+      if (!environment) {
+        throw new Error(`DIME environment not specified in tenant settings for tenant: ${tenantId}`);
+      }
+      
+      // Derive base URL from environment (no fallbacks!)
+      let baseUrl;
+      if (environment === 'production') {
+        baseUrl = 'https://api.dimepayments.com';
+      } else if (environment === 'demo') {
+        baseUrl = 'https://demo.dimepayments.com';
+      } else {
+        throw new Error(`Invalid DIME environment "${environment}" for tenant: ${tenantId}. Must be "production" or "demo".`);
+      }
+
+      return {
+        apiToken,
+        sid: dimeConfig.sid,
+        webhookSecret,
+        environment,
+        baseUrl
+      };
+    } catch (error) {
+      if (error.message.includes('DIME credentials not configured') || 
+          error.message.includes('not enabled') ||
+          error.message.includes('configuration missing')) {
+        throw error;
+      }
+      console.error('Error fetching DIME config for tenant:', tenantId, error);
+      throw new Error(`Failed to retrieve DIME configuration: ${error.message}`);
+    }
   }
 
   /**
-   * Create authenticated request headers
+   * Create authenticated request headers with tenant-specific config
+   * @param {Object} config - Configuration object from getConfigForTenant
+   * @returns {Object} Headers for DIME API requests
    */
-  static getHeaders() {
-    const config = this.getConfig();
+  static getHeaders(config) {
     return {
       'Authorization': `Bearer ${config.apiToken}`,
       'Content-Type': 'application/json',
@@ -38,11 +110,13 @@ class DimeService {
 
   /**
    * Create a customer in DIME
+   * @param {Object} customerData - Customer information
+   * @param {string} tenantId - Tenant UUID
    */
-  static async createCustomer(customerData) {
+  static async createCustomer(customerData, tenantId) {
     try {
-      const config = this.getConfig();
-      const headers = this.getHeaders();
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
 
       const payload = {
         data: {
@@ -74,7 +148,7 @@ class DimeService {
     } catch (error) {
       // Check if email already exists - try to get existing customer
       if (error.response?.data?.errors?.['data.email']?.some(msg => msg.includes('already been taken'))) {
-        const existingCustomer = await this.getCustomerByEmail(customerData.email);
+        const existingCustomer = await this.getCustomerByEmail(customerData.email, tenantId);
         if (existingCustomer.success) {
           return {
             success: true,
@@ -99,11 +173,13 @@ class DimeService {
 
   /**
    * Get existing customer by email from DIME
+   * @param {string} email - Customer email address
+   * @param {string} tenantId - Tenant UUID
    */
-  static async getCustomerByEmail(email) {
+  static async getCustomerByEmail(email, tenantId) {
     try {
-      const config = this.getConfig();
-      const headers = this.getHeaders();
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
 
       const payload = {
         filters: { email },
@@ -139,13 +215,15 @@ class DimeService {
 
   /**
    * Setup recurring payment schedule for group
+   * @param {Object} scheduleData - Schedule configuration
+   * @param {string} tenantId - Tenant UUID
    */
-  static async setupRecurringPayment(scheduleData) {
+  static async setupRecurringPayment(scheduleData, tenantId) {
     try {
       const { customerId, paymentMethodId, amount, description, startDate } = scheduleData;
       
-      const config = this.getConfig();
-      const headers = this.getHeaders();
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
       
       // Calculate end date (1st of following month)
       const endDate = new Date(startDate);
@@ -201,11 +279,13 @@ class DimeService {
 
   /**
    * Cancel a recurring payment schedule in DIME
+   * @param {string} scheduleId - DIME recurring payment ID
+   * @param {string} tenantId - Tenant UUID
    */
-  static async cancelRecurringPayment(scheduleId) {
+  static async cancelRecurringPayment(scheduleId, tenantId) {
     try {
-      const config = this.getConfig();
-      const headers = this.getHeaders();
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
       
       const response = await axios.post(
         `${config.baseUrl}/api/recurring-payment/${scheduleId}/cancel`,
@@ -235,13 +315,15 @@ class DimeService {
   /**
    * Update an existing recurring payment schedule
    * NOTE: DIME doesn't have a direct update endpoint, so we cancel and recreate
+   * @param {Object} updateData - Schedule update configuration
+   * @param {string} tenantId - Tenant UUID
    */
-  static async updateRecurringPayment(updateData) {
+  static async updateRecurringPayment(updateData, tenantId) {
     try {
       const { scheduleId, customerId, paymentMethodId, amount, startDate, description } = updateData;
       
-      const config = this.getConfig();
-      const headers = this.getHeaders();
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
       
       // Step 1: Cancel existing schedule
       try {
@@ -264,7 +346,7 @@ class DimeService {
         amount,
         description: description || 'Monthly Payment',
         startDate: startDate || new Date()
-      });
+      }, tenantId);
       
       if (!newSchedule.success) {
         throw new Error(`Failed to create new recurring payment: ${newSchedule.message}`);
@@ -283,6 +365,79 @@ class DimeService {
         success: false,
         error: error.response?.data || error.message,
         message: 'Failed to update recurring payment schedule'
+      };
+    }
+  }
+
+  /**
+   * Charge a payment method directly (one-time payment)
+   * Used for processing invoice payments on the 5th of the month
+   * @param {Object} chargeData - Charge data with customerId, paymentMethodId, amount, description, metadata
+   * @param {string} tenantId - Tenant UUID
+   * @returns {Promise<Object>} Result with success, transactionId, or error
+   */
+  static async chargePaymentMethod(chargeData, tenantId) {
+    try {
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
+
+      const { customerId, paymentMethodId, amount, description, metadata } = chargeData;
+
+      if (!customerId || !paymentMethodId || !amount) {
+        throw new Error('Missing required fields: customerId, paymentMethodId, and amount are required');
+      }
+
+      // Determine payment method type from payment method ID or metadata
+      // For now, we'll need to get this from the database or pass it in
+      // Defaulting to Card for now - this should be passed in or retrieved
+      const paymentMethodType = chargeData.paymentMethodType || 'Card';
+
+      const endpoint = paymentMethodType === 'ACH' 
+        ? '/api/transaction/charge-ach' 
+        : '/api/transaction/charge-card';
+
+      const payload = {
+        data: {
+          sid: config.sid,
+          amount: amount,
+          customer_uuid: customerId,
+          payment_method_id: paymentMethodId, // Use stored payment method ID
+          memo: (description || 'Invoice payment').replace(/[^a-zA-Z0-9\s,.\-']/g, '')
+        }
+      };
+
+      // DIME requires cardholder_name for credit cards when using payment_method_id
+      if (paymentMethodType === 'Card' || paymentMethodType === 'CreditCard') {
+        if (chargeData.cardholderName) {
+          payload.data.cardholder_name = chargeData.cardholderName;
+        }
+      }
+
+      // Add metadata if provided
+      if (metadata) {
+        payload.data.metadata = metadata;
+      }
+
+      const response = await axios.post(
+        `${config.baseUrl}${endpoint}`,
+        payload,
+        { headers }
+      );
+
+      const transactionId = response.data.data?.transaction_id || response.data.data?.id || response.data.transaction_id;
+
+      return {
+        success: true,
+        transactionId: transactionId?.toString(),
+        message: 'Payment processed successfully'
+      };
+
+    } catch (error) {
+      console.error('Error charging payment method:', error.response?.data || error.message);
+      return {
+        success: false,
+        error: error.response?.data || error.message,
+        message: 'Failed to charge payment method'
       };
     }
   }
