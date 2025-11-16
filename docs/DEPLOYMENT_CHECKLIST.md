@@ -25,9 +25,9 @@
 - ✅ Database connection tested from local functions
 
 ### Functions Tested
-- ✅ **ManualTrigger** - Working, API key authentication verified
-- ✅ **MonthlyPaymentScheduler** - Logic tested, processes groups correctly
-- ✅ **WebhookProcessor** - Structure ready for DIME webhooks
+- ✅ **DimeManualScheduler** - Working, API key authentication verified
+- ✅ **DimeRecurringPaymentScheduler** - Logic tested, processes groups correctly
+- ✅ **DimeWebhookHandler** - Structure ready for DIME webhooks
 - ⚠️ Timer trigger (will only work after Azure deployment)
 
 ### Test Results
@@ -57,9 +57,9 @@ Uploading [X] MB...
 Upload completed successfully.
 
 Functions in oe-payment-manager-fyerfvdyb3atffhj:
-    MonthlyPaymentScheduler - [timerTrigger]
-    WebhookProcessor - [httpTrigger]
-    ManualTrigger - [httpTrigger]
+    DimeRecurringPaymentScheduler - [timerTrigger]
+    DimeWebhookHandler - [httpTrigger]
+    DimeManualScheduler - [httpTrigger]
 ```
 
 ---
@@ -136,7 +136,7 @@ Ensure these are set in Azure:
 
 ## 📅 Scheduled Run
 
-**MonthlyPaymentScheduler** will run automatically:
+**DimeRecurringPaymentScheduler** will run automatically:
 - **Schedule:** 1st of every month at 6:00 AM UTC
 - **First run:** November 1, 2025 at 6:00 AM
 - **What it does:** Processes all active groups, calculates premiums, updates DIME schedules

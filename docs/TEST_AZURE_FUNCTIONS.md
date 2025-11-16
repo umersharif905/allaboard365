@@ -7,9 +7,9 @@ Your Azure Functions are **configured and ready to test**!
 **Deployment URL:** `https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net`
 
 **Available Functions:**
-1. ✅ **MonthlyPaymentScheduler** - Timer trigger (1st of month @ 6 AM)
-2. ✅ **ManualTrigger** - HTTP endpoint for manual execution
-3. ✅ **WebhookProcessor** - HTTP endpoint for DIME webhooks
+1. ✅ **DimeRecurringPaymentScheduler** - Timer trigger (1st of month @ 6 AM)
+2. ✅ **DimeManualScheduler** - HTTP endpoint for manual execution
+3. ✅ **DimeWebhookHandler** - HTTP endpoint for DIME webhooks
 
 ---
 
@@ -97,11 +97,11 @@ This will test all three endpoints and provide a detailed report.
 2. Navigate to: **Function Apps** → **oe-payment-manager-fyerfvdyb3atffhj**
 3. Click: **Functions** (left sidebar)
 4. You should see:
-   - ✅ MonthlyPaymentScheduler
-   - ✅ ManualTrigger
-   - ✅ WebhookProcessor
+   - ✅ DimeRecurringPaymentScheduler
+   - ✅ DimeManualScheduler
+   - ✅ DimeWebhookHandler
 
-5. Click **ManualTrigger** → **Test/Run** → **Run**
+5. Click **DimeManualScheduler** → **Test/Run** → **Run**
 6. Add header: `x-api-key: a2fb9635baeaab58f1c8887b90ebb61c13664c7a5a1bf490d112757928930b6c`
 7. Click **Run**
 

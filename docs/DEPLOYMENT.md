@@ -164,12 +164,12 @@ Uploading content...
 Upload completed successfully.
 
 Functions in open-enroll-payment-manager:
-    MonthlyPaymentScheduler - [timerTrigger]
+    DimeRecurringPaymentScheduler - [timerTrigger]
     
-    WebhookProcessor - [httpTrigger]
+    DimeWebhookHandler - [httpTrigger]
         Invoke url: https://open-enroll-payment-manager.azurewebsites.net/api/webhooks/dime
     
-    ManualTrigger - [httpTrigger]
+    DimeManualScheduler - [httpTrigger]
         Invoke url: https://open-enroll-payment-manager.azurewebsites.net/api/manual-run
 ```
 
@@ -435,7 +435,7 @@ ls -la */function.json
 
 ### Issue: Timer Not Triggering
 
-**Error:** MonthlyPaymentScheduler doesn't run
+**Error:** DimeRecurringPaymentScheduler doesn't run
 
 **Solutions:**
 1. Check timer expression in `function.json`

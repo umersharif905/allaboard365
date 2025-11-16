@@ -4,7 +4,7 @@
 
 ### Do You Need a Key?
 
-**YES** - The ManualTrigger endpoint requires an API key for security.
+**YES** - The DimeManualScheduler endpoint requires an API key for security.
 
 ### How to Generate a Key
 
@@ -21,7 +21,7 @@ a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2
 **Save this key** - you'll need it for:
 1. Local testing (`local.settings.json`)
 2. Azure deployment (Application Settings)
-3. API calls to ManualTrigger
+3. API calls to DimeManualScheduler
 
 ---
 
@@ -85,11 +85,11 @@ Function Runtime Version: 4.x.x
 
 Functions:
 
-        MonthlyPaymentScheduler: timerTrigger
+        DimeRecurringPaymentScheduler: timerTrigger
 
-        WebhookProcessor: [POST] http://localhost:7071/api/webhooks/dime
+        DimeWebhookHandler: [POST] http://localhost:7071/api/webhooks/dime
 
-        ManualTrigger: [POST] http://localhost:7071/api/manual-run
+        DimeManualScheduler: [POST] http://localhost:7071/api/manual-run
 
 For detailed output, run func with --verbose flag.
 ```
@@ -197,7 +197,7 @@ ORDER BY g.Name;
 **Goal:** Test with one specific group
 
 ```javascript
-// Modify MonthlyPaymentScheduler/index.js temporarily
+// Modify DimeRecurringPaymentScheduler/index.js temporarily
 const groupsQuery = `
   SELECT DISTINCT ...
   WHERE g.Status = 'Active'
@@ -274,11 +274,11 @@ grep ADMIN_API_KEY local.settings.json
 
 ### Issue 4: Timer Trigger Not Working
 
-**Problem:** MonthlyPaymentScheduler doesn't run automatically
+**Problem:** DimeRecurringPaymentScheduler doesn't run automatically
 
 **Solution:**
 - Timer triggers only work when deployed to Azure
-- For local testing, use ManualTrigger instead
+- For local testing, use DimeManualScheduler instead
 - To test timer locally, temporarily change schedule:
   ```json
   // function.json - change to run every minute for testing

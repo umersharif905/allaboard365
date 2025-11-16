@@ -47,11 +47,11 @@ Function Runtime Version: 4.x.x
 
 Functions:
 
-        MonthlyPaymentScheduler: timerTrigger
+        DimeRecurringPaymentScheduler: timerTrigger
 
-        WebhookProcessor: [POST] http://localhost:7071/api/webhooks/dime
+        DimeWebhookHandler: [POST] http://localhost:7071/api/webhooks/dime
 
-        ManualTrigger: [POST] http://localhost:7071/api/manual-run
+        DimeManualScheduler: [POST] http://localhost:7071/api/manual-run
 ```
 
 ---
@@ -74,7 +74,7 @@ curl -X POST http://localhost:7071/api/webhooks/dime \
 
 ### Test 3: Admin Trigger (Alternative endpoint)
 ```bash
-curl -X POST http://localhost:7071/admin/functions/MonthlyPaymentScheduler
+curl -X POST http://localhost:7071/admin/functions/DimeRecurringPaymentScheduler
 ```
 
 ---
@@ -94,7 +94,7 @@ curl -X POST http://localhost:7071/admin/functions/MonthlyPaymentScheduler
 When you run the manual trigger locally, you'll see detailed output:
 
 ```
-[2025-10-09T...] Executing 'ManualTrigger' (Reason='This function was programmatically called via the host APIs.', Id=...)
+[2025-10-09T...] Executing 'DimeManualScheduler' (Reason='This function was programmatically called via the host APIs.', Id=...)
 [2025-10-09T...] 🔧 Manual trigger initiated by admin
 [2025-10-09T...] =========================================
 [2025-10-09T...]   Monthly Payment Scheduler Started

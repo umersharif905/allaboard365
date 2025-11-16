@@ -148,9 +148,9 @@ After deployment, you'll have these URLs:
 
 | Function | URL |
 |----------|-----|
-| **ManualTrigger** | `https://open-enroll-payment-manager.azurewebsites.net/api/manual-run` |
-| **WebhookProcessor** | `https://open-enroll-payment-manager.azurewebsites.net/api/webhooks/dime` |
-| **MonthlyPaymentScheduler** | (Automatic - no URL needed) |
+| **DimeManualScheduler** | `https://open-enroll-payment-manager.azurewebsites.net/api/manual-run` |
+| **DimeWebhookHandler** | `https://open-enroll-payment-manager.azurewebsites.net/api/webhooks/dime` |
+| **DimeRecurringPaymentScheduler** | (Automatic - no URL needed) |
 
 ---
 
@@ -206,13 +206,13 @@ In parent repository:
 ## ❓ FAQ
 
 ### Q: Do I need an API key?
-**A:** Yes, for the ManualTrigger function. See TESTING.md for how to generate one.
+**A:** Yes, for the DimeManualScheduler function. See TESTING.md for how to generate one.
 
 ### Q: How do I test locally?
 **A:** Follow TESTING.md step-by-step. You'll need database access and DIME credentials.
 
 ### Q: When will the scheduler run automatically?
-**A:** On the 1st of each month at 6:00 AM (UTC). Use ManualTrigger for testing.
+**A:** On the 1st of each month at 6:00 AM (UTC). Use DimeManualScheduler for testing.
 
 ### Q: What if something fails?
 **A:** Check MONITORING.md → "Incident Response" for step-by-step troubleshooting.

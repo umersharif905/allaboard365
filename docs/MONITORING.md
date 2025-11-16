@@ -12,7 +12,7 @@ After deployment, monitoring ensures the payment manager runs reliably and alert
 
 **Access:**
 1. Azure Portal → Function App → **open-enroll-payment-manager**
-2. Click **Functions** → Select function (e.g., **MonthlyPaymentScheduler**)
+2. Click **Functions** → Select function (e.g., **DimeRecurringPaymentScheduler**)
 3. Click **Monitor**
 
 **What to check:**
@@ -146,7 +146,7 @@ ORDER BY gp.PaymentFailureCount DESC, gp.ModifiedDate DESC;
 // Average execution time by function
 requests
 | where timestamp > ago(30d)
-| where name in ("MonthlyPaymentScheduler", "WebhookProcessor", "ManualTrigger")
+| where name in ("DimeRecurringPaymentScheduler", "DimeWebhookHandler", "DimeManualScheduler")
 | summarize 
     AvgDuration = avg(duration),
     MaxDuration = max(duration),
@@ -183,7 +183,7 @@ dependencies
 ### 4. Custom Logs
 
 ```kusto
-// MonthlyPaymentScheduler execution details
+// DimeRecurringPaymentScheduler execution details
 traces
 | where timestamp > ago(7d)
 | where message contains "Monthly Payment Scheduler"
@@ -271,7 +271,7 @@ BEGIN
     ResultSummary,
     ErrorMessage
   FROM oe.ScheduledJobExecutions
-  WHERE JobName = 'MonthlyPaymentScheduler'
+  WHERE JobName = 'DimeRecurringPaymentScheduler'
   ORDER BY StartTime DESC;
   
   -- Check for failed payments
@@ -325,7 +325,7 @@ Run every Monday:
 
 | Metric | Target | How to Check |
 |--------|--------|--------------|
-| MonthlyPaymentScheduler duration | < 2 minutes | Application Insights |
+| DimeRecurringPaymentScheduler duration | < 2 minutes | Application Insights |
 | Database query time | < 2 seconds | Application Insights dependencies |
 | DIME API response time | < 3 seconds | Application Insights dependencies |
 | Memory usage | < 512 MB | Function App metrics |
@@ -373,7 +373,7 @@ Run every Monday:
 
 ## Incident Response
 
-### If MonthlyPaymentScheduler Fails
+### If DimeRecurringPaymentScheduler Fails
 
 **Severity: HIGH**
 

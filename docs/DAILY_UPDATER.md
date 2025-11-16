@@ -5,8 +5,8 @@ The Daily Premium Updater is an Azure Function that runs daily to update group p
 
 ## Functions Added
 
-### 1. DailyPremiumUpdater (Scheduled)
-**Path:** `/DailyPremiumUpdater`
+### 1. DimePremiumCalculator (Scheduled)
+**Path:** `/DimePremiumCalculator`
 **Schedule:** Daily at 2:00 AM (Cron: `0 0 2 * * *`)
 **Purpose:** Updates `MonthlyAmount` in `GroupRecurringPaymentPlans` table based on current active enrollments
 
@@ -26,8 +26,8 @@ The Daily Premium Updater is an Azure Function that runs daily to update group p
 - Unchanged: Groups with same amount
 - Failed: Groups with errors
 
-### 2. MonthlyPaymentScheduler (Enhanced)
-**Path:** `/MonthlyPaymentScheduler`
+### 2. DimeRecurringPaymentScheduler (Enhanced)
+**Path:** `/DimeRecurringPaymentScheduler`
 **Schedule:** Monthly on 1st at 6:00 AM (Cron: `0 0 6 1 * *`)
 **Changes:** Now sends invoice emails after processing payments
 
@@ -45,8 +45,8 @@ Located at: `/backend/templates/emails/monthly-invoice.html`
 - Payment summary with billing dates
 - Responsive design for email clients
 
-### 3. ManualDailyTest (Manual Trigger)
-**Path:** `/ManualDailyTest`
+### 3. DimeManualPremiumTest (Manual Trigger)
+**Path:** `/DimeManualPremiumTest`
 **Route:** `POST /api/manual-daily-test`
 **Purpose:** Manually trigger the daily premium updater for testing
 
@@ -106,7 +106,7 @@ curl -X POST https://your-function-app.azurewebsites.net/api/manual-run \
 -- View recent executions
 SELECT TOP 10 *
 FROM oe.ScheduledJobExecutions
-WHERE JobName IN ('DailyPremiumUpdater', 'MonthlyPaymentScheduler')
+WHERE JobName IN ('DimePremiumCalculator', 'DimeRecurringPaymentScheduler')
 ORDER BY StartTime DESC;
 
 -- View queued emails
@@ -124,7 +124,7 @@ Already configured in `local.settings.json`:
 - `DB_USER` - Database user
 - `DB_PASSWORD` - Database password
 - `ADMIN_API_KEY` - API key for manual triggers
-- `DIME_API_KEY` - DIME payment processor key (MonthlyPaymentScheduler only)
+- `DIME_API_KEY` - DIME payment processor key (DimeRecurringPaymentScheduler only)
 
 ## Deployment
 
@@ -137,7 +137,7 @@ func azure functionapp publish open-enroll-payment-manager
 
 ### Azure Portal:
 1. Go to Function App → Functions
-2. Select `DailyPremiumUpdater` or `ManualDailyTest`
+2. Select `DimePremiumCalculator` or `DimeManualPremiumTest`
 3. View "Monitor" tab for execution history
 
 ### Database Logs:
@@ -145,20 +145,20 @@ func azure functionapp publish open-enroll-payment-manager
 -- Check daily updater runs
 SELECT *
 FROM oe.ScheduledJobExecutions
-WHERE JobName = 'DailyPremiumUpdater'
+WHERE JobName = 'DimePremiumCalculator'
 ORDER BY StartTime DESC;
 
 -- Check for errors
 SELECT *
 FROM oe.ScheduledJobExecutions
-WHERE JobName = 'DailyPremiumUpdater'
+WHERE JobName = 'DimePremiumCalculator'
   AND Status = 'Failed'
 ORDER BY StartTime DESC;
 ```
 
 ## Differences from Monthly Scheduler
 
-| Feature | DailyPremiumUpdater | MonthlyPaymentScheduler |
+| Feature | DimePremiumCalculator | DimeRecurringPaymentScheduler |
 |---------|-------------------|------------------------|
 | **Frequency** | Daily (2 AM) | Monthly (1st at 6 AM) |
 | **Updates DB** | ✅ Yes | ✅ Yes |

@@ -105,7 +105,7 @@ curl -X POST https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsite
 ### Steps
 1. Go to: https://portal.azure.com
 2. Search: `oe-payment-manager-fyerfvdyb3atffhj`
-3. Click: **Functions** → **ManualTrigger**
+3. Click: **Functions** → **DimeManualScheduler**
 4. Click: **Code + Test** → **Test/Run**
 5. Add header: `x-api-key: a2fb9635baeaab58f1c8887b90ebb61c13664c7a5a1bf490d112757928930b6c`
 6. Click: **Run**
