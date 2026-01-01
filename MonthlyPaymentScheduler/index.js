@@ -660,7 +660,9 @@ module.exports = async function (context, myTimer) {
     invoicesCreated: 0,
     emailsSent: 0,
     emailsFailed: 0,
-    errors: []
+    errors: [],
+    dimeErrors: [],  // Track DIME schedule creation errors
+    emailErrors: []  // Track email queuing errors
   };
 
   try {
@@ -920,8 +922,19 @@ module.exports = async function (context, myTimer) {
               pool, group, location, fees, paymentMethod, billingDate,
               shouldUseNormalTemplate, logger, additionalLocationsInfo
             );
-            if (emailSent) results.emailsSent++;
-            else results.emailsFailed++;
+            if (emailSent) {
+              results.emailsSent++;
+            } else {
+              results.emailsFailed++;
+              results.emailErrors.push({
+                groupId: group.GroupId,
+                groupName: group.GroupName,
+                locationId: location.LocationId,
+                locationName: location.LocationName,
+                recipientEmail: location.LocationContactEmail,
+                error: 'Email queuing failed - check Azure logs for details'
+              });
+            }
           }
           
           // Store result for consolidated email
@@ -1080,10 +1093,24 @@ module.exports = async function (context, myTimer) {
                 const errorDetails = newSchedule.error?.status 
                   ? ` (status: ${newSchedule.error.status})` 
                   : '';
-                logger.error(`    [DIME] Failed to create recurring payment: ${newSchedule.error?.message || 'Unknown error'}${errorDetails}`);
+                const errorMessage = `${newSchedule.error?.message || 'Unknown error'}${errorDetails}`;
+                logger.error(`    [DIME] Failed to create recurring payment: ${errorMessage}`);
                 if (newSchedule.error?.data) {
                   logger.error(`    [DIME] Error details: ${JSON.stringify(newSchedule.error.data)}`);
                 }
+                // Capture error in results for database logging
+                results.dimeErrors.push({
+                  groupId: group.GroupId,
+                  groupName: group.GroupName,
+                  locationId: location.LocationId,
+                  locationName: location.LocationName,
+                  customerId: group.ProcessorCustomerId,
+                  paymentMethodId: paymentMethod.ProcessorPaymentMethodId,
+                  amount: scheduleAmount,
+                  error: errorMessage,
+                  status: newSchedule.error?.status,
+                  errorData: newSchedule.error?.data
+                });
                 // Don't throw - continue processing other locations, but log the failure
               }
             } catch (scheduleError) {
@@ -1093,6 +1120,20 @@ module.exports = async function (context, myTimer) {
                 logger.error(`    [DIME] Response data: ${JSON.stringify(scheduleError.response.data)}`);
               }
               logger.error(`    [DIME] Stack: ${scheduleError.stack}`);
+              // Capture error in results for database logging
+              results.dimeErrors.push({
+                groupId: group.GroupId,
+                groupName: group.GroupName,
+                locationId: location.LocationId,
+                locationName: location.LocationName,
+                customerId: group.ProcessorCustomerId,
+                paymentMethodId: paymentMethod?.ProcessorPaymentMethodId,
+                amount: scheduleAmount,
+                error: scheduleError.message,
+                status: scheduleError.response?.status,
+                responseData: scheduleError.response?.data,
+                stack: scheduleError.stack
+              });
               // Don't throw - continue processing other locations
             }
           }
@@ -1101,8 +1142,19 @@ module.exports = async function (context, myTimer) {
         // Send consolidated email if multiple locations
         if (locationResults.length > 1) {
           const consolidatedSent = await sendConsolidatedInvoiceEmail(pool, group, locationResults, billingDate, logger);
-          if (consolidatedSent) results.emailsSent++;
-          else results.emailsFailed++;
+          if (consolidatedSent) {
+            results.emailsSent++;
+          } else {
+            results.emailsFailed++;
+            results.emailErrors.push({
+              groupId: group.GroupId,
+              groupName: group.GroupName,
+              locationId: null,
+              locationName: 'Consolidated Email',
+              recipientEmail: group.ContactEmail,
+              error: 'Consolidated email queuing failed - check Azure logs for details'
+            });
+          }
         }
         
         results.updated++;
@@ -1136,9 +1188,23 @@ module.exports = async function (context, myTimer) {
     logger.error(`Emails Failed: ${results.emailsFailed}`);
     
     if (results.errors.length > 0) {
-      logger.subsection('Errors');
+      logger.subsection('Group Processing Errors');
       results.errors.forEach(err => {
         logger.error(`  ${err.groupName}: ${err.error}`);
+      });
+    }
+    
+    if (results.dimeErrors.length > 0) {
+      logger.subsection('DIME Schedule Creation Errors');
+      results.dimeErrors.forEach(err => {
+        logger.error(`  ${err.groupName} - ${err.locationName}: ${err.error}`);
+      });
+    }
+    
+    if (results.emailErrors.length > 0) {
+      logger.subsection('Email Queuing Errors');
+      results.emailErrors.forEach(err => {
+        logger.error(`  ${err.groupName} - ${err.locationName}: ${err.error}`);
       });
     }
     
