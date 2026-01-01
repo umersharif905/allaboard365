@@ -167,10 +167,10 @@ Functions in open-enroll-payment-manager:
     DimeRecurringPaymentScheduler - [timerTrigger]
     
     DimeWebhookHandler - [httpTrigger]
-        Invoke url: https://open-enroll-payment-manager.azurewebsites.net/api/webhooks/dime
+        Invoke url: https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/webhooks/dime
     
     DimeManualScheduler - [httpTrigger]
-        Invoke url: https://open-enroll-payment-manager.azurewebsites.net/api/manual-run
+        Invoke url: https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/manual-run
 ```
 
 **Save these URLs!** You'll need them.
@@ -179,7 +179,7 @@ Functions in open-enroll-payment-manager:
 
 ```bash
 # Test manual trigger (should work immediately)
-curl -X POST https://open-enroll-payment-manager.azurewebsites.net/api/manual-run \
+curl -X POST https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/manual-run \
   -H "x-api-key: YOUR_ADMIN_API_KEY"
 ```
 
@@ -197,7 +197,7 @@ curl -X POST https://open-enroll-payment-manager.azurewebsites.net/api/manual-ru
 1. Login to DIME dashboard
 2. Go to: **Settings** → **Webhooks**
 3. Add new webhook:
-   - **URL**: `https://open-enroll-payment-manager.azurewebsites.net/api/webhooks/dime`
+   - **URL**: `https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/webhooks/dime`
    - **Events**: 
      - ✅ `recurring_payment.success`
      - ✅ `recurring_payment.failed`

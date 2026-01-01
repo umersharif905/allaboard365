@@ -132,23 +132,9 @@ async function getLocationPaymentMethod(pool, groupId, locationId, useLocationAC
   return null;
 }
 
-/**
- * Calculate fees for a location
- * @param {number} basePremium - Base monthly premium
- * @param {number} householdCount - Number of households
- * @param {string} paymentMethodType - Payment method type (Card/ACH)
- * @param {object} systemFeesSettings - System fees settings
- * @param {object} paymentProcessorSettings - Payment processor settings
- * @param {number} unpaidSetupFees - Unpaid setup fees to include (default: 0)
- */
-/**
- * Calculate fees for a location
- * NOTE: Now uses shared invoiceCalculationService to ensure consistency with estimated invoice calculations
- */
-function calculateLocationFees(basePremium, householdCount, paymentMethodType, systemFeesSettings, paymentProcessorSettings, unpaidSetupFees = 0) {
-  const { calculateLocationFees: sharedCalculateLocationFees } = require('../shared/invoiceCalculationService');
-  return sharedCalculateLocationFees(basePremium, householdCount, paymentMethodType, systemFeesSettings, paymentProcessorSettings, unpaidSetupFees);
-}
+// NOTE: calculateLocationFees function removed - we now rely ONLY on oe.Enrollments for fees
+// All fees (SystemFee, PaymentProcessingFee) must be stored in oe.Enrollments
+// If fees are missing from oe.Enrollments, they will be 0 and a warning will be logged
 
 /**
  * Generate invoice record for a location
@@ -826,36 +812,28 @@ module.exports = async function (context, myTimer) {
           }
           
           // Calculate fees for this location (include unpaid setup fees)
-          // Use PaymentProcessingFee and SystemFee from database enrollments (actual stored values)
-          // Only calculate from settings if database values are not available (for backward compatibility)
+          // Use PaymentProcessingFee and SystemFee from database enrollments ONLY (oe.Enrollments)
+          // Never calculate from settings - all fees must be in oe.Enrollments
           const unpaidSetupFees = location.UnpaidSetupFees || 0;
           const dbPaymentProcessingFee = location.PaymentProcessingFeeAmount || 0;
           const dbSystemFee = location.SystemFeeAmount || 0;
           
-          // Calculate fees - use database values if available, otherwise calculate from settings
-          let fees;
-          if (dbPaymentProcessingFee > 0 || dbSystemFee > 0) {
-            // Use database values (actual stored fees)
-            const subtotalWithSystemFees = location.BasePremium + dbSystemFee;
-            fees = {
-              systemFeesAmount: dbSystemFee,
-              paymentProcessingFee: dbPaymentProcessingFee,
-              setupFeesAmount: unpaidSetupFees,
-              totalAmount: Math.round((subtotalWithSystemFees + dbPaymentProcessingFee + unpaidSetupFees) * 100) / 100,
-              processingFees: Math.round((dbSystemFee + dbPaymentProcessingFee) * 100) / 100,
-              subtotalWithSystemFees: subtotalWithSystemFees
-            };
+          // Use database values from oe.Enrollments - if missing, use 0 and log warning
+          if (dbPaymentProcessingFee === 0 && dbSystemFee === 0) {
+            logger.warn(`    ⚠️ WARNING: No fee enrollments found in oe.Enrollments for location ${location.LocationName} (SystemFee=$${dbSystemFee.toFixed(2)}, PaymentProcessingFee=$${dbPaymentProcessingFee.toFixed(2)})`);
           } else {
-            // Fallback: Calculate from settings (for backward compatibility or new enrollments)
-            fees = calculateLocationFees(
-              location.BasePremium,
-              location.HouseholdCount,
-              paymentMethod.Type,
-              systemFeesSettings,
-              paymentProcessorSettings,
-              unpaidSetupFees
-            );
+            logger.info(`    Using database-stored fees from oe.Enrollments: SystemFee=$${dbSystemFee.toFixed(2)}, PaymentProcessingFee=$${dbPaymentProcessingFee.toFixed(2)}`);
           }
+          
+          const subtotalWithSystemFees = location.BasePremium + dbSystemFee;
+          const fees = {
+            systemFeesAmount: dbSystemFee,
+            paymentProcessingFee: dbPaymentProcessingFee,
+            setupFeesAmount: unpaidSetupFees,
+            totalAmount: Math.round((subtotalWithSystemFees + dbPaymentProcessingFee + unpaidSetupFees) * 100) / 100,
+            processingFees: Math.round((dbSystemFee + dbPaymentProcessingFee) * 100) / 100,
+            subtotalWithSystemFees: subtotalWithSystemFees
+          };
           
           logger.info(`    Base: $${location.BasePremium}, System Fees: $${fees.systemFeesAmount}, Payment Fee: $${fees.paymentProcessingFee}, Setup Fees: $${fees.setupFeesAmount}, Total: $${fees.totalAmount}`);
           
@@ -966,6 +944,7 @@ module.exports = async function (context, myTimer) {
               logger.info(`    Canceling all existing DIME schedules for customer ${group.ProcessorCustomerId}`);
               
               // First, try to get all schedules from DIME for this customer
+              logger.info(`    [DIME] Listing recurring payments for customer: ${group.ProcessorCustomerId}`);
               const dimeSchedulesResult = await DimeService.listRecurringPayments(group.ProcessorCustomerId, group.TenantId);
               
               if (dimeSchedulesResult.success && dimeSchedulesResult.schedules && dimeSchedulesResult.schedules.length > 0) {
@@ -996,9 +975,12 @@ module.exports = async function (context, myTimer) {
               } else {
                 // Fallback: Cancel schedules from database if DIME API doesn't support listing
                 if (dimeSchedulesResult.error) {
-                  logger.warn(`    DIME list API error: ${dimeSchedulesResult.error.message} (status: ${dimeSchedulesResult.error.status})`);
+                  logger.warn(`    [DIME] List API error: ${dimeSchedulesResult.error.message} (status: ${dimeSchedulesResult.error.status})`);
+                  if (dimeSchedulesResult.error.status === 404) {
+                    logger.info(`    [DIME] List endpoint returned 404 - may not exist, falling back to database records`);
+                  }
                 } else {
-                  logger.info(`    DIME list API returned no schedules`);
+                  logger.info(`    [DIME] List API returned no schedules`);
                 }
                 logger.info(`    Falling back to canceling schedules from database records`);
                 const existingSchedulesQuery = `
@@ -1017,11 +999,14 @@ module.exports = async function (context, myTimer) {
                 
                 for (const scheduleId of scheduleIds) {
                   try {
+                    logger.info(`    [DIME] Canceling schedule ${scheduleId} (from database)`);
                     await DimeService.cancelRecurringPayment(scheduleId, group.TenantId);
                     logger.success(`    Canceled existing schedule ${scheduleId} (from database)`);
                   } catch (cancelError) {
                     if (cancelError.response?.status !== 404) {
-                      logger.warn(`    Failed to cancel ${scheduleId}: ${cancelError.message}`);
+                      logger.warn(`    [DIME] Failed to cancel ${scheduleId}: ${cancelError.message}`);
+                    } else {
+                      logger.info(`    [DIME] Schedule ${scheduleId} already canceled (404)`);
                     }
                   }
                 }
@@ -1039,6 +1024,7 @@ module.exports = async function (context, myTimer) {
                 logger.info(`    DIME schedule amount includes non-billing locations: $${scheduleAmount.toFixed(2)}`);
               }
               
+              logger.info(`    [DIME] Creating recurring payment: customer=${group.ProcessorCustomerId}, paymentMethod=${paymentMethod.ProcessorPaymentMethodId}, amount=$${scheduleAmount.toFixed(2)}`);
               const newSchedule = await DimeService.setupRecurringPayment({
                 customerId: group.ProcessorCustomerId,
                 paymentMethodId: paymentMethod.ProcessorPaymentMethodId,
@@ -1091,10 +1077,22 @@ module.exports = async function (context, myTimer) {
                   `);
                 logger.success(`    Saved recurring payment plan to database (DIME schedule ${newSchedule.scheduleId})`);
               } else {
-                logger.error(`    Failed to create DIME schedule: ${newSchedule.error.message}`);
+                const errorDetails = newSchedule.error?.status 
+                  ? ` (status: ${newSchedule.error.status})` 
+                  : '';
+                logger.error(`    [DIME] Failed to create recurring payment: ${newSchedule.error?.message || 'Unknown error'}${errorDetails}`);
+                if (newSchedule.error?.data) {
+                  logger.error(`    [DIME] Error details: ${JSON.stringify(newSchedule.error.data)}`);
+                }
+                // Don't throw - continue processing other locations, but log the failure
               }
             } catch (scheduleError) {
-              logger.error(`    Error creating DIME schedule: ${scheduleError.message}`);
+              logger.error(`    [DIME] Error creating recurring payment schedule: ${scheduleError.message}`);
+              if (scheduleError.response) {
+                logger.error(`    [DIME] Response status: ${scheduleError.response.status}`);
+                logger.error(`    [DIME] Response data: ${JSON.stringify(scheduleError.response.data)}`);
+              }
+              logger.error(`    [DIME] Stack: ${scheduleError.stack}`);
               // Don't throw - continue processing other locations
             }
           }
@@ -1110,13 +1108,20 @@ module.exports = async function (context, myTimer) {
         results.updated++;
         
       } catch (error) {
+        logger.error(`  ❌ Group processing failed: ${group.GroupName} (${group.GroupId})`);
         logger.error(`  Error: ${error.message}`);
+        if (error.response) {
+          logger.error(`  HTTP Status: ${error.response.status}`);
+          logger.error(`  Response Data: ${JSON.stringify(error.response.data)}`);
+        }
         logger.error(`  Stack: ${error.stack}`);
         results.failed++;
         results.errors.push({
           groupId: group.GroupId,
           groupName: group.GroupName,
-          error: error.message
+          error: error.message,
+          status: error.response?.status,
+          responseData: error.response?.data
         });
       }
     }

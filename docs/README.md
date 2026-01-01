@@ -105,9 +105,9 @@ a1b2c3d4e5f6g7h8i9j0k1l2m3n4o5p6q7r8s9t0u1v2w3x4y5z6a7b8c9d0e1f2
 curl -X POST http://localhost:7071/api/manual-run \
   -H "x-api-key: YOUR_GENERATED_KEY"
 
-# Azure testing
-curl -X POST https://open-enroll-payment-manager.azurewebsites.net/api/manual-run \
-  -H "x-api-key: YOUR_GENERATED_KEY"
+# Azure testing (Production)
+curl -X POST https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/manual-run \
+  -H "x-api-key: YOUR_ADMIN_API_KEY"
 ```
 
 ---
@@ -148,8 +148,8 @@ After deployment, you'll have these URLs:
 
 | Function | URL |
 |----------|-----|
-| **DimeManualScheduler** | `https://open-enroll-payment-manager.azurewebsites.net/api/manual-run` |
-| **DimeWebhookHandler** | `https://open-enroll-payment-manager.azurewebsites.net/api/webhooks/dime` |
+| **DimeManualScheduler** | `https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/manual-run` |
+| **DimeWebhookHandler** | `https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/webhooks/dime` |
 | **DimeRecurringPaymentScheduler** | (Automatic - no URL needed) |
 
 ---

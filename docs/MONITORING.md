@@ -386,7 +386,7 @@ Run every Monday:
 **Resolution:**
 ```bash
 # Option 1: Retry via manual trigger
-curl -X POST https://open-enroll-payment-manager.azurewebsites.net/api/manual-run \
+curl -X POST https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/manual-run \
   -H "x-api-key: $ADMIN_API_KEY"
 
 # Option 2: Check logs and fix issue, then redeploy
