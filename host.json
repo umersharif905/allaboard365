@@ -15,6 +15,11 @@
   "extensions": {
     "http": {
       "routePrefix": "api"
+    },
+    "sql": {
+      "MaxBatchSize": 100,
+      "PollingIntervalMs": 1000,
+      "MaxChangesPerWorker": 1000
     }
   }
 }

@@ -1389,6 +1389,39 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
       logger.error(`  Failed to update invoice status: ${invoiceError.message}`);
     }
   }
+  
+  // Mark setup fees as paid in SetupFee enrollment records
+  try {
+    if (isIndividualRecurring && householdId) {
+      // Individual recurring payment - mark SetupFee enrollment records as paid
+      const setupFeeResult = await pool.request()
+        .input('householdId', sql.UniqueIdentifier, householdId)
+        .query(`
+          UPDATE oe.Enrollments
+          SET Status = 'Paid',
+              ModifiedDate = GETUTCDATE()
+          WHERE HouseholdId = @householdId
+            AND EnrollmentType = 'SetupFee'
+            AND Status = 'Active'
+        `);
+      logger.info(`  Marked setup fees as paid for ${setupFeeResult.rowsAffected[0]} SetupFee enrollment(s) in household ${householdId}`);
+    } else if (groupId) {
+      // Group recurring payment - mark SetupFee enrollment records as paid for all group enrollments
+      const setupFeeResult = await pool.request()
+        .input('groupId', sql.UniqueIdentifier, groupId)
+        .query(`
+          UPDATE oe.Enrollments
+          SET Status = 'Paid',
+              ModifiedDate = GETUTCDATE()
+          WHERE GroupId = @groupId
+            AND EnrollmentType = 'SetupFee'
+            AND Status = 'Active'
+        `);
+      logger.info(`  Marked setup fees as paid for ${setupFeeResult.rowsAffected[0]} SetupFee enrollment(s) in group ${groupId}`);
+    }
+  } catch (setupFeeError) {
+    logger.error(`  Failed to mark setup fees as paid: ${setupFeeError.message}`);
+  }
 }
 
 async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) {

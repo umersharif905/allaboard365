@@ -22,46 +22,17 @@ const path = require('path');
  * Calculate premiums by location for a group
  * Primary member's LocationId determines which location pays for their household
  * Uses UseLocationACH to determine if location pays separately or charges to primary
+ * Includes unpaid setup fees for enrollments with effective date <= billing date
+ * 
+ * NOTE: Now uses shared invoiceCalculationService to ensure consistency with estimated invoice calculations
+ * This also fixes the double-counting bug that existed in the original query
  */
-async function calculateLocationPremiums(pool, groupId, logger) {
-  const query = `
-    -- Get primary location for fallback
-    DECLARE @PrimaryLocationId UNIQUEIDENTIFIER;
-    SELECT TOP 1 @PrimaryLocationId = LocationId 
-    FROM oe.GroupLocations 
-    WHERE GroupId = @groupId AND IsPrimary = 1;
-    
-    -- Calculate premiums by location (primary member's LocationId determines billing)
-    SELECT 
-      COALESCE(pm.LocationId, @PrimaryLocationId) as LocationId,
-      gl.Name as LocationName,
-      gl.ContactName as LocationContactName,
-      gl.ContactEmail as LocationContactEmail,
-      gl.IsPrimary as LocationIsPrimary,
-      gl.UseLocationACH as UseLocationACH,
-      COUNT(DISTINCT pm.HouseholdId) as HouseholdCount,
-      COUNT(DISTINCT m_all.MemberId) as MemberCount,
-      COUNT(e.EnrollmentId) as EnrollmentCount,
-      SUM(e.PremiumAmount) as BasePremium
-    FROM oe.Members pm
-    INNER JOIN oe.Enrollments e ON pm.HouseholdId = e.HouseholdId
-    LEFT JOIN oe.Members m_all ON e.HouseholdId = m_all.HouseholdId AND m_all.Status != 'Terminated'
-    LEFT JOIN oe.GroupLocations gl ON COALESCE(pm.LocationId, @PrimaryLocationId) = gl.LocationId
-    WHERE pm.MemberSequence = 1  -- Primary member determines location
-      AND pm.GroupId = @groupId
-      AND pm.Status != 'Terminated'
-      AND e.Status = 'Active'
-    GROUP BY COALESCE(pm.LocationId, @PrimaryLocationId), gl.Name, gl.ContactName, gl.ContactEmail, gl.IsPrimary, gl.UseLocationACH
-    ORDER BY gl.IsPrimary DESC, gl.Name
-  `;
-  
-  const result = await pool.request()
-    .input('groupId', sql.UniqueIdentifier, groupId)
-    .query(query);
-  
-  logger.info(`  Found ${result.recordset.length} location(s) with enrollments`);
-  
-  return result.recordset;
+async function calculateLocationPremiums(pool, groupId, billingDate, logger) {
+  const { calculateLocationPremiums: sharedCalculateLocationPremiums } = require('../shared/invoiceCalculationService');
+  // Pass sql module to ensure we use the same mssql instance as the pool
+  const locationPremiums = await sharedCalculateLocationPremiums(pool, groupId, billingDate, sql);
+  logger.info(`  Found ${locationPremiums.length} location(s) with enrollments`);
+  return locationPremiums;
 }
 
 /**
@@ -163,51 +134,20 @@ async function getLocationPaymentMethod(pool, groupId, locationId, useLocationAC
 
 /**
  * Calculate fees for a location
+ * @param {number} basePremium - Base monthly premium
+ * @param {number} householdCount - Number of households
+ * @param {string} paymentMethodType - Payment method type (Card/ACH)
+ * @param {object} systemFeesSettings - System fees settings
+ * @param {object} paymentProcessorSettings - Payment processor settings
+ * @param {number} unpaidSetupFees - Unpaid setup fees to include (default: 0)
  */
-function calculateLocationFees(basePremium, householdCount, paymentMethodType, systemFeesSettings, paymentProcessorSettings) {
-  const premiumCalculator = require('../shared/premiumCalculator');
-  
-  // Calculate system fees
-  const subtotalWithSystemFees = premiumCalculator.calculateGroupMonthlyTotal(
-    basePremium,
-    householdCount,
-    systemFeesSettings
-  );
-  
-  const systemFeesAmount = Math.round((subtotalWithSystemFees - basePremium) * 100) / 100;
-  
-  // Calculate payment processing fees
-  let paymentProcessingFee = 0;
-  
-  if (paymentProcessorSettings?.chargeFeeToMember && paymentProcessorSettings?.processors?.openenroll?.fees) {
-    const fees = paymentProcessorSettings.processors.openenroll.fees;
-    const feeConfig = (paymentMethodType === 'Card' || paymentMethodType === 'CreditCard') ? fees.creditCard : fees.ach;
-    
-    if (feeConfig) {
-      let percentageValue = feeConfig.percentageFee || 0;
-      
-      // Handle both decimal (0.0025 = 0.25%) and whole number (3 = 3%) formats
-      if (percentageValue >= 1) {
-        percentageValue = percentageValue / 100;
-      }
-      
-      const percentageFee = subtotalWithSystemFees * percentageValue;
-      const flatFee = feeConfig.flatFee || 0;
-      paymentProcessingFee = Math.round((percentageFee + flatFee) * 100) / 100;
-    }
-  }
-  
-  // Final amount includes: base premium + system fees + payment processing fees
-  const totalAmount = Math.round((subtotalWithSystemFees + paymentProcessingFee) * 100) / 100;
-  const processingFees = Math.round((systemFeesAmount + paymentProcessingFee) * 100) / 100;
-  
-  return {
-    systemFeesAmount,
-    paymentProcessingFee,
-    totalAmount,
-    processingFees,
-    subtotalWithSystemFees
-  };
+/**
+ * Calculate fees for a location
+ * NOTE: Now uses shared invoiceCalculationService to ensure consistency with estimated invoice calculations
+ */
+function calculateLocationFees(basePremium, householdCount, paymentMethodType, systemFeesSettings, paymentProcessorSettings, unpaidSetupFees = 0) {
+  const { calculateLocationFees: sharedCalculateLocationFees } = require('../shared/invoiceCalculationService');
+  return sharedCalculateLocationFees(basePremium, householdCount, paymentMethodType, systemFeesSettings, paymentProcessorSettings, unpaidSetupFees);
 }
 
 /**
@@ -216,24 +156,32 @@ function calculateLocationFees(basePremium, householdCount, paymentMethodType, s
 async function generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges = []) {
   const invoiceId = require('crypto').randomUUID();
   
-  // Calculate due date (5th of next month)
+  // Calculate due date (5th of current month - payment date)
+  // Invoice is generated on 1st, payment is charged on 5th of same month
   const dueDate = new Date(billingDate);
-  dueDate.setMonth(dueDate.getMonth() + 1);
-  dueDate.setDate(5);
+  dueDate.setDate(5); // Payment date is 5th of the same month
   
   // Billing period (current month)
   const billingPeriodStart = new Date(billingDate.getFullYear(), billingDate.getMonth(), 1);
   const billingPeriodEnd = new Date(billingDate.getFullYear(), billingDate.getMonth() + 1, 0);
   
+  // Get setup fees and new enrollment count from location
+  const setupFeesAmount = fees.setupFeesAmount || 0;
+  const newEnrollmentsCount = location.NewEnrollmentsWithSetupFees || 0;
+  
   // If this is the primary location, add non-billing location charges
   let totalSubTotal = location.BasePremium;
   let totalAmount = fees.totalAmount;
+  let totalSetupFees = setupFeesAmount;
+  let totalNewEnrollments = newEnrollmentsCount;
   
   if (location.LocationIsPrimary && additionalCharges.length > 0) {
     logger.info(`    Primary location - adding ${additionalCharges.length} non-billing location(s):`);
     additionalCharges.forEach(charge => {
       totalSubTotal += charge.fees.basePremium;
       totalAmount += charge.fees.totalAmount;
+      totalSetupFees += (charge.fees.setupFeesAmount || 0);
+      totalNewEnrollments += (charge.location.NewEnrollmentsWithSetupFees || 0);
       logger.info(`      ${charge.location.LocationName}: +$${charge.fees.totalAmount.toFixed(2)}`);
     });
     logger.info(`    Primary location total: $${totalAmount.toFixed(2)}`);
@@ -265,12 +213,14 @@ async function generateInvoice(pool, group, location, fees, billingDate, invoice
        @paidAmount, @status, @paymentDueDate, GETUTCDATE(), GETUTCDATE(), NULL, NULL)
     `);
   
-  logger.success(`    Created invoice ${invoiceNumber}: $${totalAmount.toFixed(2)}`);
+  logger.success(`    Created invoice ${invoiceNumber}: $${totalAmount.toFixed(2)}${totalSetupFees > 0 ? ` (includes $${totalSetupFees.toFixed(2)} in setup fees for ${totalNewEnrollments} new enrollment${totalNewEnrollments !== 1 ? 's' : ''})` : ''}`);
   
   return {
     invoiceId,
     invoiceNumber,
-    dueDate
+    dueDate,
+    setupFeesAmount: totalSetupFees,
+    newEnrollmentsCount: totalNewEnrollments
   };
 }
 
@@ -287,10 +237,12 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
       .query(tenantQuery);
     const tenantId = tenantResult.recordset[0]?.TenantId;
     
-    // Choose template based on UseLocationACH
-    // If true: location pays separately (normal invoice)
-    // If false: charged to primary location (warning invoice)
-    const templatePath = path.join(__dirname, '..', '..', 'backend', 'templates', 'emails', useLocationACH ? 'location-invoice.html' : 'location-invoice-no-payment.html');
+    // Choose template based on UseLocationACH and IsPrimary
+    // Primary locations always use the normal invoice template (even if UseLocationACH is false)
+    // Non-primary locations with UseLocationACH=false use the "no payment" template
+    const isPrimaryLocation = location.LocationIsPrimary || location.IsPrimary;
+    const shouldUseNormalTemplate = isPrimaryLocation || useLocationACH;
+    const templatePath = path.join(__dirname, '..', '..', 'backend', 'templates', 'emails', shouldUseNormalTemplate ? 'location-invoice.html' : 'location-invoice-no-payment.html');
     let emailHtml = fs.readFileSync(templatePath, 'utf8');
     
     // Payment method display
@@ -309,6 +261,15 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
       month: 'long',
       day: 'numeric'
     });
+    
+    // Calculate payment date (5th of the month) from billing date (1st of the month)
+    const calculatePaymentDate = (billingDate) => {
+      const date = new Date(billingDate);
+      date.setDate(5); // Payment happens on the 5th
+      return date;
+    };
+    
+    const paymentDate = calculatePaymentDate(billingDate);
     
     // Build additional locations breakdown HTML (if primary location includes other locations)
     let additionalLocationsHtml = '';
@@ -347,6 +308,8 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
     let displayMemberCount = location.MemberCount;
     let displayHouseholdCount = location.HouseholdCount;
     let displayProcessingFees = fees.processingFees;
+    let displaySetupFees = fees.setupFeesAmount || 0;
+    let displayNewEnrollments = location.NewEnrollmentsWithSetupFees || 0;
     
     if (additionalLocations.length > 0) {
       // Add up all locations for display
@@ -357,7 +320,28 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
         displayHouseholdCount += loc.householdCount;
         // Sum processing fees from each location
         displayProcessingFees += loc.processingFees || 0;
+        // Sum setup fees from each location
+        displaySetupFees += (loc.fees?.setupFeesAmount || 0);
+        // Sum new enrollments from each location
+        displayNewEnrollments += (loc.location?.NewEnrollmentsWithSetupFees || 0);
       });
+    }
+    
+    // Build breakdown section HTML
+    let breakdownSectionHtml = '';
+    if (displayProcessingFees > 0 || displaySetupFees > 0) {
+      breakdownSectionHtml = '<tr><td colspan="2" style="padding-top: 12px; border-top: 1px solid #e5e7eb;"><table width="100%" cellpadding="4" cellspacing="0">';
+      breakdownSectionHtml += `<tr><td style="color: #6b7280; font-size: 13px;">Base Premium:</td><td align="right" style="color: #374151; font-size: 13px;">$${parseFloat(displayBasePremium).toFixed(2)}</td></tr>`;
+      if (displayProcessingFees > 0) {
+        breakdownSectionHtml += `<tr><td style="color: #6b7280; font-size: 13px;">Processing Fees:</td><td align="right" style="color: #374151; font-size: 13px;">$${parseFloat(displayProcessingFees).toFixed(2)}</td></tr>`;
+      }
+      if (displaySetupFees > 0) {
+        const setupFeeLabel = displayNewEnrollments > 0 
+          ? `Total Setup Fees (One-time) - ${displayNewEnrollments} new enrollment${displayNewEnrollments !== 1 ? 's' : ''}:`
+          : 'Total Setup Fees (One-time):';
+        breakdownSectionHtml += `<tr><td style="color: #6b7280; font-size: 13px;">${setupFeeLabel}</td><td align="right" style="color: #374151; font-size: 13px;">$${parseFloat(displaySetupFees).toFixed(2)}</td></tr>`;
+      }
+      breakdownSectionHtml += '</table></td></tr>';
     }
     
     // Replace template variables
@@ -367,13 +351,17 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
       contactName: location.LocationContactName || (location.LocationContactEmail?.split('@')[0] || 'Team').split('.').map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' '),
       basePremium: `$${parseFloat(displayBasePremium).toFixed(2)}`,
       processingFees: displayProcessingFees > 0 ? `$${parseFloat(displayProcessingFees).toFixed(2)}` : '',
+      setupFees: displaySetupFees > 0 ? `$${parseFloat(displaySetupFees).toFixed(2)}` : '',
+      newEnrollmentsCount: displayNewEnrollments > 0 ? displayNewEnrollments.toString() : '',
       totalAmount: `$${parseFloat(displayTotalAmount).toFixed(2)}`,
       memberCount: displayMemberCount.toString(),
       householdCount: displayHouseholdCount.toString(),
       paymentMethod: paymentMethodDisplay,
       billingDate: formatDate(billingDate),
+      paymentDate: formatDate(paymentDate),
       currentYear: new Date().getFullYear().toString(),
-      additionalLocationsBreakdown: additionalLocationsHtml
+      additionalLocationsBreakdown: additionalLocationsHtml,
+      breakdownSection: breakdownSectionHtml
     };
     
     // Simple template processing
@@ -382,7 +370,7 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
       emailHtml = emailHtml.replace(regex, variables[key] || '');
     });
     
-    // Handle conditional blocks
+    // Handle conditional blocks (legacy support)
     if (variables.processingFees) {
       emailHtml = emailHtml.replace(/\{\{#processingFees\}\}([\s\S]*?)\{\{\/processingFees\}\}/g, '$1');
     } else {
@@ -585,6 +573,15 @@ async function sendConsolidatedInvoiceEmail(pool, group, locationResults, billin
       day: 'numeric'
     });
     
+    // Calculate payment date (5th of the month) from billing date (1st of the month)
+    const calculatePaymentDate = (billingDate) => {
+      const date = new Date(billingDate);
+      date.setDate(5); // Payment happens on the 5th
+      return date;
+    };
+    
+    const paymentDate = calculatePaymentDate(billingDate);
+    
     // Replace template variables
     const variables = {
       groupName: group.GroupName,
@@ -594,6 +591,7 @@ async function sendConsolidatedInvoiceEmail(pool, group, locationResults, billin
       totalHouseholds: totalHouseholds.toString(),
       locationBreakdown: locationBreakdownHtml,
       billingDate: formatDate(billingDate),
+      paymentDate: formatDate(paymentDate),
       currentYear: new Date().getFullYear().toString(),
       locationCount: locationResults.length.toString()
     };
@@ -665,6 +663,7 @@ module.exports = async function (context, myTimer) {
   
   logger.section('Monthly Payment Scheduler Started (Multi-Location Billing)');
   logger.info(`Execution Date: ${startTime.toISOString()}`);
+  logger.info(`[DEBUG] Code version: Fixed primary location logic v2`);
   
   let pool;
   const results = {
@@ -683,18 +682,27 @@ module.exports = async function (context, myTimer) {
     pool = await getPool();
     logger.success('Database connected');
     
-    // Calculate billing date (5th of next month)
+    // Calculate billing date and payment date
+    // If run on or before the 5th: invoice for current month (1st), payment on 5th of current month
+    // If run after the 5th: invoice for next month (1st), payment on 5th of next month
     const today = new Date();
     const currentDay = today.getDate();
     
     let billingDate;
-    if (currentDay >= 5) {
-      billingDate = new Date(today.getFullYear(), today.getMonth() + 1, 5);
+    let paymentDate;
+    
+    if (currentDay <= 5) {
+      // Run on 1st-5th: invoice for current month, payment on 5th of current month
+      billingDate = new Date(today.getFullYear(), today.getMonth(), 1);
+      paymentDate = new Date(today.getFullYear(), today.getMonth(), 5);
     } else {
-      billingDate = new Date(today.getFullYear(), today.getMonth(), 5);
+      // Run after 5th: invoice for next month, payment on 5th of next month
+      billingDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
+      paymentDate = new Date(today.getFullYear(), today.getMonth() + 1, 5);
     }
     
-    logger.info(`Billing Date (Next Cycle): ${billingDate.toISOString().split('T')[0]}`);
+    logger.info(`Billing Date (Invoice Date): ${billingDate.toISOString().split('T')[0]}`);
+    logger.info(`Payment Date: ${paymentDate.toISOString().split('T')[0]}`);
     
     // Get all active groups
     const groupsQuery = `
@@ -723,8 +731,8 @@ module.exports = async function (context, myTimer) {
       try {
         logger.subsection(`Processing: ${group.GroupName} (${group.GroupId})`);
         
-        // Get location premiums
-        const locationPremiums = await calculateLocationPremiums(pool, group.GroupId, logger);
+        // Get location premiums (pass billingDate to include unpaid setup fees)
+        const locationPremiums = await calculateLocationPremiums(pool, group.GroupId, billingDate, logger);
         
         if (locationPremiums.length === 0) {
           logger.warn(`  No active enrollments, skipping`);
@@ -817,20 +825,47 @@ module.exports = async function (context, myTimer) {
             continue;
           }
           
-          // Calculate fees for this location
-          const fees = calculateLocationFees(
-            location.BasePremium,
-            location.HouseholdCount,
-            paymentMethod.Type,
-            systemFeesSettings,
-            paymentProcessorSettings
-          );
+          // Calculate fees for this location (include unpaid setup fees)
+          // Use PaymentProcessingFee and SystemFee from database enrollments (actual stored values)
+          // Only calculate from settings if database values are not available (for backward compatibility)
+          const unpaidSetupFees = location.UnpaidSetupFees || 0;
+          const dbPaymentProcessingFee = location.PaymentProcessingFeeAmount || 0;
+          const dbSystemFee = location.SystemFeeAmount || 0;
           
-          logger.info(`    Base: $${location.BasePremium}, System Fees: $${fees.systemFeesAmount}, Payment Fee: $${fees.paymentProcessingFee}, Total: $${fees.totalAmount}`);
+          // Calculate fees - use database values if available, otherwise calculate from settings
+          let fees;
+          if (dbPaymentProcessingFee > 0 || dbSystemFee > 0) {
+            // Use database values (actual stored fees)
+            const subtotalWithSystemFees = location.BasePremium + dbSystemFee;
+            fees = {
+              systemFeesAmount: dbSystemFee,
+              paymentProcessingFee: dbPaymentProcessingFee,
+              setupFeesAmount: unpaidSetupFees,
+              totalAmount: Math.round((subtotalWithSystemFees + dbPaymentProcessingFee + unpaidSetupFees) * 100) / 100,
+              processingFees: Math.round((dbSystemFee + dbPaymentProcessingFee) * 100) / 100,
+              subtotalWithSystemFees: subtotalWithSystemFees
+            };
+          } else {
+            // Fallback: Calculate from settings (for backward compatibility or new enrollments)
+            fees = calculateLocationFees(
+              location.BasePremium,
+              location.HouseholdCount,
+              paymentMethod.Type,
+              systemFeesSettings,
+              paymentProcessorSettings,
+              unpaidSetupFees
+            );
+          }
           
-          // If location does NOT pay separately, add to primary location's charge
-          if (!location.UseLocationACH) {
-            logger.info(`    Adding to primary location's invoice (UseLocationACH=false)`);
+          logger.info(`    Base: $${location.BasePremium}, System Fees: $${fees.systemFeesAmount}, Payment Fee: $${fees.paymentProcessingFee}, Setup Fees: $${fees.setupFeesAmount}, Total: $${fees.totalAmount}`);
+          
+          // Check if this is the primary location
+          const isPrimaryLocation = location.LocationIsPrimary || location.IsPrimary;
+          logger.info(`    LocationIsPrimary: ${location.LocationIsPrimary}, IsPrimary: ${location.IsPrimary}, isPrimaryLocation: ${isPrimaryLocation}, UseLocationACH: ${location.UseLocationACH}`);
+          
+          // If location is NOT primary AND does NOT pay separately, add to primary location's charge
+          if (!isPrimaryLocation && !location.UseLocationACH) {
+            logger.info(`    Adding to primary location's invoice (UseLocationACH=false, not primary)`);
             locationsChargingToPrimary.push({
               location,
               fees
@@ -876,7 +911,7 @@ module.exports = async function (context, myTimer) {
             continue; // Don't create DIME schedule
           }
           
-          // Location pays separately - create invoice and DIME schedule
+          // Primary location OR location pays separately - create invoice and DIME schedule
           const invoiceSuffix = locationPremiums.filter(l => l.UseLocationACH).length > 1 ? `-${location.LocationName?.replace(/\s/g, '') || (i + 1)}` : '';
           const invoiceNumber = `${baseInvoiceNumber}${invoiceSuffix}`;
           
@@ -899,9 +934,13 @@ module.exports = async function (context, myTimer) {
                 }))
               : [];
             
+            // Primary locations always use normal invoice template (even if UseLocationACH is false)
+            const isPrimaryLocation = location.LocationIsPrimary || location.IsPrimary;
+            const shouldUseNormalTemplate = isPrimaryLocation || location.UseLocationACH;
+            
             const emailSent = await sendLocationInvoiceEmail(
               pool, group, location, fees, paymentMethod, billingDate,
-              location.UseLocationACH, logger, additionalLocationsInfo
+              shouldUseNormalTemplate, logger, additionalLocationsInfo
             );
             if (emailSent) results.emailsSent++;
             else results.emailsFailed++;
@@ -915,35 +954,82 @@ module.exports = async function (context, myTimer) {
             invoice
           });
           
-          // Create/update DIME schedule ONLY if location pays separately (UseLocationACH = true)
-          if (location.UseLocationACH && paymentMethod.isOwnPaymentMethod) {
+          // Create/update DIME schedule if:
+          // 1. Location pays separately (UseLocationACH = true), OR
+          // 2. Location is primary (even if UseLocationACH = false, primary location must be charged)
+          const shouldCreateDimeSchedule = (location.UseLocationACH && paymentMethod.isOwnPaymentMethod) || isPrimaryLocation;
+          
+          if (shouldCreateDimeSchedule) {
             try {
-              // Cancel existing schedules for this location
-              const existingSchedulesQuery = `
-                SELECT DimeScheduleId 
-                FROM oe.GroupRecurringPaymentPlans 
-                WHERE GroupId = @groupId AND LocationId = @locationId AND IsActive = 1
-              `;
-              const existingSchedulesResult = await pool.request()
-                .input('groupId', sql.UniqueIdentifier, group.GroupId)
-                .input('locationId', sql.UniqueIdentifier, location.LocationId)
-                .query(existingSchedulesQuery);
+              // Cancel ALL existing schedules for this customer in DIME
+              // This ensures we clean up any orphaned schedules that aren't in the database
+              logger.info(`    Canceling all existing DIME schedules for customer ${group.ProcessorCustomerId}`);
               
-              const scheduleIds = existingSchedulesResult.recordset.map(r => r.DimeScheduleId).filter(id => id);
+              // First, try to get all schedules from DIME for this customer
+              const dimeSchedulesResult = await DimeService.listRecurringPayments(group.ProcessorCustomerId, group.TenantId);
               
-              for (const scheduleId of scheduleIds) {
-                try {
-                  await DimeService.cancelRecurringPayment(scheduleId, group.TenantId);
-                  logger.success(`    Canceled existing schedule ${scheduleId}`);
-                } catch (cancelError) {
-                  if (cancelError.response?.status !== 404) {
-                    logger.warn(`    Failed to cancel ${scheduleId}: ${cancelError.message}`);
+              if (dimeSchedulesResult.success && dimeSchedulesResult.schedules && dimeSchedulesResult.schedules.length > 0) {
+                logger.info(`    Found ${dimeSchedulesResult.schedules.length} schedule(s) in DIME for this customer`);
+                
+                // Cancel all active schedules from DIME
+                for (const schedule of dimeSchedulesResult.schedules) {
+                  const scheduleId = schedule.id || schedule.recurring_payment_id || schedule.schedule_id;
+                  const status = schedule.status || schedule.state;
+                  
+                  // Cancel active schedules (skip already canceled/paused ones)
+                  if (scheduleId) {
+                    const statusLower = (status || '').toLowerCase();
+                    if (statusLower === 'active' || statusLower === 'failed' || !status) {
+                      try {
+                        await DimeService.cancelRecurringPayment(scheduleId.toString(), group.TenantId);
+                        logger.success(`    Canceled DIME schedule ${scheduleId} (status: ${status || 'unknown'})`);
+                      } catch (cancelError) {
+                        if (cancelError.response?.status !== 404) {
+                          logger.warn(`    Failed to cancel DIME schedule ${scheduleId}: ${cancelError.message}`);
+                        }
+                      }
+                    } else {
+                      logger.info(`    Skipping DIME schedule ${scheduleId} (status: ${status})`);
+                    }
+                  }
+                }
+              } else {
+                // Fallback: Cancel schedules from database if DIME API doesn't support listing
+                if (dimeSchedulesResult.error) {
+                  logger.warn(`    DIME list API error: ${dimeSchedulesResult.error.message} (status: ${dimeSchedulesResult.error.status})`);
+                } else {
+                  logger.info(`    DIME list API returned no schedules`);
+                }
+                logger.info(`    Falling back to canceling schedules from database records`);
+                const existingSchedulesQuery = `
+                  SELECT DimeScheduleId 
+                  FROM oe.GroupRecurringPaymentPlans 
+                  WHERE GroupId = @groupId 
+                    AND IsActive = 1
+                    AND (LocationId = @locationId OR LocationId IS NULL)
+                `;
+                const existingSchedulesResult = await pool.request()
+                  .input('groupId', sql.UniqueIdentifier, group.GroupId)
+                  .input('locationId', sql.UniqueIdentifier, location.LocationId)
+                  .query(existingSchedulesQuery);
+                
+                const scheduleIds = existingSchedulesResult.recordset.map(r => r.DimeScheduleId).filter(id => id);
+                
+                for (const scheduleId of scheduleIds) {
+                  try {
+                    await DimeService.cancelRecurringPayment(scheduleId, group.TenantId);
+                    logger.success(`    Canceled existing schedule ${scheduleId} (from database)`);
+                  } catch (cancelError) {
+                    if (cancelError.response?.status !== 404) {
+                      logger.warn(`    Failed to cancel ${scheduleId}: ${cancelError.message}`);
+                    }
                   }
                 }
               }
               
               // Create new schedule - if primary location, include non-billing location charges
-              const nextBillingDate = new Date(today.getFullYear(), today.getMonth() + 1, 5);
+              // Use the calculated paymentDate (5th of current month if run on/before 5th, or 5th of next month if after 5th)
+              const nextBillingDate = paymentDate;
               
               let scheduleAmount = fees.totalAmount;
               if (location.LocationIsPrimary && locationsChargingToPrimary.length > 0) {
@@ -964,13 +1050,30 @@ module.exports = async function (context, myTimer) {
               if (newSchedule.success) {
                 logger.success(`    Created DIME schedule: ${newSchedule.scheduleId}`);
                 
-                // Deactivate old plans for this group (unique constraint on GroupId+IsActive allows only one active plan per group)
+                // Handle unique constraint: only one IsActive=0 and one IsActive=1 per group
+                // Strategy: Delete old inactive plans (keep history in other tables), then deactivate active, then insert new active
+                // Note: We delete inactive plans to avoid constraint violation, but history is preserved in Invoices and Payments tables
+                
+                // Step 1: Delete old inactive plans to free up the IsActive=0 slot
+                // History is preserved in oe.Invoices and oe.Payments tables
                 await pool.request()
                   .input('groupId', sql.UniqueIdentifier, group.GroupId)
-                  .query(`UPDATE oe.GroupRecurringPaymentPlans SET IsActive = 0, ModifiedDate = GETUTCDATE() WHERE GroupId = @groupId AND IsActive = 1`);
+                  .input('locationId', sql.UniqueIdentifier, location.LocationId)
+                  .query(`
+                    DELETE FROM oe.GroupRecurringPaymentPlans 
+                    WHERE GroupId = @groupId 
+                      AND (LocationId = @locationId OR LocationId IS NULL)
+                      AND IsActive = 0
+                  `);
                 
-                // Insert new plan (use scheduleAmount which includes non-billing charges)
+                // Step 2: Deactivate current active plan (now safe since we deleted inactive ones)
                 await pool.request()
+                  .input('groupId', sql.UniqueIdentifier, group.GroupId)
+                  .input('locationId', sql.UniqueIdentifier, location.LocationId)
+                  .query(`UPDATE oe.GroupRecurringPaymentPlans SET IsActive = 0, ModifiedDate = GETUTCDATE() WHERE GroupId = @groupId AND (LocationId = @locationId OR LocationId IS NULL) AND IsActive = 1`);
+                
+                // Step 3: Insert new active plan
+                const insertResult = await pool.request()
                   .input('groupId', sql.UniqueIdentifier, group.GroupId)
                   .input('locationId', sql.UniqueIdentifier, location.LocationId)
                   .input('invoiceId', sql.UniqueIdentifier, invoice.invoiceId)
@@ -986,6 +1089,7 @@ module.exports = async function (context, myTimer) {
                       @nextBillingDate, 1, GETUTCDATE(), GETUTCDATE()
                     )
                   `);
+                logger.success(`    Saved recurring payment plan to database (DIME schedule ${newSchedule.scheduleId})`);
               } else {
                 logger.error(`    Failed to create DIME schedule: ${newSchedule.error.message}`);
               }

@@ -1,0 +1,14 @@
+{
+  "entryPoint": "",
+  "bindings": [
+    {
+      "type": "sqlTrigger",
+      "name": "changes",
+      "direction": "in",
+      "tableName": "oe.Payments",
+      "connectionStringSetting": "SqlConnectionString"
+    }
+  ],
+  "scriptFile": "index.js"
+}
+

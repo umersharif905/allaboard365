@@ -225,13 +225,15 @@ class DimeService {
       const config = await this.getConfigForTenant(tenantId);
       const headers = this.getHeaders(config);
       
-      // Calculate end date (1st of following month)
-      const endDate = new Date(startDate);
-      endDate.setMonth(endDate.getMonth() + 1);
-      endDate.setDate(1);
-      
       // Format dates for DIME API
       const startDateFormatted = startDate.toISOString().replace('T', ' ').substring(0, 19);
+      
+      // Set end date to day before next month's payment date
+      // This allows the schedule to continue monthly until manually canceled
+      // Example: If start is Jan 5, next payment is Feb 5, so end date is Feb 4
+      const endDate = new Date(startDate);
+      endDate.setMonth(endDate.getMonth() + 1); // Next month
+      endDate.setDate(endDate.getDate() - 1); // Day before next payment
       const endDateFormatted = endDate.toISOString().replace('T', ' ').substring(0, 19);
       
       const payload = {
@@ -278,6 +280,77 @@ class DimeService {
   }
 
   /**
+   * List all recurring payment schedules for a customer in DIME
+   * @param {string} customerId - DIME customer UUID
+   * @param {string} tenantId - Tenant UUID
+   * @returns {Promise<Array>} Array of schedule objects with id, amount, status, etc.
+   */
+  static async listRecurringPayments(customerId, tenantId) {
+    try {
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
+      
+      // DIME API uses GET with data in request body (unusual but that's their format)
+      // Format: GET /api/recurring-payment/list with body containing data.sid and filters.customer_uuid
+      // Note: axios.get() doesn't support request body, so we use axios.request() with method: 'GET'
+      const response = await axios.request({
+        method: 'GET',
+        url: `${config.baseUrl}/api/recurring-payment/list`,
+        headers,
+        data: {
+          data: {
+            sid: config.sid
+          },
+          filters: {
+            customer_uuid: customerId
+            // Note: Omitting status filter - will get all schedules and filter in code
+          }
+        }
+      });
+      
+      // DIME API might return data in different formats
+      const schedules = response.data?.data || response.data?.recurring_payments || response.data || [];
+      
+      return {
+        success: true,
+        schedules: Array.isArray(schedules) ? schedules : [],
+        rawResponse: response.data
+      };
+    } catch (error) {
+      // Log the error for debugging
+      console.error('DIME listRecurringPayments error:', {
+        status: error.response?.status,
+        message: error.response?.data?.message || error.message,
+        data: error.response?.data
+      });
+      
+      // If endpoint doesn't exist or returns 404, return empty array
+      if (error.response?.status === 404) {
+        return {
+          success: false,
+          schedules: [],
+          message: 'DIME list endpoint returned 404 - endpoint may not exist',
+          error: {
+            message: 'Endpoint not found',
+            status: 404
+          }
+        };
+      }
+      
+      return {
+        success: false,
+        schedules: [],
+        error: {
+          message: error.response?.data?.message || error.message,
+          code: error.response?.data?.code || 'LIST_SCHEDULES_ERROR',
+          status: error.response?.status,
+          details: error.response?.data
+        }
+      };
+    }
+  }
+
+  /**
    * Cancel a recurring payment schedule in DIME
    * @param {string} scheduleId - DIME recurring payment ID
    * @param {string} tenantId - Tenant UUID
@@ -287,9 +360,15 @@ class DimeService {
       const config = await this.getConfigForTenant(tenantId);
       const headers = this.getHeaders(config);
       
-      const response = await axios.post(
-        `${config.baseUrl}/api/recurring-payment/${scheduleId}/cancel`,
-        { data: { sid: config.sid } },
+      // DIME API uses PATCH /api/recurring-payment/cancel with data.recurring_payment_id
+      const response = await axios.patch(
+        `${config.baseUrl}/api/recurring-payment/cancel`,
+        {
+          data: {
+            sid: config.sid,
+            recurring_payment_id: scheduleId
+          }
+        },
         { headers }
       );
       
@@ -327,9 +406,14 @@ class DimeService {
       
       // Step 1: Cancel existing schedule
       try {
-        await axios.post(
-          `${config.baseUrl}/api/recurring-payment/${scheduleId}/cancel`,
-          { data: { sid: config.sid } },
+        await axios.patch(
+          `${config.baseUrl}/api/recurring-payment/cancel`,
+          {
+            data: {
+              sid: config.sid,
+              recurring_payment_id: scheduleId
+            }
+          },
           { headers }
         );
       } catch (cancelError) {
