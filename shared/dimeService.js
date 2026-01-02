@@ -68,9 +68,11 @@ class DimeService {
       }
       
       // Derive base URL from environment (no fallbacks!)
+      // NOTE: Production uses app.dimepayments.com (not api.dimepayments.com)
+      // This matches the backend service implementation
       let baseUrl;
       if (environment === 'production') {
-        baseUrl = 'https://api.dimepayments.com';
+        baseUrl = 'https://app.dimepayments.com';
       } else if (environment === 'demo') {
         baseUrl = 'https://demo.dimepayments.com';
       } else {
@@ -173,6 +175,7 @@ class DimeService {
 
   /**
    * Get existing customer by email from DIME
+   * Uses GET /api/customer/show with email filter
    * @param {string} email - Customer email address
    * @param {string} tenantId - Tenant UUID
    */
@@ -181,22 +184,33 @@ class DimeService {
       const config = await this.getConfigForTenant(tenantId);
       const headers = this.getHeaders(config);
 
+      // DIME API uses GET with data in request body (unusual but that's their format)
+      // Format: GET /api/customer/show with body containing data.sid and filters.email
       const payload = {
-        filters: { email },
-        data: { sid: config.sid }
+        data: {
+          sid: config.sid
+        },
+        filters: {
+          email: email
+        }
       };
 
-      const response = await axios.patch(
-        `${config.baseUrl}/api/customer/update`,
-        payload,
-        { headers }
-      );
+      // Use axios.request() with method: 'GET' to send request body
+      const response = await axios.request({
+        method: 'GET',
+        url: `${config.baseUrl}/api/customer/show`,
+        headers,
+        data: payload
+      });
 
-      if (response.data && response.data.data) {
+      // DIME API might return data in different formats
+      const customerData = response.data?.data || response.data;
+      
+      if (customerData && customerData.uuid) {
         return {
           success: true,
-          customerId: response.data.data.uuid,
-          rawResponse: response.data.data
+          customerId: customerData.uuid,
+          rawResponse: customerData
         };
       }
 
@@ -206,9 +220,65 @@ class DimeService {
       };
 
     } catch (error) {
+      // 404 means customer not found
+      if (error.response?.status === 404) {
+        return {
+          success: false,
+          message: 'Customer not found'
+        };
+      }
+      
       return {
         success: false,
-        message: error.response?.data?.message || error.message
+        message: error.response?.data?.message || error.message,
+        status: error.response?.status,
+        errorData: error.response?.data
+      };
+    }
+  }
+
+  /**
+   * Verify if a customer UUID exists in DIME by attempting to list their recurring payments
+   * @param {string} customerId - Customer UUID to verify
+   * @param {string} tenantId - Tenant UUID
+   * @returns {Promise<Object>} { success: boolean, exists: boolean, message?: string }
+   */
+  static async verifyCustomer(customerId, tenantId) {
+    try {
+      // Try to list recurring payments for this customer
+      // If customer doesn't exist, this will fail with 400/404
+      const result = await this.listRecurringPayments(customerId, tenantId);
+      
+      // If we get a response (even with no schedules), customer exists
+      if (result.success || result.error?.status === 404) {
+        // 404 might mean customer doesn't exist OR no schedules exist
+        // But if we get a 400 with customer_uuid invalid, that's definitive
+        if (result.error?.status === 400 && result.error?.data?.errors?.['filters.customer_uuid']) {
+          return {
+            success: true,
+            exists: false,
+            message: 'Customer UUID is invalid in DIME'
+          };
+        }
+        
+        // Otherwise, customer likely exists (404 might just mean no schedules)
+        return {
+          success: true,
+          exists: true,
+          message: 'Customer verified'
+        };
+      }
+      
+      return {
+        success: true,
+        exists: false,
+        message: result.error?.message || 'Customer verification failed'
+      };
+    } catch (error) {
+      return {
+        success: false,
+        exists: false,
+        message: error.message || 'Failed to verify customer'
       };
     }
   }

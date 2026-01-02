@@ -139,7 +139,7 @@ async function getLocationPaymentMethod(pool, groupId, locationId, useLocationAC
 /**
  * Generate invoice record for a location
  */
-async function generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges = []) {
+async function generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges = [], transaction = null) {
   const invoiceId = require('crypto').randomUUID();
   
   // Calculate due date (5th of current month - payment date)
@@ -173,7 +173,10 @@ async function generateInvoice(pool, group, location, fees, billingDate, invoice
     logger.info(`    Primary location total: $${totalAmount.toFixed(2)}`);
   }
   
-  await pool.request()
+  // Use transaction if provided, otherwise use pool.request()
+  const request = transaction ? transaction.request() : pool.request();
+  
+  await request
     .input('invoiceId', sql.UniqueIdentifier, invoiceId)
     .input('groupId', sql.UniqueIdentifier, group.GroupId)
     .input('locationId', sql.UniqueIdentifier, location.LocationId)
@@ -643,6 +646,217 @@ async function sendConsolidatedInvoiceEmail(pool, group, locationResults, billin
   }
 }
 
+/**
+ * Send execution report email to jeremy@open-enroll.net
+ * Reports all successes and failures from the monthly payment scheduler run
+ */
+async function sendExecutionReportEmail(pool, results, startTime, endTime, billingDate, paymentDate, logger) {
+  try {
+    const duration = ((endTime - startTime) / 1000).toFixed(2);
+    const formatDate = (date) => {
+      return date.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+    };
+    
+    // Build HTML report
+    let html = `
+<!DOCTYPE html>
+<html>
+<head>
+  <style>
+    body { font-family: Arial, sans-serif; line-height: 1.6; color: #333; }
+    .header { background-color: #2563eb; color: white; padding: 20px; border-radius: 5px 5px 0 0; }
+    .content { padding: 20px; background-color: #f9fafb; }
+    .section { background-color: white; padding: 15px; margin: 10px 0; border-radius: 5px; border-left: 4px solid #2563eb; }
+    .success { border-left-color: #10b981; }
+    .error { border-left-color: #ef4444; }
+    .warning { border-left-color: #f59e0b; }
+    h2 { margin-top: 0; color: #1f2937; }
+    h3 { color: #4b5563; margin-top: 20px; }
+    table { width: 100%; border-collapse: collapse; margin: 10px 0; }
+    th, td { padding: 8px; text-align: left; border-bottom: 1px solid #e5e7eb; }
+    th { background-color: #f3f4f6; font-weight: 600; }
+    .stat { font-size: 24px; font-weight: bold; color: #2563eb; }
+    .stat-success { color: #10b981; }
+    .stat-error { color: #ef4444; }
+    .error-detail { background-color: #fef2f2; padding: 10px; margin: 5px 0; border-radius: 3px; border-left: 3px solid #ef4444; }
+    .success-detail { background-color: #f0fdf4; padding: 10px; margin: 5px 0; border-radius: 3px; border-left: 3px solid #10b981; }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <h1>Monthly Payment Scheduler Execution Report</h1>
+    <p>Execution Date: ${formatDate(startTime)} at ${startTime.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', timeZoneName: 'short' })}</p>
+    <p>Duration: ${duration} seconds</p>
+  </div>
+  
+  <div class="content">
+    <div class="section">
+      <h2>📊 Summary</h2>
+      <table>
+        <tr>
+          <th>Metric</th>
+          <th>Count</th>
+        </tr>
+        <tr>
+          <td>Groups Processed</td>
+          <td><span class="stat">${results.processed}</span></td>
+        </tr>
+        <tr>
+          <td>Groups Updated Successfully</td>
+          <td><span class="stat stat-success">${results.updated}</span></td>
+        </tr>
+        <tr>
+          <td>Groups Failed</td>
+          <td><span class="stat stat-error">${results.failed}</span></td>
+        </tr>
+        <tr>
+          <td>Invoices Created</td>
+          <td><span class="stat stat-success">${results.invoicesCreated}</span></td>
+        </tr>
+        <tr>
+          <td>Emails Sent</td>
+          <td><span class="stat stat-success">${results.emailsSent}</span></td>
+        </tr>
+        <tr>
+          <td>Emails Failed</td>
+          <td><span class="stat stat-error">${results.emailsFailed}</span></td>
+        </tr>
+        <tr>
+          <td>DIME Schedule Errors</td>
+          <td><span class="stat stat-error">${results.dimeErrors.length}</span></td>
+        </tr>
+      </table>
+    </div>
+    
+    <div class="section">
+      <h2>📅 Billing Information</h2>
+      <p><strong>Invoice Date:</strong> ${formatDate(billingDate)}</p>
+      <p><strong>Payment Date:</strong> ${formatDate(paymentDate)}</p>
+    </div>`;
+    
+    // Add successful groups
+    if (results.updated > 0) {
+      html += `
+    <div class="section success">
+      <h2>✅ Successfully Processed Groups</h2>
+      <p><strong>${results.updated} group(s) processed successfully</strong></p>
+      <p>Invoices created and DIME schedules set up for these groups.</p>
+    </div>`;
+    }
+    
+    // Add group processing errors
+    if (results.errors.length > 0) {
+      html += `
+    <div class="section error">
+      <h2>❌ Group Processing Errors</h2>
+      <p><strong>${results.errors.length} group(s) failed to process:</strong></p>`;
+      
+      results.errors.forEach(err => {
+        html += `
+      <div class="error-detail">
+        <strong>${err.groupName || 'Unknown Group'}</strong><br>
+        <em>Error:</em> ${err.error}<br>
+        ${err.hasPaymentMethods ? '<strong>⚠️ Has payment methods - manual intervention required!</strong>' : ''}
+      </div>`;
+      });
+      
+      html += `
+    </div>`;
+    }
+    
+    // Add DIME errors
+    if (results.dimeErrors.length > 0) {
+      html += `
+    <div class="section error">
+      <h2>❌ DIME Schedule Creation Errors</h2>
+      <p><strong>${results.dimeErrors.length} DIME schedule(s) failed to create:</strong></p>`;
+      
+      results.dimeErrors.forEach(err => {
+        html += `
+      <div class="error-detail">
+        <strong>${err.groupName} - ${err.locationName}</strong><br>
+        <em>Error:</em> ${err.error}<br>
+        ${err.status ? `<em>Status:</em> ${err.status}<br>` : ''}
+        ${err.amount ? `<em>Amount:</em> $${parseFloat(err.amount).toFixed(2)}<br>` : ''}
+      </div>`;
+      });
+      
+      html += `
+    </div>`;
+    }
+    
+    // Add email errors
+    if (results.emailErrors.length > 0) {
+      html += `
+    <div class="section warning">
+      <h2>⚠️ Email Queuing Errors</h2>
+      <p><strong>${results.emailErrors.length} email(s) failed to queue:</strong></p>`;
+      
+      results.emailErrors.forEach(err => {
+        html += `
+      <div class="error-detail">
+        <strong>${err.groupName} - ${err.locationName || 'Consolidated Email'}</strong><br>
+        <em>Recipient:</em> ${err.recipientEmail || 'N/A'}<br>
+        <em>Error:</em> ${err.error}
+      </div>`;
+      });
+      
+      html += `
+    </div>`;
+    }
+    
+    html += `
+  </div>
+</body>
+</html>`;
+    
+    // Get tenant ID for message queue (use first tenant from results or query for any active tenant)
+    let messageTenantId = null;
+    if (results.errors.length > 0 && results.errors[0].groupId) {
+      // Try to get tenant from first error group
+      const tenantQuery = await pool.request()
+        .input('groupId', sql.UniqueIdentifier, results.errors[0].groupId)
+        .query(`SELECT TenantId FROM oe.Groups WHERE GroupId = @groupId`);
+      messageTenantId = tenantQuery.recordset[0]?.TenantId;
+    }
+    
+    if (!messageTenantId) {
+      // Fallback: get any active tenant
+      const tenantQuery = await pool.request().query(`SELECT TOP 1 TenantId FROM oe.Tenants WHERE Status = 'Active'`);
+      messageTenantId = tenantQuery.recordset[0]?.TenantId;
+    }
+    
+    if (!messageTenantId) {
+      logger.warn(`  Cannot send execution report - no tenant ID available`);
+      return false;
+    }
+    
+    // Queue the email
+    const messageId = require('crypto').randomUUID();
+    await pool.request()
+      .input('messageId', sql.UniqueIdentifier, messageId)
+      .input('tenantId', sql.UniqueIdentifier, messageTenantId)
+      .input('recipientAddress', sql.NVarChar, 'jeremy@open-enroll.net')
+      .input('subject', sql.NVarChar, `Monthly Payment Scheduler Report - ${formatDate(startTime)} (${results.failed > 0 ? 'FAILURES' : 'SUCCESS'})`)
+      .input('body', sql.NVarChar, html)
+      .query(`
+        INSERT INTO oe.MessageQueue (
+          MessageId, TenantId, MessageType, RecipientAddress, 
+          Subject, Body, Status, RetryCount, CreatedDate, CreatedBy, RecipientId
+        ) VALUES (
+          @messageId, @tenantId, 'Email', @recipientAddress,
+          @subject, @body, 'Pending', 0, GETUTCDATE(), NULL, NULL
+        )
+      `);
+    
+    logger.success(`  📧 Execution report queued to jeremy@open-enroll.net`);
+    return true;
+  } catch (error) {
+    logger.error(`  Failed to queue execution report email: ${error.message}`);
+    return false;
+  }
+}
+
 module.exports = async function (context, myTimer) {
   const logger = createLogger(context);
   const startTime = new Date();
@@ -650,6 +864,18 @@ module.exports = async function (context, myTimer) {
   logger.section('Monthly Payment Scheduler Started (Multi-Location Billing)');
   logger.info(`Execution Date: ${startTime.toISOString()}`);
   logger.info(`[DEBUG] Code version: Fixed primary location logic v2`);
+  
+  // Check if emails should be skipped (for testing)
+  const SKIP_EMAILS = process.env.SKIP_EMAILS === 'true' || process.env.SKIP_EMAILS === '1';
+  if (SKIP_EMAILS) {
+    logger.warn('⚠️ SKIP_EMAILS is enabled - emails will NOT be sent (testing mode)');
+  }
+  
+  // Check if transactions should be used (all-or-nothing: invoice + DIME must both succeed)
+  const USE_TRANSACTIONS = process.env.USE_TRANSACTIONS === 'true' || process.env.USE_TRANSACTIONS === '1';
+  if (USE_TRANSACTIONS) {
+    logger.warn('⚠️ USE_TRANSACTIONS is enabled - invoice creation and DIME setup are atomic (all-or-nothing)');
+  }
   
   let pool;
   const results = {
@@ -758,7 +984,7 @@ module.exports = async function (context, myTimer) {
         
         logger.info(`  Base Invoice Number: ${baseInvoiceNumber}`);
         
-        // Handle DIME customer
+        // Handle DIME customer - verify and refresh if needed
         if (!group.ProcessorCustomerId) {
           logger.warn(`  Creating DIME customer...`);
           
@@ -791,7 +1017,67 @@ module.exports = async function (context, myTimer) {
           
           group.ProcessorCustomerId = createResult.customerId;
         } else {
-          logger.info(`  Using existing DIME customer: ${group.ProcessorCustomerId}`);
+          // Verify existing customer UUID is still valid in DIME
+          logger.info(`  Verifying DIME customer: ${group.ProcessorCustomerId}`);
+          const verifyResult = await DimeService.verifyCustomer(group.ProcessorCustomerId, group.TenantId);
+          
+          if (!verifyResult.exists) {
+            logger.warn(`  ⚠️ Stored customer UUID is invalid in DIME. Attempting to find by email...`);
+            
+            // Check if group has payment methods - if so, we MUST find the existing customer
+            const paymentMethodCheck = await pool.request()
+              .input('groupId', sql.UniqueIdentifier, group.GroupId)
+              .query(`
+                SELECT COUNT(*) as PaymentMethodCount
+                FROM oe.GroupPaymentMethods
+                WHERE GroupId = @groupId AND Status = 'Active'
+              `);
+            
+            const hasPaymentMethods = paymentMethodCheck.recordset[0]?.PaymentMethodCount > 0;
+            
+            if (hasPaymentMethods) {
+              logger.warn(`  ⚠️ Group has ${paymentMethodCheck.recordset[0].PaymentMethodCount} active payment method(s) - MUST find existing customer to preserve payment methods`);
+            }
+            
+            // Try to find customer by email (this preserves payment methods)
+            if (group.ContactEmail) {
+              const foundCustomer = await DimeService.getCustomerByEmail(group.ContactEmail, group.TenantId);
+              
+              if (foundCustomer.success && foundCustomer.customerId) {
+                logger.success(`  ✅ Found customer by email: ${foundCustomer.customerId} (preserves payment methods)`);
+                
+                // Update database with correct customer UUID
+                await pool.request()
+                  .input('groupId', sql.UniqueIdentifier, group.GroupId)
+                  .input('customerId', sql.NVarChar(255), foundCustomer.customerId)
+                  .query(`UPDATE oe.Groups SET ProcessorCustomerId = @customerId, ModifiedDate = GETUTCDATE() WHERE GroupId = @groupId`);
+                
+                group.ProcessorCustomerId = foundCustomer.customerId;
+              } else {
+                // Customer not found by email - FAIL (payment methods can only be created manually in group portal)
+                logger.error(`  ❌ CRITICAL: Customer UUID ${group.ProcessorCustomerId} is invalid and customer not found by email ${group.ContactEmail}`);
+                logger.error(`  ❌ Manual intervention required: Check DIME dashboard or update ProcessorCustomerId in database`);
+                logger.error(`  ❌ Payment methods can only be created manually in the group portal - cannot auto-create customer`);
+                results.failed++;
+                results.errors.push({
+                  groupId: group.GroupId,
+                  groupName: group.GroupName,
+                  error: `Invalid customer UUID and not found by email ${group.ContactEmail}. Manual intervention required.`,
+                  hasPaymentMethods: hasPaymentMethods
+                });
+                continue;
+              }
+            } else {
+              logger.error(`  Cannot refresh customer UUID - missing contact email`);
+              if (hasPaymentMethods) {
+                logger.error(`  ❌ CRITICAL: Group has payment methods but cannot verify customer - manual intervention required`);
+              }
+              results.failed++;
+              continue;
+            }
+          } else {
+            logger.info(`  ✅ Customer UUID verified: ${group.ProcessorCustomerId}`);
+          }
         }
         
         // Process each location
@@ -897,58 +1183,35 @@ module.exports = async function (context, myTimer) {
           
           // Generate invoice - if primary location, include non-billing charges
           const additionalCharges = location.LocationIsPrimary ? locationsChargingToPrimary : [];
-          const invoice = await generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges);
-          results.invoicesCreated++;
           
-          // Send location email (if location has contact email)
-          if (location.LocationContactEmail) {
-            // Pass additional charges info for primary location emails
-            const additionalLocationsInfo = location.LocationIsPrimary && additionalCharges.length > 0 
-              ? additionalCharges.map(c => ({
-                  name: c.location.LocationName,
-                  basePremium: c.location.BasePremium,
-                  totalAmount: c.fees.totalAmount,
-                  processingFees: c.fees.processingFees,
-                  memberCount: c.location.MemberCount,
-                  householdCount: c.location.HouseholdCount
-                }))
-              : [];
-            
-            // Primary locations always use normal invoice template (even if UseLocationACH is false)
-            const isPrimaryLocation = location.LocationIsPrimary || location.IsPrimary;
-            const shouldUseNormalTemplate = isPrimaryLocation || location.UseLocationACH;
-            
-            const emailSent = await sendLocationInvoiceEmail(
-              pool, group, location, fees, paymentMethod, billingDate,
-              shouldUseNormalTemplate, logger, additionalLocationsInfo
-            );
-            if (emailSent) {
-              results.emailsSent++;
-            } else {
-              results.emailsFailed++;
-              results.emailErrors.push({
-                groupId: group.GroupId,
-                groupName: group.GroupName,
-                locationId: location.LocationId,
-                locationName: location.LocationName,
-                recipientEmail: location.LocationContactEmail,
-                error: 'Email queuing failed - check Azure logs for details'
-              });
-            }
+          // If USE_TRANSACTIONS is enabled, wrap invoice creation and DIME setup in a transaction
+          // This ensures atomicity: if DIME fails, invoice is rolled back
+          let invoice;
+          let transaction = null;
+          
+          if (USE_TRANSACTIONS) {
+            transaction = new sql.Transaction(pool);
+            await transaction.begin();
+            logger.info(`    🔒 Started transaction for invoice + DIME setup`);
           }
           
-          // Store result for consolidated email
-          locationResults.push({
-            location,
-            fees,
-            paymentMethod,
-            invoice
-          });
-          
-          // Create/update DIME schedule if:
-          // 1. Location pays separately (UseLocationACH = true), OR
-          // 2. Location is primary (even if UseLocationACH = false, primary location must be charged)
-          const shouldCreateDimeSchedule = (location.UseLocationACH && paymentMethod.isOwnPaymentMethod) || isPrimaryLocation;
+          try {
+            invoice = await generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges, transaction);
+            results.invoicesCreated++;
+            
+            // Store result for consolidated email
+            locationResults.push({
+              location,
+              fees,
+              paymentMethod,
+              invoice
+            });
+            
+            // Create/update DIME schedule if:
+            // 1. Location pays separately (UseLocationACH = true), OR
+            // 2. Location is primary (even if UseLocationACH = false, primary location must be charged)
+            const isPrimaryLocation = location.LocationIsPrimary || location.IsPrimary;
+            const shouldCreateDimeSchedule = (location.UseLocationACH && paymentMethod.isOwnPaymentMethod) || isPrimaryLocation;
           
           if (shouldCreateDimeSchedule) {
             try {
@@ -1029,6 +1292,7 @@ module.exports = async function (context, myTimer) {
               // Use the calculated paymentDate (5th of current month if run on/before 5th, or 5th of next month if after 5th)
               const nextBillingDate = paymentDate;
               
+              // Calculate schedule amount (define outside try-catch so it's accessible in error handlers)
               let scheduleAmount = fees.totalAmount;
               if (location.LocationIsPrimary && locationsChargingToPrimary.length > 0) {
                 locationsChargingToPrimary.forEach(charge => {
@@ -1055,7 +1319,9 @@ module.exports = async function (context, myTimer) {
                 
                 // Step 1: Delete old inactive plans to free up the IsActive=0 slot
                 // History is preserved in oe.Invoices and oe.Payments tables
-                await pool.request()
+                // Create a new request for each query to avoid parameter conflicts
+                const deleteRequest = transaction ? transaction.request() : pool.request();
+                await deleteRequest
                   .input('groupId', sql.UniqueIdentifier, group.GroupId)
                   .input('locationId', sql.UniqueIdentifier, location.LocationId)
                   .query(`
@@ -1066,13 +1332,15 @@ module.exports = async function (context, myTimer) {
                   `);
                 
                 // Step 2: Deactivate current active plan (now safe since we deleted inactive ones)
-                await pool.request()
+                const updateRequest = transaction ? transaction.request() : pool.request();
+                await updateRequest
                   .input('groupId', sql.UniqueIdentifier, group.GroupId)
                   .input('locationId', sql.UniqueIdentifier, location.LocationId)
                   .query(`UPDATE oe.GroupRecurringPaymentPlans SET IsActive = 0, ModifiedDate = GETUTCDATE() WHERE GroupId = @groupId AND (LocationId = @locationId OR LocationId IS NULL) AND IsActive = 1`);
                 
                 // Step 3: Insert new active plan
-                const insertResult = await pool.request()
+                const insertRequest = transaction ? transaction.request() : pool.request();
+                await insertRequest
                   .input('groupId', sql.UniqueIdentifier, group.GroupId)
                   .input('locationId', sql.UniqueIdentifier, location.LocationId)
                   .input('invoiceId', sql.UniqueIdentifier, invoice.invoiceId)
@@ -1089,6 +1357,12 @@ module.exports = async function (context, myTimer) {
                     )
                   `);
                 logger.success(`    Saved recurring payment plan to database (DIME schedule ${newSchedule.scheduleId})`);
+                
+                // Commit transaction if using transactions
+                if (transaction) {
+                  await transaction.commit();
+                  logger.success(`    ✅ Transaction committed - invoice and DIME setup completed`);
+                }
               } else {
                 const errorDetails = newSchedule.error?.status 
                   ? ` (status: ${newSchedule.error.status})` 
@@ -1098,6 +1372,14 @@ module.exports = async function (context, myTimer) {
                 if (newSchedule.error?.data) {
                   logger.error(`    [DIME] Error details: ${JSON.stringify(newSchedule.error.data)}`);
                 }
+                
+                // If using transactions, rollback the invoice creation
+                if (transaction) {
+                  await transaction.rollback();
+                  logger.error(`    🔄 Transaction rolled back - invoice creation reverted due to DIME failure`);
+                  results.invoicesCreated--; // Adjust count since invoice was rolled back
+                }
+                
                 // Capture error in results for database logging
                 results.dimeErrors.push({
                   groupId: group.GroupId,
@@ -1128,19 +1410,90 @@ module.exports = async function (context, myTimer) {
                 locationName: location.LocationName,
                 customerId: group.ProcessorCustomerId,
                 paymentMethodId: paymentMethod?.ProcessorPaymentMethodId,
-                amount: scheduleAmount,
+                amount: scheduleAmount || 0, // Use 0 as fallback if scheduleAmount wasn't calculated yet
                 error: scheduleError.message,
                 status: scheduleError.response?.status,
                 responseData: scheduleError.response?.data,
                 stack: scheduleError.stack
               });
+              
+              // If using transactions, rollback the invoice creation
+              if (transaction) {
+                try {
+                  await transaction.rollback();
+                  logger.error(`    🔄 Transaction rolled back - invoice creation reverted due to DIME error`);
+                  results.invoicesCreated--; // Adjust count since invoice was rolled back
+                } catch (rollbackError) {
+                  logger.error(`    Failed to rollback transaction: ${rollbackError.message}`);
+                }
+              }
               // Don't throw - continue processing other locations
             }
           }
+          
+          // Commit transaction if it was started and DIME succeeded (or if no DIME schedule was needed)
+          if (transaction && (!shouldCreateDimeSchedule || (shouldCreateDimeSchedule && invoice))) {
+            // Transaction already committed in DIME success block, or no DIME needed
+            // Just ensure we're not in a transaction state
+          }
+          
+          } catch (transactionError) {
+            // Catch any errors during invoice creation or transaction handling
+            logger.error(`    Error in invoice/DIME transaction: ${transactionError.message}`);
+            if (transaction) {
+              try {
+                await transaction.rollback();
+                logger.error(`    🔄 Transaction rolled back due to error`);
+              } catch (rollbackError) {
+                logger.error(`    Failed to rollback transaction: ${rollbackError.message}`);
+              }
+            }
+            // Re-throw to be caught by outer try-catch
+            throw transactionError;
+          }
+          
+          // Send location email AFTER transaction commits (if location has contact email) - SKIP if SKIP_EMAILS is enabled
+          if (location.LocationContactEmail && !SKIP_EMAILS) {
+            // Pass additional charges info for primary location emails
+            const additionalLocationsInfo = location.LocationIsPrimary && additionalCharges.length > 0 
+              ? additionalCharges.map(c => ({
+                  name: c.location.LocationName,
+                  basePremium: c.location.BasePremium,
+                  totalAmount: c.fees.totalAmount,
+                  processingFees: c.fees.processingFees,
+                  memberCount: c.location.MemberCount,
+                  householdCount: c.location.HouseholdCount
+                }))
+              : [];
+            
+            // Primary locations always use normal invoice template (even if UseLocationACH is false)
+            const isPrimaryLocation = location.LocationIsPrimary || location.IsPrimary;
+            const shouldUseNormalTemplate = isPrimaryLocation || location.UseLocationACH;
+            
+            const emailSent = await sendLocationInvoiceEmail(
+              pool, group, location, fees, paymentMethod, billingDate,
+              shouldUseNormalTemplate, logger, additionalLocationsInfo
+            );
+            if (emailSent) {
+              results.emailsSent++;
+            } else {
+              results.emailsFailed++;
+              results.emailErrors.push({
+                groupId: group.GroupId,
+                groupName: group.GroupName,
+                locationId: location.LocationId,
+                locationName: location.LocationName,
+                recipientEmail: location.LocationContactEmail,
+                error: 'Email queuing failed - check Azure logs for details'
+              });
+            }
+          } else if (location.LocationContactEmail && SKIP_EMAILS) {
+            logger.info(`    ⏭️ Skipping email (SKIP_EMAILS enabled)`);
+          }
         }
         
-        // Send consolidated email if multiple locations
-        if (locationResults.length > 1) {
+        // Send consolidated email if multiple locations (only if not skipping emails)
+        if (locationResults.length > 1 && !SKIP_EMAILS) {
           const consolidatedSent = await sendConsolidatedInvoiceEmail(pool, group, locationResults, billingDate, logger);
           if (consolidatedSent) {
             results.emailsSent++;
@@ -1212,10 +1565,11 @@ module.exports = async function (context, myTimer) {
     logger.success(`Completed in ${duration.toFixed(2)}s`);
     
     // Store execution log
+    const endTime = new Date();
     await pool.request()
       .input('jobName', sql.NVarChar(100), 'MonthlyPaymentScheduler')
       .input('startTime', sql.DateTime2, startTime)
-      .input('endTime', sql.DateTime2, new Date())
+      .input('endTime', sql.DateTime2, endTime)
       .input('status', sql.NVarChar(50), results.failed === 0 ? 'Success' : 'PartialSuccess')
       .input('resultSummary', sql.NVarChar(sql.MAX), JSON.stringify(results))
       .query(`
@@ -1225,6 +1579,9 @@ module.exports = async function (context, myTimer) {
           NEWID(), @jobName, @startTime, @endTime, @status, @resultSummary
         )
       `);
+    
+    // Send execution report email to jeremy@open-enroll.net
+    await sendExecutionReportEmail(pool, results, startTime, endTime, billingDate, paymentDate, logger);
     
   } catch (error) {
     logger.error(`Fatal error: ${error.message}`);
