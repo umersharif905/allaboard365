@@ -595,6 +595,88 @@ class DimeService {
       };
     }
   }
+
+  /**
+   * List transactions from DIME API
+   * @param {Object} filters - Filter options (start_date, end_date, customer_uuid, sweep_id)
+   * @param {string} tenantId - Tenant UUID
+   * @returns {Promise<Object>} Result with success, transactions array, or error
+   */
+  static async listTransactions(filters, tenantId) {
+    try {
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
+
+      // Build filters object
+      const filterObj = {
+        data: {
+          sid: config.sid
+        },
+        filters: {}
+      };
+
+      // Add optional filters
+      if (filters.start_date) {
+        filterObj.filters.start_date = filters.start_date;
+      }
+      if (filters.end_date) {
+        filterObj.filters.end_date = filters.end_date;
+      }
+      if (filters.customer_uuid) {
+        filterObj.filters.customer_uuid = filters.customer_uuid;
+      }
+      if (filters.sweep_id) {
+        filterObj.filters.sweep_id = filters.sweep_id;
+      }
+
+      // DIME API uses GET with data in request body (unusual but that's their format)
+      const response = await axios.request({
+        method: 'GET',
+        url: `${config.baseUrl}/api/transactions`,
+        headers,
+        data: filterObj
+      });
+
+      // DIME API might return data in different formats
+      const transactions = response.data?.data || response.data?.transactions || response.data || [];
+
+      return {
+        success: true,
+        transactions: Array.isArray(transactions) ? transactions : [],
+        rawResponse: response.data
+      };
+    } catch (error) {
+      console.error('DIME listTransactions error:', {
+        status: error.response?.status,
+        message: error.response?.data?.message || error.message,
+        data: error.response?.data
+      });
+
+      // If endpoint doesn't exist or returns 404, return empty array
+      if (error.response?.status === 404) {
+        return {
+          success: false,
+          transactions: [],
+          message: 'DIME transactions endpoint returned 404 - endpoint may not exist',
+          error: {
+            message: 'Endpoint not found',
+            status: 404
+          }
+        };
+      }
+
+      return {
+        success: false,
+        transactions: [],
+        error: {
+          message: error.response?.data?.message || error.message,
+          code: error.response?.data?.code || 'LIST_TRANSACTIONS_ERROR',
+          status: error.response?.status,
+          details: error.response?.data
+        }
+      };
+    }
+  }
 }
 
 module.exports = DimeService;
