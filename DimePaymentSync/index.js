@@ -277,6 +277,9 @@ module.exports = async function (context, req) {
               // Map DIME status to our payment status
               const paymentStatus = mapDimeStatusToPaymentStatus(status, statusCode, statusText);
 
+              // Build ProductCommissions JSON from enrollments
+              const productCommissionsJSON = await buildProductCommissionsJSON(pool, contextData.householdId, contextData.groupId, logger);
+
               // Insert payment record
               await pool.request()
                 .input('transactionType', sql.NVarChar(50), 'Payment')
@@ -298,18 +301,19 @@ module.exports = async function (context, req) {
                 .input('commission', sql.Decimal(10,2), pricing.commission)
                 .input('overrideRate', sql.Decimal(10,2), pricing.overrideRate)
                 .input('systemFees', sql.Decimal(10,2), pricing.systemFees)
+                .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
                 .query(`
                   INSERT INTO oe.Payments (
                     PaymentId, EnrollmentId, AgentId, HouseholdId, GroupId, TenantId, LocationId, InvoiceId,
                     TransactionType, Amount, Status, Processor, 
                     ProcessorTransactionId, PaymentMethod, RecurringScheduleId, PaymentDate,
-                    NetRate, Commission, OverrideRate, SystemFees,
+                    NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
                     CreatedDate, ModifiedDate
                   ) VALUES (
                     NEWID(), @enrollmentId, @agentId, @householdId, @groupId, @tenantId, @locationId, @invoiceId,
                     @transactionType, @amount, @status, @processor,
                     @processorTransactionId, @paymentMethod, @recurringScheduleId, @paymentDate,
-                    @netRate, @commission, @overrideRate, @systemFees,
+                    @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
                     GETUTCDATE(), GETUTCDATE()
                   )
                 `);
@@ -486,6 +490,77 @@ async function matchTransactionToGroup(pool, groupId, tenantId, scheduleId, logg
     agentId,
     householdId
   };
+}
+
+/**
+ * Build ProductCommissions JSON from enrollments
+ * Returns JSON string with structure: { "productId": { "enrollmentCount": 38, "commissionAmount": 650.00 } }
+ */
+async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
+  try {
+    if (!householdId && !groupId) {
+      return null;
+    }
+
+    let query;
+    const request = pool.request();
+
+    if (householdId) {
+      request.input('householdId', sql.UniqueIdentifier, householdId);
+      query = `
+        SELECT 
+          e.ProductId,
+          COUNT(*) as EnrollmentCount,
+          SUM(COALESCE(e.Commission, 0)) as CommissionAmount
+        FROM oe.Enrollments e
+        WHERE e.HouseholdId = @householdId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+        GROUP BY e.ProductId
+      `;
+    } else if (groupId) {
+      request.input('groupId', sql.UniqueIdentifier, groupId);
+      query = `
+        SELECT 
+          e.ProductId,
+          COUNT(*) as EnrollmentCount,
+          SUM(COALESCE(e.Commission, 0)) as CommissionAmount
+        FROM oe.Enrollments e
+        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+        WHERE m.GroupId = @groupId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+        GROUP BY e.ProductId
+      `;
+    }
+
+    const result = await request.query(query);
+    
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    // Build JSON structure: { "productId": { "enrollmentCount": 38, "commissionAmount": 650.00 } }
+    const productCommissions = {};
+    for (const row of result.recordset) {
+      const productId = row.ProductId.toString().toUpperCase(); // Store in uppercase for consistency
+      productCommissions[productId] = {
+        enrollmentCount: row.EnrollmentCount || 0,
+        commissionAmount: parseFloat(row.CommissionAmount) || 0
+      };
+    }
+
+    return JSON.stringify(productCommissions);
+  } catch (error) {
+    logger.warn(`Could not build ProductCommissions JSON: ${error.message}`);
+    return null;
+  }
 }
 
 /**

@@ -469,6 +469,75 @@ async function getEnrollmentContext(pool, enrollmentId, logger) {
   };
 }
 
+// Helper function to build ProductCommissions JSON from enrollments
+// Returns JSON string with structure: { "productId": { "enrollmentCount": 38, "commissionAmount": 650.00 } }
+async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
+  try {
+    if (!householdId && !groupId) {
+      return null;
+    }
+
+    let query;
+    const request = pool.request();
+
+    if (householdId) {
+      request.input('householdId', sql.UniqueIdentifier, householdId);
+      query = `
+        SELECT 
+          e.ProductId,
+          COUNT(*) as EnrollmentCount,
+          SUM(COALESCE(e.Commission, 0)) as CommissionAmount
+        FROM oe.Enrollments e
+        WHERE e.HouseholdId = @householdId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+        GROUP BY e.ProductId
+      `;
+    } else if (groupId) {
+      request.input('groupId', sql.UniqueIdentifier, groupId);
+      query = `
+        SELECT 
+          e.ProductId,
+          COUNT(*) as EnrollmentCount,
+          SUM(COALESCE(e.Commission, 0)) as CommissionAmount
+        FROM oe.Enrollments e
+        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+        WHERE m.GroupId = @groupId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+        GROUP BY e.ProductId
+      `;
+    }
+
+    const result = await request.query(query);
+    
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    // Build JSON structure: { "productId": { "enrollmentCount": 38, "commissionAmount": 650.00 } }
+    const productCommissions = {};
+    for (const row of result.recordset) {
+      const productId = row.ProductId.toString().toUpperCase(); // Store in uppercase for consistency
+      productCommissions[productId] = {
+        enrollmentCount: row.EnrollmentCount || 0,
+        commissionAmount: parseFloat(row.CommissionAmount) || 0
+      };
+    }
+
+    return JSON.stringify(productCommissions);
+  } catch (error) {
+    logger.warn(`Could not build ProductCommissions JSON: ${error.message}`);
+    return null;
+  }
+}
+
 // Helper function to get failure attempt information for a payment
 async function getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger) {
   try {
@@ -913,8 +982,12 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     logger.info(`Payment failure attempt ${attemptInfo.attemptNumber} (${attemptInfo.consecutiveFailures} consecutive failures)`);
   }
 
+  // Build ProductCommissions JSON from enrollments
+  const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
+
   // Insert payment record
-  await pool.request()
+  const paymentRequest = pool.request();
+  paymentRequest
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
     .input('status', sql.NVarChar(50), status)
@@ -932,6 +1005,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     .input('commission', sql.Decimal(10,2), commission)
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
+    .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
     .input('attemptNumber', sql.Int, attemptInfo.attemptNumber)
     .input('originalPaymentId', sql.UniqueIdentifier, attemptInfo.originalPaymentId)
     .input('consecutiveFailures', sql.Int, attemptInfo.consecutiveFailures)
@@ -941,13 +1015,13 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate, 
-        GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees,
+        GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
         AttemptNumber, OriginalPaymentId, ConsecutiveFailureCount, LastFailureDate,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), @enrollmentId, @agentId, @householdId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate, 
-        @groupId, @tenantId, @netRate, @commission, @overrideRate, @systemFees,
+        @groupId, @tenantId, @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
         @attemptNumber, @originalPaymentId, @consecutiveFailures, @lastFailureDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -1149,15 +1223,19 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
 
   logger.info(`ACH Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}, Method: ${paymentMethod}`);
 
-  // Get GroupId, TenantId, HouseholdId and pricing fields from enrollment context
+  // Get GroupId, TenantId, AgentId, HouseholdId and pricing fields from enrollment context
   const contextFromEnrollment = await getEnrollmentContext(pool, data.enrollment_id, logger);
   const groupId = contextFromEnrollment.groupId || null;
   const tenantId = contextFromEnrollment.tenantId || null;
+  const agentId = contextFromEnrollment.agentId || null;
   const householdId = contextFromEnrollment.householdId || null;
   const netRate = contextFromEnrollment.netRate || 0;
   const commission = contextFromEnrollment.commission || 0;
   const overrideRate = contextFromEnrollment.overrideRate || 0;
   const systemFees = contextFromEnrollment.systemFees || 0;
+
+  // Build ProductCommissions JSON from enrollments
+  const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
 
   // Insert payment record
   await pool.request()
@@ -1170,6 +1248,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     .input('webhookEventId', sql.Int, webhookEventId)
     .input('paymentDate', sql.DateTime2, new Date())
     .input('enrollmentId', sql.UniqueIdentifier, data.enrollment_id || null)
+    .input('agentId', sql.UniqueIdentifier, agentId)
     .input('householdId', sql.UniqueIdentifier, householdId)
     .input('groupId', sql.UniqueIdentifier, groupId)
     .input('tenantId', sql.UniqueIdentifier, tenantId)
@@ -1177,16 +1256,17 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     .input('commission', sql.Decimal(10,2), commission)
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
+    .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
     .query(`
       INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+        PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
-        NetRate, Commission, OverrideRate, SystemFees,
+        NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
         CreatedDate, ModifiedDate
       ) VALUES (
-        NEWID(), @enrollmentId, @householdId, @transactionType, @amount, @status, @processor,
+        NEWID(), @enrollmentId, @agentId, @householdId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
-        @netRate, @commission, @overrideRate, @systemFees,
+        @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -1454,21 +1534,9 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
         g.GroupId, 
         g.TenantId,
         grp.LocationId,
-        grp.InvoiceId,
-        e.EnrollmentId,
-        e.AgentId,
-        NULL as HouseholdId
+        grp.InvoiceId
       FROM oe.GroupRecurringPaymentPlans grp
       INNER JOIN oe.Groups g ON grp.GroupId = g.GroupId
-      LEFT JOIN (
-        SELECT TOP 1 EnrollmentId, AgentId, MemberId
-        FROM oe.Enrollments
-        WHERE Status = 'Active'
-        ORDER BY EffectiveDate DESC
-      ) e ON EXISTS (
-        SELECT 1 FROM oe.Members m 
-        WHERE m.MemberId = e.MemberId AND m.GroupId = g.GroupId
-      )
       WHERE grp.DimeScheduleId = @scheduleId
     `);
 
@@ -1488,9 +1556,38 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     tenantId = groupData.TenantId;
     locationId = groupData.LocationId || null;
     invoiceId = groupData.InvoiceId || null;
-    enrollmentId = groupData.EnrollmentId || null;
-    agentId = groupData.AgentId || null;
-    logger.info(`Found GROUP recurring payment for GroupId: ${groupId}, LocationId: ${locationId}, InvoiceId: ${invoiceId}`);
+    
+    // Get AgentId and EnrollmentId from the most recent active enrollment for this group
+    // This ensures we get a valid AgentId even if enrollments span multiple agents
+    try {
+      const enrollmentResult = await pool.request()
+        .input('groupId', sql.UniqueIdentifier, groupId)
+        .query(`
+          SELECT TOP 1 
+            e.EnrollmentId,
+            e.AgentId,
+            e.HouseholdId
+          FROM oe.Enrollments e
+          INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+          WHERE m.GroupId = @groupId
+            AND e.Status = 'Active'
+            AND e.AgentId IS NOT NULL
+          ORDER BY e.EffectiveDate DESC, e.CreatedDate DESC
+        `);
+      
+      if (enrollmentResult.recordset.length > 0) {
+        enrollmentId = enrollmentResult.recordset[0].EnrollmentId;
+        agentId = enrollmentResult.recordset[0].AgentId;
+        householdId = enrollmentResult.recordset[0].HouseholdId;
+        logger.info(`Found AgentId ${agentId} from enrollment for group ${groupId}`);
+      } else {
+        logger.warn(`No active enrollment with AgentId found for group ${groupId}`);
+      }
+    } catch (error) {
+      logger.warn(`Could not get AgentId for group ${groupId}: ${error.message}`);
+    }
+    
+    logger.info(`Found GROUP recurring payment for GroupId: ${groupId}, LocationId: ${locationId}, InvoiceId: ${invoiceId}, AgentId: ${agentId}`);
   } else {
     // Not a group payment - check if it's an INDIVIDUAL recurring payment
     // Look for existing payment record with this RecurringScheduleId
@@ -1583,6 +1680,12 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     logger.warn(`Could not aggregate pricing: ${error.message}`);
   }
 
+  // Build ProductCommissions JSON from enrollments (enrollment count and commission amount per product)
+  const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
+  if (productCommissionsJSON) {
+    logger.info(`Built ProductCommissions JSON: ${productCommissionsJSON}`);
+  }
+
   // Calculate next billing date (1 month from now)
   const nextBillingDate = new Date();
   nextBillingDate.setMonth(nextBillingDate.getMonth() + 1);
@@ -1590,7 +1693,7 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
   
   logger.info(`Calculated next billing date: ${nextBillingDate.toISOString().split('T')[0]}`);
 
-  // Insert payment record with LocationId, InvoiceId, RecurringScheduleId and NextBillingDate
+  // Insert payment record with LocationId, InvoiceId, RecurringScheduleId, NextBillingDate, and ProductCommissions
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
@@ -1613,18 +1716,19 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     .input('commission', sql.Decimal(10,2), commission)
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
+    .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, AgentId, HouseholdId, GroupId, TenantId, LocationId, InvoiceId,
         TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, RecurringScheduleId, NextBillingDate, WebhookEventId, PaymentDate,
-        NetRate, Commission, OverrideRate, SystemFees,
+        NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), @enrollmentId, @agentId, @householdId, @groupId, @tenantId, @locationId, @invoiceId,
         @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @recurringScheduleId, @nextBillingDate, @webhookEventId, @paymentDate,
-        @netRate, @commission, @overrideRate, @systemFees,
+        @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -1751,7 +1855,37 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     tenantId = groupData.TenantId;
     locationId = groupData.LocationId || null;
     invoiceId = groupData.InvoiceId || null;
-    logger.info(`Found GROUP recurring payment failure for GroupId: ${groupId}, LocationId: ${locationId}, InvoiceId: ${invoiceId}`);
+    
+    // Get AgentId and EnrollmentId from the most recent active enrollment for this group
+    try {
+      const enrollmentResult = await pool.request()
+        .input('groupId', sql.UniqueIdentifier, groupId)
+        .query(`
+          SELECT TOP 1 
+            e.EnrollmentId,
+            e.AgentId,
+            e.HouseholdId
+          FROM oe.Enrollments e
+          INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+          WHERE m.GroupId = @groupId
+            AND e.Status = 'Active'
+            AND e.AgentId IS NOT NULL
+          ORDER BY e.EffectiveDate DESC, e.CreatedDate DESC
+        `);
+      
+      if (enrollmentResult.recordset.length > 0) {
+        enrollmentId = enrollmentResult.recordset[0].EnrollmentId;
+        agentId = enrollmentResult.recordset[0].AgentId;
+        householdId = enrollmentResult.recordset[0].HouseholdId;
+        logger.info(`Found AgentId ${agentId} from enrollment for group ${groupId}`);
+      } else {
+        logger.warn(`No active enrollment with AgentId found for group ${groupId}`);
+      }
+    } catch (error) {
+      logger.warn(`Could not get AgentId for group ${groupId}: ${error.message}`);
+    }
+    
+    logger.info(`Found GROUP recurring payment failure for GroupId: ${groupId}, LocationId: ${locationId}, InvoiceId: ${invoiceId}, AgentId: ${agentId}`);
   } else {
     // Not a group payment - check if it's an INDIVIDUAL recurring payment
     const individualResult = await pool.request()
@@ -1841,13 +1975,19 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     logger.warn(`Could not aggregate pricing: ${error.message}`);
   }
 
+  // Build ProductCommissions JSON from enrollments (enrollment count and commission amount per product)
+  const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
+  if (productCommissionsJSON) {
+    logger.info(`Built ProductCommissions JSON: ${productCommissionsJSON}`);
+  }
+
   // Calculate next retry date (1 week from now for failed payments)
   const nextRetryDate = new Date();
   nextRetryDate.setDate(nextRetryDate.getDate() + 7);
   
   logger.info(`Next retry date set to: ${nextRetryDate.toISOString().split('T')[0]}`);
 
-  // Insert failed payment record with LocationId, InvoiceId, RecurringScheduleId and retry info
+  // Insert failed payment record with LocationId, InvoiceId, RecurringScheduleId, ProductCommissions, and retry info
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
@@ -1871,18 +2011,19 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     .input('commission', sql.Decimal(10,2), commission)
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
+    .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, AgentId, HouseholdId, GroupId, TenantId, LocationId, InvoiceId,
         TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, RecurringScheduleId, FailureReason, RetryDate, WebhookEventId, PaymentDate,
-        NetRate, Commission, OverrideRate, SystemFees,
+        NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), @enrollmentId, @agentId, @householdId, @groupId, @tenantId, @locationId, @invoiceId,
         @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @recurringScheduleId, @failureReason, @retryDate, @webhookEventId, @paymentDate,
-        @netRate, @commission, @overrideRate, @systemFees,
+        @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
