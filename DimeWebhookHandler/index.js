@@ -471,8 +471,13 @@ async function getEnrollmentContext(pool, enrollmentId, logger) {
 
 // Helper function to build ProductCommissions JSON from enrollments
 // Returns JSON string with structure: { "productId": { "enrollmentCount": 38, "commissionAmount": 650.00 } }
+// Note: Excludes bundle ProductIds - only includes component products (products that are NOT bundles)
 async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
   try {
+    // For group payments, prioritize groupId over householdId
+    // For group payments, we want all group enrollments, not just one household
+    const useGroupQuery = groupId && !householdId;
+
     if (!householdId && !groupId) {
       return null;
     }
@@ -480,23 +485,8 @@ async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
     let query;
     const request = pool.request();
 
-    if (householdId) {
-      request.input('householdId', sql.UniqueIdentifier, householdId);
-      query = `
-        SELECT 
-          e.ProductId,
-          COUNT(*) as EnrollmentCount,
-          SUM(COALESCE(e.Commission, 0)) as CommissionAmount
-        FROM oe.Enrollments e
-        WHERE e.HouseholdId = @householdId
-          AND e.Status = 'Active'
-          AND e.EffectiveDate <= GETUTCDATE()
-          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
-          AND e.ProductId IS NOT NULL
-          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
-        GROUP BY e.ProductId
-      `;
-    } else if (groupId) {
+    if (useGroupQuery) {
+      // Group payment - query all enrollments in the group, exclude bundle ProductIds
       request.input('groupId', sql.UniqueIdentifier, groupId);
       query = `
         SELECT 
@@ -511,6 +501,35 @@ async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
           AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
           AND e.ProductId IS NOT NULL
           AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+          -- Exclude bundle ProductIds (products that are bundles, not component products)
+          AND e.ProductId NOT IN (
+            SELECT DISTINCT BundleProductId 
+            FROM oe.ProductBundles
+            WHERE BundleProductId IS NOT NULL
+          )
+        GROUP BY e.ProductId
+      `;
+    } else if (householdId) {
+      // Household payment - query enrollments for this household, exclude bundle ProductIds
+      request.input('householdId', sql.UniqueIdentifier, householdId);
+      query = `
+        SELECT 
+          e.ProductId,
+          COUNT(*) as EnrollmentCount,
+          SUM(COALESCE(e.Commission, 0)) as CommissionAmount
+        FROM oe.Enrollments e
+        WHERE e.HouseholdId = @householdId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+          -- Exclude bundle ProductIds (products that are bundles, not component products)
+          AND e.ProductId NOT IN (
+            SELECT DISTINCT BundleProductId 
+            FROM oe.ProductBundles
+            WHERE BundleProductId IS NOT NULL
+          )
         GROUP BY e.ProductId
       `;
     }
@@ -1557,16 +1576,15 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     locationId = groupData.LocationId || null;
     invoiceId = groupData.InvoiceId || null;
     
-    // Get AgentId and EnrollmentId from the most recent active enrollment for this group
+    // Get AgentId from the most recent active enrollment for this group
+    // For group payments, we only need AgentId - EnrollmentId and HouseholdId should be NULL
     // This ensures we get a valid AgentId even if enrollments span multiple agents
     try {
       const enrollmentResult = await pool.request()
         .input('groupId', sql.UniqueIdentifier, groupId)
         .query(`
           SELECT TOP 1 
-            e.EnrollmentId,
-            e.AgentId,
-            e.HouseholdId
+            e.AgentId
           FROM oe.Enrollments e
           INNER JOIN oe.Members m ON e.MemberId = m.MemberId
           WHERE m.GroupId = @groupId
@@ -1576,9 +1594,10 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
         `);
       
       if (enrollmentResult.recordset.length > 0) {
-        enrollmentId = enrollmentResult.recordset[0].EnrollmentId;
         agentId = enrollmentResult.recordset[0].AgentId;
-        householdId = enrollmentResult.recordset[0].HouseholdId;
+        // For group payments, EnrollmentId and HouseholdId should remain NULL
+        enrollmentId = null;
+        householdId = null;
         logger.info(`Found AgentId ${agentId} from enrollment for group ${groupId}`);
       } else {
         logger.warn(`No active enrollment with AgentId found for group ${groupId}`);
@@ -1856,15 +1875,14 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     locationId = groupData.LocationId || null;
     invoiceId = groupData.InvoiceId || null;
     
-    // Get AgentId and EnrollmentId from the most recent active enrollment for this group
+    // Get AgentId from the most recent active enrollment for this group
+    // For group payments, we only need AgentId - EnrollmentId and HouseholdId should be NULL
     try {
       const enrollmentResult = await pool.request()
         .input('groupId', sql.UniqueIdentifier, groupId)
         .query(`
           SELECT TOP 1 
-            e.EnrollmentId,
-            e.AgentId,
-            e.HouseholdId
+            e.AgentId
           FROM oe.Enrollments e
           INNER JOIN oe.Members m ON e.MemberId = m.MemberId
           WHERE m.GroupId = @groupId
@@ -1874,9 +1892,10 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
         `);
       
       if (enrollmentResult.recordset.length > 0) {
-        enrollmentId = enrollmentResult.recordset[0].EnrollmentId;
         agentId = enrollmentResult.recordset[0].AgentId;
-        householdId = enrollmentResult.recordset[0].HouseholdId;
+        // For group payments, EnrollmentId and HouseholdId should remain NULL
+        enrollmentId = null;
+        householdId = null;
         logger.info(`Found AgentId ${agentId} from enrollment for group ${groupId}`);
       } else {
         logger.warn(`No active enrollment with AgentId found for group ${groupId}`);
