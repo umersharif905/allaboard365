@@ -469,13 +469,13 @@ async function getEnrollmentContext(pool, enrollmentId, logger) {
   };
 }
 
-// Helper function to build ProductCommissions JSON from enrollments
-// Returns JSON string with structure: { "productId": { "enrollmentCount": 38, "commissionAmount": 650.00 } }
+// Helper function to build ProductVendorAmounts JSON from enrollments
+// Returns JSON string with structure: { "productId": { "enrolledHouseholdsCount": 7, "vendorAmount": 650.00 } }
 // Note: Excludes bundle ProductIds - only includes component products (products that are NOT bundles)
-async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
+// For group payments, enrolledHouseholdsCount represents number of households (primary members), not total enrollments
+async function buildProductVendorAmountsJSON(pool, householdId, groupId, logger) {
   try {
     // For group payments, prioritize groupId over householdId
-    // For group payments, we want all group enrollments, not just one household
     const useGroupQuery = groupId && !householdId;
 
     if (!householdId && !groupId) {
@@ -486,12 +486,183 @@ async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
     const request = pool.request();
 
     if (useGroupQuery) {
-      // Group payment - query all enrollments in the group, exclude bundle ProductIds
+      // Group payment - count DISTINCT households (primary members) per product, not total enrollments
       request.input('groupId', sql.UniqueIdentifier, groupId);
       query = `
         SELECT 
           e.ProductId,
-          COUNT(*) as EnrollmentCount,
+          COUNT(DISTINCT CASE WHEN m.RelationshipType = 'P' THEN m.HouseholdId END) as HouseholdCount,
+          SUM(COALESCE(e.NetRate, 0)) as VendorAmount
+        FROM oe.Enrollments e
+        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+        WHERE m.GroupId = @groupId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+          AND e.ProductId NOT IN (
+            SELECT DISTINCT BundleProductId 
+            FROM oe.ProductBundles
+            WHERE BundleProductId IS NOT NULL
+          )
+        GROUP BY e.ProductId
+      `;
+    } else if (householdId) {
+      // Household payment - count is 1 (single household)
+      request.input('householdId', sql.UniqueIdentifier, householdId);
+      query = `
+        SELECT 
+          e.ProductId,
+          1 as HouseholdCount,
+          SUM(COALESCE(e.NetRate, 0)) as VendorAmount
+        FROM oe.Enrollments e
+        WHERE e.HouseholdId = @householdId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+          AND e.ProductId NOT IN (
+            SELECT DISTINCT BundleProductId 
+            FROM oe.ProductBundles
+            WHERE BundleProductId IS NOT NULL
+          )
+        GROUP BY e.ProductId
+      `;
+    }
+
+    const result = await request.query(query);
+    
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    const productVendorAmounts = {};
+    for (const row of result.recordset) {
+      const productId = row.ProductId.toString().toUpperCase();
+      productVendorAmounts[productId] = {
+        enrolledHouseholdsCount: row.HouseholdCount || 0,
+        vendorAmount: parseFloat(row.VendorAmount) || 0
+      };
+    }
+
+    return JSON.stringify(productVendorAmounts);
+  } catch (error) {
+    logger.warn(`Could not build ProductVendorAmounts JSON: ${error.message}`);
+    return null;
+  }
+}
+
+// Helper function to build ProductOwnerAmounts JSON from enrollments
+// Returns JSON string with structure: { "productId": { "enrolledHouseholdsCount": 7, "overrideAmount": 650.00 } }
+// Note: Excludes bundle ProductIds - only includes component products (products that are NOT bundles)
+// For group payments, enrolledHouseholdsCount represents number of households (primary members), not total enrollments
+async function buildProductOwnerAmountsJSON(pool, householdId, groupId, logger) {
+  try {
+    // For group payments, prioritize groupId over householdId
+    const useGroupQuery = groupId && !householdId;
+
+    if (!householdId && !groupId) {
+      return null;
+    }
+
+    let query;
+    const request = pool.request();
+
+    if (useGroupQuery) {
+      // Group payment - count DISTINCT households (primary members) per product, not total enrollments
+      request.input('groupId', sql.UniqueIdentifier, groupId);
+      query = `
+        SELECT 
+          e.ProductId,
+          COUNT(DISTINCT CASE WHEN m.RelationshipType = 'P' THEN m.HouseholdId END) as HouseholdCount,
+          SUM(COALESCE(e.OverrideRate, 0)) as OverrideAmount
+        FROM oe.Enrollments e
+        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+        WHERE m.GroupId = @groupId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+          AND e.ProductId NOT IN (
+            SELECT DISTINCT BundleProductId 
+            FROM oe.ProductBundles
+            WHERE BundleProductId IS NOT NULL
+          )
+        GROUP BY e.ProductId
+      `;
+    } else if (householdId) {
+      // Household payment - count is 1 (single household)
+      request.input('householdId', sql.UniqueIdentifier, householdId);
+      query = `
+        SELECT 
+          e.ProductId,
+          1 as HouseholdCount,
+          SUM(COALESCE(e.OverrideRate, 0)) as OverrideAmount
+        FROM oe.Enrollments e
+        WHERE e.HouseholdId = @householdId
+          AND e.Status = 'Active'
+          AND e.EffectiveDate <= GETUTCDATE()
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > GETUTCDATE())
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId != '00000000-0000-0000-0000-000000000000'
+          AND e.ProductId NOT IN (
+            SELECT DISTINCT BundleProductId 
+            FROM oe.ProductBundles
+            WHERE BundleProductId IS NOT NULL
+          )
+        GROUP BY e.ProductId
+      `;
+    }
+
+    const result = await request.query(query);
+    
+    if (result.recordset.length === 0) {
+      return null;
+    }
+
+    const productOwnerAmounts = {};
+    for (const row of result.recordset) {
+      const productId = row.ProductId.toString().toUpperCase();
+      productOwnerAmounts[productId] = {
+        enrolledHouseholdsCount: row.HouseholdCount || 0,
+        overrideAmount: parseFloat(row.OverrideAmount) || 0
+      };
+    }
+
+    return JSON.stringify(productOwnerAmounts);
+  } catch (error) {
+    logger.warn(`Could not build ProductOwnerAmounts JSON: ${error.message}`);
+    return null;
+  }
+}
+
+// Helper function to build ProductCommissions JSON from enrollments
+// Returns JSON string with structure: { "productId": { "enrolledHouseholdsCount": 7, "commissionAmount": 650.00 } }
+// Note: Excludes bundle ProductIds - only includes component products (products that are NOT bundles)
+// For group payments, enrolledHouseholdsCount represents number of households (primary members), not total enrollments
+async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
+  try {
+    // For group payments, prioritize groupId over householdId
+    // For group payments, we count distinct households (primary members), not total enrollments
+    const useGroupQuery = groupId && !householdId;
+
+    if (!householdId && !groupId) {
+      return null;
+    }
+
+    let query;
+    const request = pool.request();
+
+    if (useGroupQuery) {
+      // Group payment - count DISTINCT households (primary members) per product, not total enrollments
+      request.input('groupId', sql.UniqueIdentifier, groupId);
+      query = `
+        SELECT 
+          e.ProductId,
+          COUNT(DISTINCT CASE WHEN m.RelationshipType = 'P' THEN m.HouseholdId END) as HouseholdCount,
           SUM(COALESCE(e.Commission, 0)) as CommissionAmount
         FROM oe.Enrollments e
         INNER JOIN oe.Members m ON e.MemberId = m.MemberId
@@ -510,12 +681,12 @@ async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
         GROUP BY e.ProductId
       `;
     } else if (householdId) {
-      // Household payment - query enrollments for this household, exclude bundle ProductIds
+      // Household payment - count is 1 (single household)
       request.input('householdId', sql.UniqueIdentifier, householdId);
       query = `
         SELECT 
           e.ProductId,
-          COUNT(*) as EnrollmentCount,
+          1 as HouseholdCount,
           SUM(COALESCE(e.Commission, 0)) as CommissionAmount
         FROM oe.Enrollments e
         WHERE e.HouseholdId = @householdId
@@ -540,12 +711,12 @@ async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
       return null;
     }
 
-    // Build JSON structure: { "productId": { "enrollmentCount": 38, "commissionAmount": 650.00 } }
+    // Build JSON structure: { "productId": { "enrolledHouseholdsCount": 7, "commissionAmount": 650.00 } }
     const productCommissions = {};
     for (const row of result.recordset) {
       const productId = row.ProductId.toString().toUpperCase(); // Store in uppercase for consistency
       productCommissions[productId] = {
-        enrollmentCount: row.EnrollmentCount || 0,
+        enrolledHouseholdsCount: row.HouseholdCount || 0,
         commissionAmount: parseFloat(row.CommissionAmount) || 0
       };
     }
@@ -1001,8 +1172,10 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     logger.info(`Payment failure attempt ${attemptInfo.attemptNumber} (${attemptInfo.consecutiveFailures} consecutive failures)`);
   }
 
-  // Build ProductCommissions JSON from enrollments
+  // Build ProductCommissions, ProductVendorAmounts, and ProductOwnerAmounts JSON from enrollments
   const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
+  const productVendorAmountsJSON = await buildProductVendorAmountsJSON(pool, householdId, groupId, logger);
+  const productOwnerAmountsJSON = await buildProductOwnerAmountsJSON(pool, householdId, groupId, logger);
 
   // Insert payment record
   const paymentRequest = pool.request();
@@ -1025,6 +1198,8 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
     .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
+    .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
+    .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
     .input('attemptNumber', sql.Int, attemptInfo.attemptNumber)
     .input('originalPaymentId', sql.UniqueIdentifier, attemptInfo.originalPaymentId)
     .input('consecutiveFailures', sql.Int, attemptInfo.consecutiveFailures)
@@ -1035,12 +1210,14 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
         PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate, 
         GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
+        ProductVendorAmounts, ProductOwnerAmounts,
         AttemptNumber, OriginalPaymentId, ConsecutiveFailureCount, LastFailureDate,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), @enrollmentId, @agentId, @householdId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate, 
         @groupId, @tenantId, @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
+        @productVendorAmounts, @productOwnerAmounts,
         @attemptNumber, @originalPaymentId, @consecutiveFailures, @lastFailureDate,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -1253,8 +1430,10 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
   const overrideRate = contextFromEnrollment.overrideRate || 0;
   const systemFees = contextFromEnrollment.systemFees || 0;
 
-  // Build ProductCommissions JSON from enrollments
+  // Build ProductCommissions, ProductVendorAmounts, and ProductOwnerAmounts JSON from enrollments
   const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
+  const productVendorAmountsJSON = await buildProductVendorAmountsJSON(pool, householdId, groupId, logger);
+  const productOwnerAmountsJSON = await buildProductOwnerAmountsJSON(pool, householdId, groupId, logger);
 
   // Insert payment record
   await pool.request()
@@ -1276,16 +1455,20 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
     .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
+    .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
+    .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
         NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
+        ProductVendorAmounts, ProductOwnerAmounts,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), @enrollmentId, @agentId, @householdId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
         @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
+        @productVendorAmounts, @productOwnerAmounts,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -1699,10 +1882,18 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     logger.warn(`Could not aggregate pricing: ${error.message}`);
   }
 
-  // Build ProductCommissions JSON from enrollments (enrollment count and commission amount per product)
+  // Build ProductCommissions, ProductVendorAmounts, and ProductOwnerAmounts JSON from enrollments
   const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
+  const productVendorAmountsJSON = await buildProductVendorAmountsJSON(pool, householdId, groupId, logger);
+  const productOwnerAmountsJSON = await buildProductOwnerAmountsJSON(pool, householdId, groupId, logger);
   if (productCommissionsJSON) {
     logger.info(`Built ProductCommissions JSON: ${productCommissionsJSON}`);
+  }
+  if (productVendorAmountsJSON) {
+    logger.info(`Built ProductVendorAmounts JSON: ${productVendorAmountsJSON}`);
+  }
+  if (productOwnerAmountsJSON) {
+    logger.info(`Built ProductOwnerAmounts JSON: ${productOwnerAmountsJSON}`);
   }
 
   // Calculate next billing date (1 month from now)
@@ -1712,7 +1903,7 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
   
   logger.info(`Calculated next billing date: ${nextBillingDate.toISOString().split('T')[0]}`);
 
-  // Insert payment record with LocationId, InvoiceId, RecurringScheduleId, NextBillingDate, and ProductCommissions
+  // Insert payment record with LocationId, InvoiceId, RecurringScheduleId, NextBillingDate, ProductCommissions, ProductVendorAmounts, and ProductOwnerAmounts
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
@@ -1736,18 +1927,22 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
     .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
+    .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
+    .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, AgentId, HouseholdId, GroupId, TenantId, LocationId, InvoiceId,
         TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, RecurringScheduleId, NextBillingDate, WebhookEventId, PaymentDate,
         NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
+        ProductVendorAmounts, ProductOwnerAmounts,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), @enrollmentId, @agentId, @householdId, @groupId, @tenantId, @locationId, @invoiceId,
         @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @recurringScheduleId, @nextBillingDate, @webhookEventId, @paymentDate,
         @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
+        @productVendorAmounts, @productOwnerAmounts,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -1994,10 +2189,18 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     logger.warn(`Could not aggregate pricing: ${error.message}`);
   }
 
-  // Build ProductCommissions JSON from enrollments (enrollment count and commission amount per product)
+  // Build ProductCommissions, ProductVendorAmounts, and ProductOwnerAmounts JSON from enrollments
   const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
+  const productVendorAmountsJSON = await buildProductVendorAmountsJSON(pool, householdId, groupId, logger);
+  const productOwnerAmountsJSON = await buildProductOwnerAmountsJSON(pool, householdId, groupId, logger);
   if (productCommissionsJSON) {
     logger.info(`Built ProductCommissions JSON: ${productCommissionsJSON}`);
+  }
+  if (productVendorAmountsJSON) {
+    logger.info(`Built ProductVendorAmounts JSON: ${productVendorAmountsJSON}`);
+  }
+  if (productOwnerAmountsJSON) {
+    logger.info(`Built ProductOwnerAmounts JSON: ${productOwnerAmountsJSON}`);
   }
 
   // Calculate next retry date (1 week from now for failed payments)
@@ -2006,7 +2209,7 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
   
   logger.info(`Next retry date set to: ${nextRetryDate.toISOString().split('T')[0]}`);
 
-  // Insert failed payment record with LocationId, InvoiceId, RecurringScheduleId, ProductCommissions, and retry info
+  // Insert failed payment record with LocationId, InvoiceId, RecurringScheduleId, ProductCommissions, ProductVendorAmounts, ProductOwnerAmounts, and retry info
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10,2), amount)
@@ -2031,18 +2234,22 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
     .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
+    .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
+    .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
     .query(`
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, AgentId, HouseholdId, GroupId, TenantId, LocationId, InvoiceId,
         TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, RecurringScheduleId, FailureReason, RetryDate, WebhookEventId, PaymentDate,
         NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
+        ProductVendorAmounts, ProductOwnerAmounts,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), @enrollmentId, @agentId, @householdId, @groupId, @tenantId, @locationId, @invoiceId,
         @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @recurringScheduleId, @failureReason, @retryDate, @webhookEventId, @paymentDate,
         @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
+        @productVendorAmounts, @productOwnerAmounts,
         GETUTCDATE(), GETUTCDATE()
       )
     `);
