@@ -1200,6 +1200,17 @@ module.exports = async function (context, myTimer, options = {}) {
             continue;
           }
           
+          // Skip if invoice already exists for this group/location/billing period (e.g. from a prior single-group run)
+          const existingInvoiceCheck = await pool.request()
+            .input('groupId', sql.UniqueIdentifier, group.GroupId)
+            .input('locationId', sql.UniqueIdentifier, location.LocationId)
+            .input('invoiceDate', sql.Date, billingDate)
+            .query(`SELECT 1 AS HasExisting FROM oe.Invoices WHERE GroupId = @groupId AND LocationId = @locationId AND CAST(InvoiceDate AS DATE) = CAST(@invoiceDate AS DATE)`);
+          if (existingInvoiceCheck.recordset && existingInvoiceCheck.recordset.length > 0) {
+            logger.info(`    ⏭️ Skipping location ${location.LocationName}: invoice already exists for this billing period (no duplicate)`);
+            continue;
+          }
+          
           const invoiceSuffix = locationPremiums.filter(l => l.UseLocationACH).length > 1 ? `-${location.LocationName?.replace(/\s/g, '') || (i + 1)}` : '';
           const invoiceNumber = `${baseInvoiceNumber}${invoiceSuffix}`;
           
