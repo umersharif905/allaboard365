@@ -11,7 +11,8 @@
     "DIME_SID": "your_dime_sid",
     "DIME_BASE_URL": "https://api.dimepay.com",
     "DIME_WEBHOOK_SECRET": "your_webhook_secret",
-    "ADMIN_API_KEY": "your_admin_api_key_generate_with_crypto"
+    "ADMIN_API_KEY": "your_admin_api_key_generate_with_crypto",
+    "NODE_ENV": "development"
   }
 }
 

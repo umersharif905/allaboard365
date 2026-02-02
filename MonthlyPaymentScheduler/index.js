@@ -857,12 +857,19 @@ async function sendExecutionReportEmail(pool, results, startTime, endTime, billi
   }
 }
 
-module.exports = async function (context, myTimer) {
+/**
+ * @param {object} context - Azure Function context
+ * @param {object} myTimer - Timer trigger (null when invoked from DimeManualScheduler)
+ * @param {object} [options] - Optional: { groupId } to run for a single group only (manual test)
+ */
+module.exports = async function (context, myTimer, options = {}) {
   const logger = createLogger(context);
   const startTime = new Date();
-  
+  const singleGroupId = options && options.groupId;
+
   logger.section('Monthly Payment Scheduler Started (Multi-Location Billing)');
   logger.info(`Execution Date: ${startTime.toISOString()}`);
+  if (singleGroupId) logger.info(`Single-group mode: GroupId = ${singleGroupId}`);
   logger.info(`[DEBUG] Code version: Fixed primary location logic v2`);
   
   // Check if emails should be skipped (for testing)
@@ -918,7 +925,7 @@ module.exports = async function (context, myTimer) {
     logger.info(`Billing Date (Invoice Date): ${billingDate.toISOString().split('T')[0]}`);
     logger.info(`Payment Date: ${paymentDate.toISOString().split('T')[0]}`);
     
-    // Get all active groups
+    // Get all active groups (or single group when options.groupId is set)
     const groupsQuery = `
       SELECT DISTINCT
         g.GroupId,
@@ -930,10 +937,12 @@ module.exports = async function (context, myTimer) {
         g.ProcessorCustomerId
       FROM oe.Groups g
       WHERE g.Status = 'Active'
+      ${singleGroupId ? 'AND g.GroupId = @groupId' : ''}
       ORDER BY g.Name
     `;
-    
-    const groupsResult = await pool.request().query(groupsQuery);
+    const groupsRequest = pool.request();
+    if (singleGroupId) groupsRequest.input('groupId', sql.UniqueIdentifier, singleGroupId);
+    const groupsResult = await groupsRequest.query(groupsQuery);
     const groups = groupsResult.recordset;
     
     logger.info(`Found ${groups.length} active groups`);
@@ -1178,6 +1187,19 @@ module.exports = async function (context, myTimer) {
           }
           
           // Primary location OR location pays separately - create invoice and DIME schedule
+          // Compute effective schedule amount (primary may include non-billing locations)
+          let scheduleAmountForSkip = fees.totalAmount;
+          if (location.LocationIsPrimary && locationsChargingToPrimary.length > 0) {
+            locationsChargingToPrimary.forEach(charge => {
+              scheduleAmountForSkip += charge.fees.totalAmount;
+            });
+          }
+          // Skip location when total is $0 - no active enrollments for this billing period; DIME rejects amount > 0
+          if (scheduleAmountForSkip <= 0 || (typeof scheduleAmountForSkip === 'number' && scheduleAmountForSkip < 0.01)) {
+            logger.info(`    ⏭️ Skipping location ${location.LocationName}: $0 due (no active enrollments for this billing period)`);
+            continue;
+          }
+          
           const invoiceSuffix = locationPremiums.filter(l => l.UseLocationACH).length > 1 ? `-${location.LocationName?.replace(/\s/g, '') || (i + 1)}` : '';
           const invoiceNumber = `${baseInvoiceNumber}${invoiceSuffix}`;
           

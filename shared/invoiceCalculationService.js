@@ -43,6 +43,7 @@ async function calculateLocationPremiums(pool, groupId, billingDate, sqlModule =
     
     -- Calculate premiums by location (primary member's LocationId determines billing)
     -- FIXED: Use DISTINCT enrollments to prevent double-counting from member joins
+    -- Enrollment "active for billing month": EffectiveDate/TerminationDate only (do not use oe.Enrollments.Status)
     WITH EnrollmentPremiums AS (
       -- First, get distinct enrollments with their premiums (avoid double-counting from member joins)
       SELECT DISTINCT
@@ -53,7 +54,8 @@ async function calculateLocationPremiums(pool, groupId, billingDate, sqlModule =
       FROM oe.Members pm
       INNER JOIN oe.Enrollments e ON pm.HouseholdId = e.HouseholdId 
         AND (e.EnrollmentType = 'Product' OR e.EnrollmentType IS NULL)
-        AND e.Status = 'Active'
+        AND CAST(e.EffectiveDate AS DATE) <= EOMONTH(@billingDate)
+        AND (e.TerminationDate IS NULL OR CAST(e.TerminationDate AS DATE) >= @billingDate)
       WHERE pm.MemberSequence = 1  -- Primary member determines location
         AND pm.GroupId = @groupId
         AND pm.Status != 'Terminated'
@@ -96,7 +98,8 @@ async function calculateLocationPremiums(pool, groupId, billingDate, sqlModule =
       FROM oe.Members pm
       INNER JOIN oe.Enrollments e_setup ON pm.HouseholdId = e_setup.HouseholdId 
         AND e_setup.EnrollmentType = 'SetupFee'
-        AND e_setup.Status = 'Active'
+        AND CAST(e_setup.EffectiveDate AS DATE) <= EOMONTH(@billingDate)
+        AND (e_setup.TerminationDate IS NULL OR CAST(e_setup.TerminationDate AS DATE) >= @billingDate)
       LEFT JOIN oe.GroupLocations gl ON COALESCE(pm.LocationId, @PrimaryLocationId) = gl.LocationId
       WHERE pm.MemberSequence = 1  -- Primary member determines location
         AND pm.GroupId = @groupId
@@ -111,7 +114,8 @@ async function calculateLocationPremiums(pool, groupId, billingDate, sqlModule =
       FROM oe.Members pm
       INNER JOIN oe.Enrollments e_ppf ON pm.HouseholdId = e_ppf.HouseholdId 
         AND e_ppf.EnrollmentType = 'PaymentProcessingFee'
-        AND e_ppf.Status = 'Active'
+        AND CAST(e_ppf.EffectiveDate AS DATE) <= EOMONTH(@billingDate)
+        AND (e_ppf.TerminationDate IS NULL OR CAST(e_ppf.TerminationDate AS DATE) >= @billingDate)
       WHERE pm.MemberSequence = 1  -- Primary member determines location
         AND pm.GroupId = @groupId
         AND pm.Status != 'Terminated'
@@ -125,7 +129,8 @@ async function calculateLocationPremiums(pool, groupId, billingDate, sqlModule =
       FROM oe.Members pm
       INNER JOIN oe.Enrollments e_sf ON pm.HouseholdId = e_sf.HouseholdId 
         AND e_sf.EnrollmentType = 'SystemFee'
-        AND e_sf.Status = 'Active'
+        AND CAST(e_sf.EffectiveDate AS DATE) <= EOMONTH(@billingDate)
+        AND (e_sf.TerminationDate IS NULL OR CAST(e_sf.TerminationDate AS DATE) >= @billingDate)
       WHERE pm.MemberSequence = 1  -- Primary member determines location
         AND pm.GroupId = @groupId
         AND pm.Status != 'Terminated'

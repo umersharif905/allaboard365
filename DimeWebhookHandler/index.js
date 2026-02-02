@@ -644,12 +644,15 @@ async function buildProductOwnerAmountsJSON(pool, householdId, groupId, logger) 
 // Note: Excludes bundle ProductIds - only includes component products (products that are NOT bundles)
 // For group payments, enrolledHouseholdsCount represents number of households (primary members), not total enrollments
 async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
+  logger.info(`buildProductCommissionsJSON called with householdId=${householdId}, groupId=${groupId}`);
   try {
     // For group payments, prioritize groupId over householdId
     // For group payments, we count distinct households (primary members), not total enrollments
     const useGroupQuery = groupId && !householdId;
+    logger.info(`useGroupQuery=${useGroupQuery}`);
 
     if (!householdId && !groupId) {
+      logger.info(`Both householdId and groupId are null, returning null`);
       return null;
     }
 
@@ -705,15 +708,19 @@ async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
       `;
     }
 
+    logger.info(`Executing ProductCommissions query...`);
     const result = await request.query(query);
+    logger.info(`ProductCommissions query returned ${result.recordset.length} rows`);
     
     if (result.recordset.length === 0) {
+      logger.info(`No enrollments found for ProductCommissions, returning null`);
       return null;
     }
 
     // Build JSON structure: { "productId": { "enrolledHouseholdsCount": 7, "commissionAmount": 650.00 } }
     const productCommissions = {};
     for (const row of result.recordset) {
+      logger.info(`ProductCommissions row: ProductId=${row.ProductId}, HouseholdCount=${row.HouseholdCount}, CommissionAmount=${row.CommissionAmount}`);
       const productId = row.ProductId.toString().toUpperCase(); // Store in uppercase for consistency
       productCommissions[productId] = {
         enrolledHouseholdsCount: row.HouseholdCount || 0,
@@ -721,9 +728,12 @@ async function buildProductCommissionsJSON(pool, householdId, groupId, logger) {
       };
     }
 
-    return JSON.stringify(productCommissions);
+    const jsonResult = JSON.stringify(productCommissions);
+    logger.info(`ProductCommissions JSON built: ${jsonResult}`);
+    return jsonResult;
   } catch (error) {
     logger.warn(`Could not build ProductCommissions JSON: ${error.message}`);
+    logger.warn(`Stack: ${error.stack}`);
     return null;
   }
 }
