@@ -4,6 +4,7 @@
   "description": "Azure Functions for OpenEnroll group payment processing",
   "scripts": {
     "start": "func start",
+    "generate-admin-key": "node generate-admin-api-key.js",
     "deploy": "func azure functionapp publish open-enroll-payment-manager",
     "deploy:staging": "func azure functionapp publish open-enroll-payment-manager-staging"
   },

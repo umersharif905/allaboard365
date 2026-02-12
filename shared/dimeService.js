@@ -355,14 +355,21 @@ class DimeService {
    * @param {string} tenantId - Tenant UUID
    * @returns {Promise<Array>} Array of schedule objects with id, amount, status, etc.
    */
-  static async listRecurringPayments(customerId, tenantId) {
+  /**
+   * @param {string} customerId - DIME customer_uuid (e.g. group ProcessorCustomerId)
+   * @param {string} tenantId - Tenant UUID
+   * @param {{ status?: string }} opts - optional filters; status e.g. "Active, Failed, Paused, Canceled" to include failed
+   */
+  static async listRecurringPayments(customerId, tenantId, opts = {}) {
     try {
       const config = await this.getConfigForTenant(tenantId);
       const headers = this.getHeaders(config);
-      
+
+      const filters = { customer_uuid: customerId };
+      if (opts.status) filters.status = opts.status;
+
       // DIME API uses GET with data in request body (unusual but that's their format)
-      // Format: GET /api/recurring-payment/list with body containing data.sid and filters.customer_uuid
-      // Note: axios.get() doesn't support request body, so we use axios.request() with method: 'GET'
+      // Format: GET /api/recurring-payment/list with body containing data.sid and filters (customer_uuid, status)
       const response = await axios.request({
         method: 'GET',
         url: `${config.baseUrl}/api/recurring-payment/list`,
@@ -371,10 +378,7 @@ class DimeService {
           data: {
             sid: config.sid
           },
-          filters: {
-            customer_uuid: customerId
-            // Note: Omitting status filter - will get all schedules and filter in code
-          }
+          filters
         }
       });
       
@@ -387,14 +391,20 @@ class DimeService {
         rawResponse: response.data
       };
     } catch (error) {
-      // Log the error for debugging
+      // 404 "No recurring payments found" is normal when customer has no (or no Failed) schedules
+      const is404NoRecurring = error.response?.status === 404 &&
+        (error.response?.data?.data?.message === 'No recurring payments found' ||
+         error.response?.data?.message === 'No recurring payments found');
+      if (is404NoRecurring) {
+        return { success: true, schedules: [] };
+      }
+      // Log other errors
       console.error('DIME listRecurringPayments error:', {
         status: error.response?.status,
         message: error.response?.data?.message || error.message,
         data: error.response?.data
       });
-      
-      // If endpoint doesn't exist or returns 404, return empty array
+      // Other 404 (e.g. endpoint not exist) return empty
       if (error.response?.status === 404) {
         return {
           success: false,
@@ -597,6 +607,22 @@ class DimeService {
   }
 
   /**
+   * List recent transactions for a tenant (merchant-level). Does NOT filter by customer.
+   * Use this for payment sync: one call per tenant returns all transactions in the date range;
+   * each transaction should include customer_uuid (or equivalent) so we can match to our groups.
+   * @param {Object} filters - { start_date, end_date } (optional: sweep_id)
+   * @param {string} tenantId - Tenant UUID
+   * @returns {Promise<Object>} Result with success, transactions array, or error
+   */
+  static async listRecentTransactions(filters, tenantId) {
+    const { start_date, end_date, sweep_id } = filters || {};
+    return this.listTransactions(
+      { start_date, end_date, sweep_id },
+      tenantId
+    );
+  }
+
+  /**
    * List transactions from DIME API
    * @param {Object} filters - Filter options (start_date, end_date, customer_uuid, sweep_id)
    * @param {string} tenantId - Tenant UUID
@@ -637,7 +663,7 @@ class DimeService {
         data: filterObj
       });
 
-      // DIME API might return data in different formats
+      // DIME API returns { data: [ { transaction_number, transaction_info_id, amount, transaction_status, customer_uuid, ... } ] }
       const transactions = response.data?.data || response.data?.transactions || response.data || [];
 
       return {
