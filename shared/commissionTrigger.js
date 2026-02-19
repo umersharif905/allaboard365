@@ -59,8 +59,7 @@ module.exports = async function (context, changes) {
               p.Status,
               p.Commission,
               p.OverrideRate,
-              p.NetRate,
-              e.ProductId
+              p.NetRate
             FROM oe.Payments p
             LEFT JOIN oe.Enrollments e ON p.EnrollmentId = e.EnrollmentId AND e.Status = 'Active'
             WHERE p.PaymentId = @PaymentId
@@ -84,8 +83,10 @@ module.exports = async function (context, changes) {
             householdId: paymentData.HouseholdId,
             groupId: paymentData.GroupId,
             paymentDate: paymentData.PaymentDate,
-            enrollmentId: paymentData.EnrollmentId,
-            productId: paymentData.ProductId,
+            // For group payments, do NOT pass EnrollmentId. Passing a single EnrollmentId causes the calculator
+            // to treat the payment like a single-enrollment payment, which skips group tier distribution logic.
+            enrollmentId: paymentData.GroupId ? null : paymentData.EnrollmentId,
+            productId: null,
             paymentAmount: parseFloat(paymentData.Amount),
             agentId: paymentData.AgentId,
             tenantId: null, // Will be derived from oe.Agents in commission service
@@ -140,8 +141,7 @@ module.exports = async function (context, changes) {
               p.Status,
               p.Commission,
               p.OverrideRate,
-              p.NetRate,
-              e.ProductId
+              p.NetRate
             FROM oe.Payments p
             LEFT JOIN oe.Enrollments e ON p.EnrollmentId = e.EnrollmentId AND e.Status = 'Active'
             WHERE p.PaymentId = @PaymentId
@@ -182,8 +182,10 @@ module.exports = async function (context, changes) {
             householdId: paymentData.HouseholdId,
             groupId: paymentData.GroupId,
             paymentDate: paymentData.PaymentDate,
-            enrollmentId: paymentData.EnrollmentId,
-            productId: paymentData.ProductId,
+            // For group payments, do NOT pass EnrollmentId. Passing a single EnrollmentId causes the calculator
+            // to treat the payment like a single-enrollment payment, which skips group tier distribution logic.
+            enrollmentId: paymentData.GroupId ? null : paymentData.EnrollmentId,
+            productId: null,
             paymentAmount: parseFloat(paymentData.Amount),
             agentId: paymentData.AgentId,
             tenantId: null, // Will be derived from oe.Agents in commission service

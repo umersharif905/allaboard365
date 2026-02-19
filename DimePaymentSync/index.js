@@ -221,7 +221,53 @@ module.exports = async function (context, req) {
             continue;
           }
 
-          const group = customerUuid ? customerUuidToGroup[customerUuid] : null;
+          let group = customerUuid ? customerUuidToGroup[customerUuid] : null;
+
+          // Fallback: if no group by customer_uuid, try to match by transaction ID to an existing payment (e.g. old DIME merchant data missing customer_uuid)
+          if (!group && transactionId) {
+            const existingByTxId = await pool.request()
+              .input('processorTransactionId', sql.NVarChar(255), transactionId)
+              .query(`
+                SELECT PaymentId, Status, Amount
+                FROM oe.Payments
+                WHERE ProcessorTransactionId = @processorTransactionId
+              `);
+            if (existingByTxId.recordset.length === 1) {
+              const existing = existingByTxId.recordset[0];
+              const newStatus = mapDimeStatusToPaymentStatus(status, statusCode, statusText, transactionStatus);
+              if (existing.Status !== newStatus && newStatus !== 'Unknown') {
+                logger.info(`    [Fallback by tx id] Updating payment ${transactionId}: ${existing.Status} → ${newStatus}`);
+                if (dryRun) {
+                  stats.dryRunWouldUpdate.push({ processorTransactionId: transactionId, paymentId: existing.PaymentId, from: existing.Status, to: newStatus });
+                  stats.paymentsUpdated++;
+                } else {
+                  await pool.request()
+                    .input('paymentId', sql.UniqueIdentifier, existing.PaymentId)
+                    .input('newStatus', sql.NVarChar(50), newStatus)
+                    .query(`
+                      UPDATE oe.Payments
+                      SET Status = @newStatus,
+                          ModifiedDate = GETUTCDATE()
+                      WHERE PaymentId = @paymentId
+                    `);
+                  stats.paymentsUpdated++;
+                  if (newStatus === 'Completed') {
+                    await updateInvoiceIfNeeded(pool, existing.PaymentId, amount, logger);
+                  }
+                }
+              } else {
+                logger.info(`    [Fallback by tx id] Payment ${transactionId} already has status ${existing.Status}, skipping`);
+                stats.paymentsSkipped++;
+              }
+              continue;
+            }
+            if (existingByTxId.recordset.length > 1) {
+              logger.warn(`  Skipping transaction ${transactionId}: multiple payments share this ProcessorTransactionId (ambiguous)`);
+              stats.paymentsSkipped++;
+              continue;
+            }
+          }
+
           if (!group) {
             logger.info(`  Skipping transaction ${transactionId}: no group for customer_uuid ${customerUuidRaw || '(missing)'}`);
             stats.paymentsSkipped++;

@@ -18,6 +18,21 @@ class DimeService {
       throw new Error('Tenant ID is required for DIME operations');
     }
 
+    // Optional: use old/alternate merchant for sync (e.g. temporary override to fetch history from previous DIME merchant)
+    const overrideBaseUrl = process.env.DIME_OVERRIDE_BASE_URL;
+    const overrideApiToken = process.env.DIME_OVERRIDE_API_TOKEN;
+    const overrideSid = process.env.DIME_OVERRIDE_SID;
+    if (overrideBaseUrl && overrideApiToken && overrideSid) {
+      console.log('DIME config: using override (DIME_OVERRIDE_* env) for tenant', tenantId);
+      return {
+        apiToken: overrideApiToken,
+        sid: overrideSid,
+        webhookSecret: process.env.DIME_OVERRIDE_WEBHOOK_SECRET || null,
+        environment: 'production',
+        baseUrl: overrideBaseUrl.replace(/\/$/, '')
+      };
+    }
+
     try {
       const pool = await getPool();
       
@@ -678,8 +693,16 @@ class DimeService {
         data: error.response?.data
       });
 
-      // If endpoint doesn't exist or returns 404, return empty array
+      // 404 with "No transactions found" is a valid empty result (endpoint exists, just no data)
       if (error.response?.status === 404) {
+        const bodyMsg = (error.response?.data?.data?.message || error.response?.data?.message || '').toString().toLowerCase();
+        if (bodyMsg.includes('no transactions found') || bodyMsg.includes('no transactions')) {
+          return {
+            success: true,
+            transactions: [],
+            message: 'No transactions found in date range'
+          };
+        }
         return {
           success: false,
           transactions: [],

@@ -673,7 +673,7 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
     }
 
     // Get tenant settings for base URL - let frontend route decide where to go
-    let baseUrl = 'https://open-enroll.com'; // Default fallback
+    let baseUrl = 'https://app.allaboard365.com'; // Default fallback
     try {
       const tenantResult = await pool.request()
         .input('tenantId', sql.UniqueIdentifier, tenantId)
