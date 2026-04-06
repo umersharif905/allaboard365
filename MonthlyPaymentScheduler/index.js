@@ -231,7 +231,7 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
     // Non-primary locations with UseLocationACH=false use the "no payment" template
     const isPrimaryLocation = location.LocationIsPrimary || location.IsPrimary;
     const shouldUseNormalTemplate = isPrimaryLocation || useLocationACH;
-    const templatePath = path.join(__dirname, '..', '..', 'backend', 'templates', 'emails', shouldUseNormalTemplate ? 'location-invoice.html' : 'location-invoice-no-payment.html');
+    const templatePath = path.join(__dirname, '..', 'templates', 'emails', shouldUseNormalTemplate ? 'location-invoice.html' : 'location-invoice-no-payment.html');
     let emailHtml = fs.readFileSync(templatePath, 'utf8');
     
     // Payment method display
@@ -866,10 +866,12 @@ module.exports = async function (context, myTimer, options = {}) {
   const logger = createLogger(context);
   const startTime = new Date();
   const singleGroupId = options && options.groupId;
+  const billingDateOverride = options && options.billingDate; // YYYY-MM-DD for regenerate flow
 
   logger.section('Monthly Payment Scheduler Started (Multi-Location Billing)');
   logger.info(`Execution Date: ${startTime.toISOString()}`);
   if (singleGroupId) logger.info(`Single-group mode: GroupId = ${singleGroupId}`);
+  if (billingDateOverride) logger.info(`Billing date override: ${billingDateOverride}`);
   logger.info(`[DEBUG] Code version: Fixed primary location logic v2`);
   
   // Check if emails should be skipped (for testing)
@@ -904,15 +906,21 @@ module.exports = async function (context, myTimer, options = {}) {
     logger.success('Database connected');
     
     // Calculate billing date and payment date
-    // If run on or before the 5th: invoice for current month (1st), payment on 5th of current month
-    // If run after the 5th: invoice for next month (1st), payment on 5th of next month
+    // Override: when billingDateOverride (YYYY-MM-DD) is provided (e.g. from regenerate flow), use it
+    // Otherwise: If run on or before the 5th: invoice for current month; if after 5th: next month
     const today = new Date();
     const currentDay = today.getDate();
     
     let billingDate;
     let paymentDate;
     
-    if (currentDay <= 5) {
+    if (billingDateOverride) {
+      const [y, m, d] = billingDateOverride.split('-').map(Number);
+      billingDate = new Date(y, (m || 1) - 1, d || 1);
+      paymentDate = new Date(billingDate);
+      paymentDate.setDate(5);
+      if (paymentDate < billingDate) paymentDate.setMonth(paymentDate.getMonth() + 1);
+    } else if (currentDay <= 5) {
       // Run on 1st-5th: invoice for current month, payment on 5th of current month
       billingDate = new Date(today.getFullYear(), today.getMonth(), 1);
       paymentDate = new Date(today.getFullYear(), today.getMonth(), 5);

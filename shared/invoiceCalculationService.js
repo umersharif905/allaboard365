@@ -191,8 +191,14 @@ function calculateLocationFees(basePremium, householdCount, paymentMethodType, s
   // Calculate payment processing fees
   let paymentProcessingFee = 0;
   
-  if (paymentProcessorSettings?.chargeFeeToMember && paymentProcessorSettings?.processors?.openenroll?.fees) {
-    const fees = paymentProcessorSettings.processors.openenroll.fees;
+  const processors = paymentProcessorSettings?.processors || {};
+  const activeKey = paymentProcessorSettings?.activeProcessor ? String(paymentProcessorSettings.activeProcessor) : null;
+  const activeProcessor = activeKey && processors ? processors[activeKey] : null;
+  const fallbackProcessor = processors?.openenroll || null;
+  const processorToUse = activeProcessor || fallbackProcessor;
+  const fees = processorToUse?.fees;
+
+  if (paymentProcessorSettings?.chargeFeeToMember && fees) {
     const feeConfig = (paymentMethodType === 'Card' || paymentMethodType === 'CreditCard') ? fees.creditCard : fees.ach;
     
     if (feeConfig) {

@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monthly Invoice - {{locationName}}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background-color: #1f8dbf; padding: 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Monthly Benefits Invoice</h1>
+              <p style="color: #e0f2fe; margin: 8px 0 0 0; font-size: 14px;">{{locationName}}</p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td style="padding: 30px;">
+              <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px;">Dear {{contactName}},</p>
+              
+              <p style="margin: 0 0 20px 0; color: #374151; font-size: 14px; line-height: 1.6;">
+                This is your monthly benefits invoice for <strong>{{locationName}}</strong>.
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 6px; overflow: hidden; margin: 20px 0;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h2 style="margin: 0 0 16px 0; color: #111827; font-size: 18px; font-weight: 600;">Invoice Summary</h2>
+                    
+                    <table width="100%" cellpadding="8" cellspacing="0">
+                      <tr>
+                        <td style="color: #6b7280; font-size: 14px;">Premium Amount</td>
+                        <td align="right" style="color: #111827; font-size: 18px; font-weight: 600;">{{totalAmount}}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #6b7280; font-size: 14px;">Coverage</td>
+                        <td align="right" style="color: #111827; font-size: 14px; font-weight: 500;">{{memberCount}} members across {{householdCount}} households</td>
+                      </tr>
+                      {{#processingFees}}
+                      <tr>
+                        <td colspan="2" style="padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                          <table width="100%" cellpadding="4" cellspacing="0">
+                            <tr>
+                              <td style="color: #6b7280; font-size: 13px;">Base Premium:</td>
+                              <td align="right" style="color: #374151; font-size: 13px;">{{basePremium}}</td>
+                            </tr>
+                            <tr>
+                              <td style="color: #6b7280; font-size: 13px;">Processing Fees:</td>
+                              <td align="right" style="color: #374151; font-size: 13px;">{{processingFees}}</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      {{/processingFees}}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="padding: 16px; background-color: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+                    <h3 style="margin: 0 0 8px 0; color: #1e40af; font-size: 14px; font-weight: 600;">Payment Information</h3>
+                    <p style="margin: 0; color: #1e40af; font-size: 13px; line-height: 1.5;">
+                      <strong>Payment Method:</strong> {{paymentMethod}}<br>
+                      <strong>Billing Date:</strong> {{billingDate}}
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 20px 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
+                Payment will be automatically charged on <strong>{{billingDate}}</strong> using the payment method registered for this location. No action is required on your part.
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                    <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+                      <strong>Important:</strong> Please ensure sufficient funds are available in your account on the billing date to avoid payment failures.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 20px 0 0 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
+                If you have any questions about this invoice, please contact your group administrator or our support team.
+              </p>
+              
+              <p style="margin: 20px 0 0 0; color: #6b7280; font-size: 13px;">
+                Thank you for your business,<br>
+                <strong>{{groupName}}</strong>
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                © {{currentYear}} {{groupName}}. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>

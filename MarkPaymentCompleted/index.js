@@ -1,9 +1,10 @@
 const { getPool, sql } = require('../shared/db');
+const { buildProductSnapshotForPayment } = require('../shared/payment-product-snapshots');
 
 /**
  * POST /api/mark-payment-completed
- * Manually mark a payment as Completed and its linked invoice as Paid.
- * Use when you've confirmed success in DIME (e.g. different merchant) and want to sync our DB.
+ * Manually mark a payment as Completed, backfill ProductCommissions/ProductVendorAmounts/ProductOwnerAmounts (same as webhook), and set linked invoice to Paid.
+ * Use when DIME did not send a webhook (e.g. one-time charge retry) and you want to sync our DB.
  *
  * Body (one of):
  *   { "processorTransactionId": "6281" }   - our DB ProcessorTransactionId
@@ -12,6 +13,7 @@ const { getPool, sql } = require('../shared/db');
  * Optional body fields:
  *   { "dimeTransactionId": "6494" }         - store DIME's transaction id for audit (updates ProcessorTransactionId if you want to align)
  *   { "amount": 1891.30 }                   - amount to set on Invoice.PaidAmount (default: from payment)
+ *   { "backfillBreakdown": true }          - (default true) populate ProductCommissions, ProductVendorAmounts, ProductOwnerAmounts from group/household enrollments
  *
  * Headers: x-api-key (ADMIN_API_KEY)
  */
@@ -31,6 +33,7 @@ module.exports = async function (context, req) {
     const paymentIdParam = body.paymentId ? String(body.paymentId).trim() : null;
     const dimeTransactionId = body.dimeTransactionId ? String(body.dimeTransactionId).trim() : null;
     const amountOverride = body.amount != null ? parseFloat(body.amount) : null;
+    const backfillBreakdown = body.backfillBreakdown !== false; // default true
 
     if (!processorTransactionId && !paymentIdParam) {
       context.res = {
@@ -50,7 +53,8 @@ module.exports = async function (context, req) {
       const byId = await pool.request()
         .input('paymentId', sql.UniqueIdentifier, paymentIdParam)
         .query(`
-          SELECT PaymentId, GroupId, InvoiceId, ProcessorTransactionId, Status, Amount
+          SELECT PaymentId, GroupId, HouseholdId, InvoiceId, EnrollmentId, RecurringScheduleId,
+                 ProcessorTransactionId, Status, Amount, PaymentDate
           FROM oe.Payments
           WHERE PaymentId = @paymentId
         `);
@@ -59,7 +63,8 @@ module.exports = async function (context, req) {
       const byTx = await pool.request()
         .input('processorTransactionId', sql.NVarChar(255), processorTransactionId)
         .query(`
-          SELECT PaymentId, GroupId, InvoiceId, ProcessorTransactionId, Status, Amount
+          SELECT PaymentId, GroupId, HouseholdId, InvoiceId, EnrollmentId, RecurringScheduleId,
+                 ProcessorTransactionId, Status, Amount, PaymentDate
           FROM oe.Payments
           WHERE ProcessorTransactionId = @processorTransactionId
         `);
@@ -82,17 +87,60 @@ module.exports = async function (context, req) {
     const amount = amountOverride != null && !isNaN(amountOverride) ? amountOverride : (payment.Amount ?? 0);
     const newProcessorTxId = dimeTransactionId || payment.ProcessorTransactionId;
 
-    // Update payment first (trigger on Payments may fire here)
-    await pool.request()
+    const logger = { info: (m) => context.log(m), warn: (m) => context.log.warn(m), error: (m) => context.log.error(m) };
+
+    let productCommissionsJSON = null;
+    let productVendorAmountsJSON = null;
+    let productOwnerAmountsJSON = null;
+    if (backfillBreakdown && (payment.GroupId || payment.HouseholdId)) {
+      try {
+        const paymentDate = payment.PaymentDate || null;
+        const oneOffEnrollment =
+          payment.HouseholdId &&
+          payment.EnrollmentId &&
+          !payment.InvoiceId &&
+          !payment.RecurringScheduleId;
+        const snap = await buildProductSnapshotForPayment(
+          pool,
+          {
+            householdId: payment.HouseholdId,
+            groupId: payment.GroupId,
+            paymentDate,
+            invoiceId: payment.InvoiceId || null,
+            enrollmentId: payment.EnrollmentId || null,
+            productSnapshotScope: oneOffEnrollment ? 'enrollment' : undefined
+          },
+          logger
+        );
+        if (snap) {
+          productCommissionsJSON = snap.productCommissionsJSON;
+          productVendorAmountsJSON = snap.productVendorAmountsJSON;
+          productOwnerAmountsJSON = snap.productOwnerAmountsJSON;
+        }
+      } catch (breakdownErr) {
+        context.log.warn('Backfill breakdown build failed:', breakdownErr.message);
+      }
+    }
+
+    // Update payment: status, ProcessorTransactionId, and optionally product JSON (same as webhook)
+    const updateReq = pool.request()
       .input('paymentId', sql.UniqueIdentifier, payment.PaymentId)
-      .input('processorTransactionId', sql.NVarChar(255), newProcessorTxId)
-      .query(`
-        UPDATE oe.Payments
-        SET Status = 'Completed',
-            ModifiedDate = GETUTCDATE(),
-            ProcessorTransactionId = @processorTransactionId
-        WHERE PaymentId = @paymentId
-      `);
+      .input('processorTransactionId', sql.NVarChar(255), newProcessorTxId);
+    if (productCommissionsJSON != null) {
+      updateReq.input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON);
+      updateReq.input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON);
+      updateReq.input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON);
+    }
+    const setClause = productCommissionsJSON != null
+      ? `SET Status = 'Completed', ModifiedDate = GETUTCDATE(), ProcessorTransactionId = @processorTransactionId,
+         ProductCommissions = @productCommissions, ProductVendorAmounts = @productVendorAmounts, ProductOwnerAmounts = @productOwnerAmounts`
+      : `SET Status = 'Completed', ModifiedDate = GETUTCDATE(), ProcessorTransactionId = @processorTransactionId`;
+    await updateReq.query(`
+      UPDATE oe.Payments
+      ${setClause}
+      WHERE PaymentId = @paymentId
+    `);
+    const breakdownUpdated = productCommissionsJSON != null;
 
     let invoiceUpdated = false;
     let invoiceError = null;
@@ -117,16 +165,22 @@ module.exports = async function (context, req) {
       }
     }
 
+    const msgParts = ['Payment marked as Completed'];
+    if (breakdownUpdated) msgParts.push('breakdown backfilled');
+    if (invoiceUpdated) msgParts.push('invoice marked as Paid');
+    if (invoiceError) msgParts.push('invoice update failed');
+
     context.res = {
       status: 200,
       body: {
         success: true,
-        message: 'Payment marked as Completed' + (invoiceUpdated ? ' and invoice marked as Paid' : (invoiceError ? '; invoice update failed' : '')),
+        message: msgParts.join(', '),
         data: {
           paymentId: payment.PaymentId,
           groupId: payment.GroupId,
           processorTransactionId: newProcessorTxId,
           amount,
+          breakdownUpdated,
           invoiceId: payment.InvoiceId || null,
           invoiceUpdated,
           invoiceError: invoiceError || undefined

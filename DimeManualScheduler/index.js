@@ -28,13 +28,26 @@ module.exports = async function (context, req) {
     }
 
     const groupId = (req.query && req.query.groupId) || (req.body && req.body.groupId) || null;
+    const billingDateParam = (req.query && req.query.billingDate) || (req.body && req.body.billingDate) || null;
+    // When billingDate override is used (e.g. regenerate flow), groupId is required - never run for all groups
+    if (billingDateParam && !groupId) {
+      context.log.warn('Rejected: billingDate override requires groupId');
+      context.res = {
+        status: 400,
+        body: { success: false, error: 'groupId is required when billingDate is specified' }
+      };
+      return;
+    }
     if (groupId) {
       context.log(`🔧 Manual trigger initiated by admin (single group: ${groupId})`);
     } else {
       context.log('🔧 Manual trigger initiated by admin');
     }
+    if (billingDateParam) {
+      context.log(`🔧 Billing date override: ${billingDateParam} (YYYY-MM-DD)`);
+    }
 
-    const options = groupId ? { groupId } : {};
+    const options = { groupId, billingDate: billingDateParam };
     await monthlyScheduler(context, null, options);
 
     context.res = {

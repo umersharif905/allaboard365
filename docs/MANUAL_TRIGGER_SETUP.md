@@ -103,9 +103,9 @@ curl -X POST "http://localhost:7071/api/manual-run?groupId=YOUR-GROUP-UUID" \
 
 The **monthly invoice + DIME run** is triggered by something outside this repo:
 
-1. **Azure Logic App** – A recurring Logic App is often used to call the manual-run URL on the 1st (e.g. at 6 AM). See `docs/AZURE_SCHEDULER_SETUP.md` in the main repo for the HTTP action and schedule.
-2. **Azure Function timer** – If `MonthlyPaymentScheduler` is deployed as a timer-triggered function, the schedule is in the function app (e.g. `0 0 6 1 * *` for 6 AM on the 1st). Check **Function App** → **Functions** → **MonthlyPaymentScheduler** (if it exists) for its trigger.
-3. **Function app not published** – If you deploy only the HTTP-triggered `DimeManualScheduler`, the 1st-of-month run **must** be done by a Logic App (or similar) calling `/api/manual-run`. Ensure the Logic App exists, is enabled, and points to the correct URL and API key.
+1. **MonthlyPaymentSchedulerTrigger** (timer) – Deployed with the function app. Runs automatically on the 1st of each month at 6:00 AM UTC. Uses the same logic as manual-run.
+2. **DimeManualScheduler** (manual) – POST to `/api/manual-run` with `x-api-key` header. Use for ad-hoc runs or single-group tests.
+3. **Azure Logic App** – Alternative: a recurring Logic App can call the manual-run URL on the 1st. See `docs/AZURE_SCHEDULER_SETUP.md` in the main repo.
 
 After fixing the trigger, run manually once (full or single-group) to generate and send the missing invoices.
 

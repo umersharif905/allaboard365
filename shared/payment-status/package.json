@@ -1,0 +1,4 @@
+{
+  "type": "commonjs",
+  "description": "Vendored copy of repo root shared/payment-status for Azure deploy (function app root has no ../.. parent). Keep in sync with ../../../shared/payment-status/index.js"
+}

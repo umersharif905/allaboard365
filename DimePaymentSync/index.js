@@ -2,6 +2,7 @@ const { getPool, sql } = require('../shared/db');
 const DimeService = require('../shared/dimeService');
 const { createLogger } = require('../shared/logger');
 const { createRecurringPaymentRecord, createFailedRecurringPaymentRecord, getPricingFields } = require('../shared/createRecurringPaymentRecord');
+const oePaymentStatus = require('../shared/payment-status');
 
 /**
  * DIME Payment Sync Function
@@ -36,6 +37,9 @@ module.exports = async function (context, req) {
     const endDateParam = req.query?.endDate;
     const dryRun = (req.query?.dryRun || req.query?.dry_run || '').toString().toLowerCase() === 'true' || req.query?.dryRun === '1';
     const maxPaymentsToCreate = parseInt(req.query?.limit || req.query?.maxPaymentsToCreate || '0', 10) || 0; // 0 = no limit
+    const logRawStatus =
+      (req.query?.logRawStatus || req.query?.debugStatus || '').toString().toLowerCase() === 'true' ||
+      req.query?.logRawStatus === '1';
 
     if (startDateParam && endDateParam) {
       startDate = new Date(startDateParam);
@@ -50,6 +54,7 @@ module.exports = async function (context, req) {
     logger.info(`Time Range: ${startDate.toISOString()} to ${endDate.toISOString()}`);
     if (dryRun) logger.info('DRY RUN: no payments or invoices will be created/updated');
     if (maxPaymentsToCreate > 0) logger.info(`Limit: create at most ${maxPaymentsToCreate} new payment(s)`);
+    if (logRawStatus) logger.info('logRawStatus=1: logging DIME list fields + mapped status per transaction (see App Insights)');
 
     // Format dates for DIME API (YYYY-MM-DD HH:mm:ss)
     const formatDateForDime = (date) => {
@@ -71,6 +76,8 @@ module.exports = async function (context, req) {
       paymentsCreated: 0,
       paymentsUpdated: 0,
       paymentsSkipped: 0,
+      individualPaymentsCreated: 0,
+      syncSkippedCompletedToPending: 0,
       failedFromListCreated: 0,
       failedFromListSkipped: 0,
       errors: [],
@@ -98,26 +105,54 @@ module.exports = async function (context, req) {
     logger.info(`Found ${groups.length} groups with ProcessorCustomerId`);
 
     if (groups.length === 0) {
-      logger.warn('No groups with ProcessorCustomerId found');
-      context.res = {
-        status: 200,
-        body: {
-          success: true,
-          message: 'No groups with ProcessorCustomerId found',
-          stats,
-          timestamp: new Date().toISOString()
-        }
-      };
-      return;
+      logger.warn('No groups with ProcessorCustomerId found (individual-only tenants may still be processed)');
     }
 
     // Group by TenantId to batch API calls
     const groupsByTenant = {};
     for (const group of groups) {
-      if (!groupsByTenant[group.TenantId]) {
-        groupsByTenant[group.TenantId] = [];
+      const tid = String(group.TenantId);
+      if (!groupsByTenant[tid]) {
+        groupsByTenant[tid] = [];
       }
-      groupsByTenant[group.TenantId].push(group);
+      groupsByTenant[tid].push(group);
+    }
+
+    // Tenants with only individual recurring (no ProcessorCustomerId on a group) still need merchant-level DIME sync
+    try {
+      const indTenants = await pool.request().query(`
+        SELECT DISTINCT u.TenantId
+        FROM oe.IndividualRecurringSchedules irs
+        INNER JOIN oe.Members m ON m.HouseholdId = irs.HouseholdId AND m.RelationshipType = N'P'
+        INNER JOIN oe.Users u ON u.UserId = m.UserId
+        WHERE irs.IsActive = 1
+      `);
+      for (const row of indTenants.recordset) {
+        const tid = String(row.TenantId);
+        if (!groupsByTenant[tid]) groupsByTenant[tid] = [];
+      }
+      if (indTenants.recordset.length > 0) {
+        logger.info(`Merged ${indTenants.recordset.length} tenant row(s) from IndividualRecurringSchedules (individual-only tenants included)`);
+      }
+    } catch (e) {
+      const msg = String(e.message || '');
+      if (!msg.includes('Invalid object name') && !msg.includes('IndividualRecurringSchedules')) {
+        logger.warn(`IndividualRecurringSchedules tenant merge: ${msg}`);
+      }
+    }
+
+    if (Object.keys(groupsByTenant).length === 0) {
+      logger.warn('No tenants to process: no groups with ProcessorCustomerId and no IndividualRecurringSchedules');
+      context.res = {
+        status: 200,
+        body: {
+          success: true,
+          message: 'No tenants to process',
+          stats,
+          timestamp: new Date().toISOString()
+        }
+      };
+      return;
     }
 
     // Phase 2 only: groups that have an active recurring payment plan in our DB (so we only call DIME list for those).
@@ -138,10 +173,11 @@ module.exports = async function (context, req) {
     const groupsWithRecurringResult = await pool.request().query(groupsWithRecurringQuery);
     const groupsWithRecurringByTenant = {};
     for (const row of groupsWithRecurringResult.recordset) {
-      if (!groupsWithRecurringByTenant[row.TenantId]) {
-        groupsWithRecurringByTenant[row.TenantId] = [];
+      const tid = String(row.TenantId);
+      if (!groupsWithRecurringByTenant[tid]) {
+        groupsWithRecurringByTenant[tid] = [];
       }
-      groupsWithRecurringByTenant[row.TenantId].push(row);
+      groupsWithRecurringByTenant[tid].push(row);
     }
     const totalWithRecurring = groupsWithRecurringResult.recordset.length;
     logger.info(`Found ${totalWithRecurring} group(s) with active recurring payment plans (Phase 2 will query DIME only for these)`);
@@ -205,10 +241,30 @@ module.exports = async function (context, req) {
             || transaction.id 
             || transaction.transactionNumber;
           const amount = parseFloat(transaction.amount) || 0;
-          const statusCode = transaction.status_code;
+          const statusCodeNorm = normalizeListStatusCode(transaction.status_code);
           const statusText = transaction.status_text;
-          const transactionStatus = transaction.transaction_status || ''; // e.g. "CC Pending", "CC Approved"
-          const status = deriveTransactionStatus(statusCode, statusText, transactionStatus);
+          const transactionStatusLine = transaction.transaction_status || transaction.transactionStatus || ''; // e.g. "CC Pending", "CC Approved"
+          const derivedLineStatus = deriveTransactionStatus(statusCodeNorm, statusText, transactionStatusLine);
+          const mappedStatus = paymentStatusFromListTransaction(
+            transaction,
+            derivedLineStatus,
+            statusCodeNorm,
+            statusText,
+            transactionStatusLine
+          );
+          if (logRawStatus) {
+            logger.info(
+              `    DIME list raw ${transactionId}: ${JSON.stringify({
+                status_code: transaction.status_code,
+                status_text: transaction.status_text,
+                transaction_status: transaction.transaction_status ?? transaction.transactionStatus,
+                status: transaction.status,
+                pending: transaction.pending,
+                transaction_type: transaction.transaction_type ?? transaction.transactionType,
+                mapped: mappedStatus
+              })}`
+            );
+          }
           const paymentMethod = normalizeDimeTransactionType(transaction.transaction_type || transaction.payment_method || transaction.paymentMethod);
           const scheduleId = transaction.schedule_id || transaction.recurring_payment_id || null;
           const customerUuidRaw = transaction.customer_uuid || transaction.customer_uuid_id || transaction.customer?.uuid || null;
@@ -234,8 +290,12 @@ module.exports = async function (context, req) {
               `);
             if (existingByTxId.recordset.length === 1) {
               const existing = existingByTxId.recordset[0];
-              const newStatus = mapDimeStatusToPaymentStatus(status, statusCode, statusText, transactionStatus);
-              if (existing.Status !== newStatus && newStatus !== 'Unknown') {
+              const newStatus = mappedStatus;
+              if (
+                existing.Status !== newStatus &&
+                newStatus !== 'Unknown' &&
+                shouldApplyListSyncStatusUpdate(existing.Status, newStatus, logger, transactionId)
+              ) {
                 logger.info(`    [Fallback by tx id] Updating payment ${transactionId}: ${existing.Status} → ${newStatus}`);
                 if (dryRun) {
                   stats.dryRunWouldUpdate.push({ processorTransactionId: transactionId, paymentId: existing.PaymentId, from: existing.Status, to: newStatus });
@@ -255,6 +315,9 @@ module.exports = async function (context, req) {
                     await updateInvoiceIfNeeded(pool, existing.PaymentId, amount, logger);
                   }
                 }
+              } else if (existing.Status !== newStatus && newStatus !== 'Unknown') {
+                stats.syncSkippedCompletedToPending++;
+                stats.paymentsSkipped++;
               } else {
                 logger.info(`    [Fallback by tx id] Payment ${transactionId} already has status ${existing.Status}, skipping`);
                 stats.paymentsSkipped++;
@@ -268,11 +331,20 @@ module.exports = async function (context, req) {
             }
           }
 
-          if (!group) {
-            logger.info(`  Skipping transaction ${transactionId}: no group for customer_uuid ${customerUuidRaw || '(missing)'}`);
+          let individualContext = null;
+          if (!group && customerUuid) {
+            const resolvedScheduleId = await resolveIndividualScheduleIdForSync(pool, tenantId, customerUuidRaw, scheduleId, logger);
+            if (resolvedScheduleId) {
+              individualContext = await resolveIndividualPaymentContext(pool, tenantId, resolvedScheduleId, customerUuidRaw, logger);
+            }
+          }
+          if (!group && !individualContext) {
+            logger.info(`  Skipping transaction ${transactionId}: no group or individual match for customer_uuid ${customerUuidRaw || '(missing)'}`);
             stats.paymentsSkipped++;
             continue;
           }
+
+          const groupDisplayName = group ? group.GroupName : 'Individual';
 
           // Check if payment already exists
               const existingPayment = await pool.request()
@@ -292,26 +364,31 @@ module.exports = async function (context, req) {
                 
                 // Check if status needs updating
                 const currentStatus = existing.Status;
-                const newStatus = mapDimeStatusToPaymentStatus(status, statusCode, statusText, transactionStatus);
+                const newStatus = mappedStatus;
 
                 if (currentStatus !== newStatus && newStatus !== 'Unknown') {
-                  logger.info(`    Updating payment ${transactionId}: ${currentStatus} → ${newStatus}`);
-                  if (dryRun) {
-                    stats.dryRunWouldUpdate.push({ processorTransactionId: transactionId, paymentId: existing.PaymentId, from: currentStatus, to: newStatus });
-                    stats.paymentsUpdated++;
+                  if (!shouldApplyListSyncStatusUpdate(currentStatus, newStatus, logger, transactionId)) {
+                    stats.syncSkippedCompletedToPending++;
+                    stats.paymentsSkipped++;
                   } else {
-                    await pool.request()
-                      .input('paymentId', sql.UniqueIdentifier, existing.PaymentId)
-                      .input('newStatus', sql.NVarChar(50), newStatus)
-                      .query(`
-                        UPDATE oe.Payments
-                        SET Status = @newStatus,
-                            ModifiedDate = GETUTCDATE()
-                        WHERE PaymentId = @paymentId
-                      `);
-                    stats.paymentsUpdated++;
-                    if (newStatus === 'Completed') {
-                      await updateInvoiceIfNeeded(pool, existing.PaymentId, amount, logger);
+                    logger.info(`    Updating payment ${transactionId}: ${currentStatus} → ${newStatus}`);
+                    if (dryRun) {
+                      stats.dryRunWouldUpdate.push({ processorTransactionId: transactionId, paymentId: existing.PaymentId, from: currentStatus, to: newStatus });
+                      stats.paymentsUpdated++;
+                    } else {
+                      await pool.request()
+                        .input('paymentId', sql.UniqueIdentifier, existing.PaymentId)
+                        .input('newStatus', sql.NVarChar(50), newStatus)
+                        .query(`
+                          UPDATE oe.Payments
+                          SET Status = @newStatus,
+                              ModifiedDate = GETUTCDATE()
+                          WHERE PaymentId = @paymentId
+                        `);
+                      stats.paymentsUpdated++;
+                      if (newStatus === 'Completed') {
+                        await updateInvoiceIfNeeded(pool, existing.PaymentId, amount, logger);
+                      }
                     }
                   }
                 } else {
@@ -325,9 +402,9 @@ module.exports = async function (context, req) {
               logger.info(`    Creating payment record for transaction ${transactionId}`);
 
               // Match transaction to group and find associated data
-              // If no scheduleId, try to find it by customer_uuid
+              // If no scheduleId, try to find it by customer_uuid (group path only)
               let finalScheduleId = scheduleId;
-              if (!finalScheduleId && (customerUuidRaw || customerUuid)) {
+              if (group && !finalScheduleId && (customerUuidRaw || customerUuid)) {
                 try {
                   const scheduleResult = await pool.request()
                     .input('customerUuid', sql.NVarChar(255), customerUuidRaw || customerUuid)
@@ -348,19 +425,35 @@ module.exports = async function (context, req) {
                   logger.warn(`    Could not find schedule_id for customer ${customerUuid}: ${error.message}`);
                 }
               }
-              
-              const contextData = await matchTransactionToGroup(
-                pool,
-                group.GroupId,
-                group.TenantId,
-                finalScheduleId,
-                logger
-              );
+              if (individualContext) {
+                finalScheduleId = individualContext.scheduleId;
+              }
+
+              let contextData;
+              if (individualContext) {
+                contextData = {
+                  groupId: individualContext.groupId,
+                  tenantId: individualContext.tenantId,
+                  householdId: individualContext.householdId,
+                  enrollmentId: individualContext.enrollmentId,
+                  agentId: individualContext.agentId,
+                  locationId: individualContext.locationId,
+                  invoiceId: individualContext.invoiceId
+                };
+              } else {
+                contextData = await matchTransactionToGroup(
+                  pool,
+                  group.GroupId,
+                  group.TenantId,
+                  finalScheduleId,
+                  logger
+                );
+              }
 
               const paymentDate = transactionDate instanceof Date 
                 ? transactionDate 
                 : new Date(transactionDate);
-              const paymentStatus = mapDimeStatusToPaymentStatus(status, statusCode, statusText, transactionStatus);
+              const paymentStatus = mappedStatus;
 
               // Same function as webhook: single source of truth for oe.Payments row
               if (dryRun) {
@@ -371,9 +464,10 @@ module.exports = async function (context, req) {
                   paymentStatus,
                   paymentMethod,
                   paymentDate: paymentDate.toISOString(),
+                  context: individualContext ? 'individual' : 'group',
                   groupId: contextData.groupId,
                   tenantId: contextData.tenantId,
-                  groupName: group.GroupName,
+                  groupName: groupDisplayName,
                   netRate: pricing.netRate,
                   commission: pricing.commission,
                   overrideRate: pricing.overrideRate,
@@ -387,7 +481,8 @@ module.exports = async function (context, req) {
                   wouldUpdateInvoice: !!(contextData.invoiceId && paymentStatus === 'Completed')
                 });
                 stats.paymentsCreated++;
-                logger.info(`    [DRY RUN] Would create payment: ${transactionId} $${amount} ${group.GroupName}`);
+                if (individualContext) stats.individualPaymentsCreated++;
+                logger.info(`    [DRY RUN] Would create payment: ${transactionId} $${amount} ${groupDisplayName}`);
                 if (maxPaymentsToCreate > 0 && stats.paymentsCreated >= maxPaymentsToCreate) {
                   logger.info(`    [DRY RUN] Reached limit ${maxPaymentsToCreate}, stopping scan`);
                   reachedLimit = true;
@@ -407,7 +502,7 @@ module.exports = async function (context, req) {
                   agentId: contextData.agentId,
                   locationId: contextData.locationId,
                   invoiceId: contextData.invoiceId,
-                  scheduleId,
+                  scheduleId: finalScheduleId,
                   amount,
                   processorTransactionId: transactionId,
                   paymentDate,
@@ -417,6 +512,7 @@ module.exports = async function (context, req) {
                   webhookEventId: null
                 }, logger);
                 stats.paymentsCreated++;
+                if (individualContext) stats.individualPaymentsCreated++;
                 logger.success(`    Created payment record for transaction ${transactionId}`);
                 if (contextData.invoiceId && paymentStatus === 'Completed') {
                   await updateInvoiceIfNeeded(pool, null, amount, logger, contextData.invoiceId);
@@ -431,8 +527,8 @@ module.exports = async function (context, req) {
             } catch (transactionError) {
               logger.error(`  Error processing transaction ${transaction.transaction_number || transaction.transaction_id || transaction.id}: ${transactionError.message}`);
               stats.errors.push({
-                groupId: group.GroupId,
-                groupName: group.GroupName,
+                groupId: group?.GroupId,
+                groupName: group?.GroupName,
                 transactionId: transaction.transaction_number || transaction.transaction_id || transaction.id,
                 error: transactionError.message
               });
@@ -536,11 +632,15 @@ module.exports = async function (context, req) {
     logger.info(`Customers With Transactions: ${stats.customersWithTransactions}`);
     logger.info(`Total Transactions Found: ${stats.totalTransactionsFound}`);
     logger.info(`Payments Created: ${stats.paymentsCreated}`);
+    logger.info(`Individual payments created (sync): ${stats.individualPaymentsCreated}`);
     logger.info(`Payments Updated: ${stats.paymentsUpdated}`);
     logger.info(`Payments Skipped: ${stats.paymentsSkipped}`);
     logger.info(`Failed from list created: ${stats.failedFromListCreated}`);
     logger.info(`Failed from list skipped (already had payment): ${stats.failedFromListSkipped}`);
     logger.info(`Errors: ${stats.errors.length}`);
+    if (stats.syncSkippedCompletedToPending > 0) {
+      logger.info(`Skipped list sync downgrades (Completed→Pending): ${stats.syncSkippedCompletedToPending}`);
+    }
 
     context.res = {
       status: 200,
@@ -548,6 +648,7 @@ module.exports = async function (context, req) {
         success: true,
         message: dryRun ? 'Dry run completed (no changes made)' : 'Payment sync completed',
         dryRun: dryRun || undefined,
+        logRawStatus: logRawStatus || undefined,
         stats,
         duration: `${duration.toFixed(2)}s`,
         timestamp: endTime.toISOString()
@@ -572,6 +673,182 @@ module.exports = async function (context, req) {
     }
   }
 };
+
+/**
+ * Resolve Dime schedule id for a customer (group plan first, then individual recurring, then prior oe.Payments).
+ * Same order as DimeWebhookHandler.handleRecurringPaymentSuccess.
+ */
+async function resolveIndividualScheduleIdForSync(pool, tenantId, customerUuidRaw, scheduleIdFromTransaction, logger) {
+  let scheduleId = scheduleIdFromTransaction ? String(scheduleIdFromTransaction).trim() : null;
+  const cu = customerUuidRaw ? String(customerUuidRaw).trim() : '';
+  if (!cu) return null;
+
+  if (!scheduleId) {
+    try {
+      const scheduleResult = await pool.request()
+        .input('customerUuid', sql.NVarChar(255), cu)
+        .input('tenantId', sql.UniqueIdentifier, tenantId)
+        .query(`
+          SELECT TOP 1 grp.DimeScheduleId
+          FROM oe.GroupRecurringPaymentPlans grp
+          INNER JOIN oe.Groups g ON grp.GroupId = g.GroupId
+          WHERE g.ProcessorCustomerId = @customerUuid
+            AND g.TenantId = @tenantId
+            AND grp.IsActive = 1
+          ORDER BY grp.CreatedDate DESC
+        `);
+      if (scheduleResult.recordset.length > 0) {
+        scheduleId = String(scheduleResult.recordset[0].DimeScheduleId).trim();
+        logger.info(`    Found schedule_id ${scheduleId} for customer ${cu} (group plan)`);
+      }
+    } catch (error) {
+      logger.warn(`    Could not find group schedule_id for customer ${cu}: ${error.message}`);
+    }
+  }
+
+  if (!scheduleId) {
+    try {
+      const indSched = await pool.request()
+        .input('customerUuid', sql.NVarChar(255), cu)
+        .input('tenantId', sql.UniqueIdentifier, tenantId)
+        .query(`
+          SELECT TOP 1 irs.DimeScheduleId
+          FROM oe.IndividualRecurringSchedules irs
+          INNER JOIN oe.Members m ON m.HouseholdId = irs.HouseholdId AND m.RelationshipType = N'P'
+          INNER JOIN oe.Users u ON u.UserId = m.UserId
+          INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
+            AND mpm.ProcessorCustomerId = @customerUuid
+            AND mpm.Status = N'Active'
+          WHERE irs.IsActive = 1 AND u.TenantId = @tenantId
+          ORDER BY irs.ModifiedDate DESC, irs.CreatedDate DESC
+        `);
+      if (indSched.recordset.length > 0) {
+        scheduleId = String(indSched.recordset[0].DimeScheduleId).trim();
+        logger.info(`    Resolved individual schedule_id ${scheduleId} from IndividualRecurringSchedules for ${cu}`);
+      }
+    } catch (err) {
+      const msg = String(err.message || '');
+      if (!msg.includes('Invalid object name') && !msg.includes('IndividualRecurringSchedules')) {
+        logger.warn(`    IndividualRecurringSchedules schedule lookup: ${msg}`);
+      }
+    }
+  }
+
+  if (!scheduleId) {
+    try {
+      const paySched = await pool.request()
+        .input('customerUuid', sql.NVarChar(255), cu)
+        .input('tenantId', sql.UniqueIdentifier, tenantId)
+        .query(`
+          SELECT TOP 1 p.RecurringScheduleId
+          FROM oe.Payments p
+          INNER JOIN oe.Members m ON m.HouseholdId = p.HouseholdId AND m.RelationshipType = N'P'
+          INNER JOIN oe.Users u ON u.UserId = m.UserId
+          INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
+            AND mpm.ProcessorCustomerId = @customerUuid
+            AND mpm.Status = N'Active'
+          WHERE u.TenantId = @tenantId
+            AND p.RecurringScheduleId IS NOT NULL AND LTRIM(RTRIM(CAST(p.RecurringScheduleId AS NVARCHAR(255)))) <> N''
+          ORDER BY p.ModifiedDate DESC, p.PaymentDate DESC
+        `);
+      if (paySched.recordset.length > 0) {
+        scheduleId = String(paySched.recordset[0].RecurringScheduleId).trim();
+        logger.info(`    Resolved schedule_id ${scheduleId} from oe.Payments for ${cu}`);
+      }
+    } catch (err) {
+      logger.warn(`    oe.Payments schedule lookup: ${err.message}`);
+    }
+  }
+
+  return scheduleId || null;
+}
+
+/**
+ * Household / enrollment context for individual recurring when customer_uuid is not on oe.Groups.ProcessorCustomerId.
+ * Prefers latest oe.Payments for this tenant + schedule; else IndividualRecurringSchedules + active enrollment.
+ */
+async function resolveIndividualPaymentContext(pool, tenantId, finalScheduleId, customerUuidRaw, logger) {
+  const cu = customerUuidRaw ? String(customerUuidRaw).trim() : '';
+  const sid = finalScheduleId ? String(finalScheduleId).trim() : '';
+  if (!cu || !sid) return null;
+
+  const payRow = await pool.request()
+    .input('scheduleId', sql.NVarChar(255), sid)
+    .input('tenantId', sql.UniqueIdentifier, tenantId)
+    .query(`
+      SELECT TOP 1 p.HouseholdId, p.EnrollmentId, p.GroupId, p.AgentId, p.TenantId
+      FROM oe.Payments p
+      WHERE p.RecurringScheduleId = @scheduleId AND p.TenantId = @tenantId
+      ORDER BY p.CreatedDate DESC
+    `);
+
+  if (payRow.recordset.length > 0) {
+    const r = payRow.recordset[0];
+    return {
+      scheduleId: sid,
+      tenantId: r.TenantId,
+      householdId: r.HouseholdId,
+      enrollmentId: r.EnrollmentId,
+      agentId: r.AgentId,
+      groupId: r.GroupId,
+      locationId: null,
+      invoiceId: null
+    };
+  }
+
+  try {
+    const hh = await pool.request()
+      .input('scheduleId', sql.NVarChar(255), sid)
+      .input('tenantId', sql.UniqueIdentifier, tenantId)
+      .input('cu', sql.NVarChar(255), cu)
+      .query(`
+        SELECT TOP 1 irs.HouseholdId, u.TenantId
+        FROM oe.IndividualRecurringSchedules irs
+        INNER JOIN oe.Members m ON m.HouseholdId = irs.HouseholdId AND m.RelationshipType = N'P'
+        INNER JOIN oe.Users u ON u.UserId = m.UserId
+        INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
+          AND mpm.ProcessorCustomerId = @cu AND mpm.Status = N'Active'
+        WHERE irs.DimeScheduleId = @scheduleId AND irs.IsActive = 1 AND u.TenantId = @tenantId
+      `);
+
+    if (hh.recordset.length === 0) {
+      logger.info(`    Individual sync: no household for schedule ${sid} on tenant ${tenantId}`);
+      return null;
+    }
+
+    const householdId = hh.recordset[0].HouseholdId;
+    const tenantIdResolved = hh.recordset[0].TenantId;
+
+    const enr = await pool.request()
+      .input('householdId', sql.UniqueIdentifier, householdId)
+      .query(`
+        SELECT TOP 1 e.EnrollmentId, e.AgentId
+        FROM oe.Enrollments e
+        WHERE e.HouseholdId = @householdId AND e.Status = N'Active'
+        ORDER BY e.EffectiveDate DESC, e.CreatedDate DESC
+      `);
+
+    const enrollmentId = enr.recordset.length ? enr.recordset[0].EnrollmentId : null;
+    const agentId = enr.recordset.length ? enr.recordset[0].AgentId : null;
+
+    return {
+      scheduleId: sid,
+      tenantId: tenantIdResolved,
+      householdId,
+      enrollmentId,
+      agentId,
+      groupId: null,
+      locationId: null,
+      invoiceId: null
+    };
+  } catch (err) {
+    const msg = String(err.message || '');
+    if (!msg.includes('Invalid object name') && !msg.includes('IndividualRecurringSchedules')) {
+      logger.warn(`    Individual sync resolve context: ${msg}`);
+    }
+    return null;
+  }
+}
 
 /**
  * Match transaction to group and find associated context (location, invoice, schedule, etc.)
@@ -675,13 +952,51 @@ async function matchTransactionToGroup(pool, groupId, tenantId, scheduleId, logg
   };
 }
 
+/** DIME list API may send numeric 0 instead of string "00". */
+function normalizeListStatusCode(code) {
+  if (code === null || code === undefined || code === '') return '';
+  const s = String(code).trim();
+  if (s === '0') return '00';
+  return s;
+}
+
+/**
+ * Map list row to oe.Payments status. Prefer DIME `status` (e.g. "Success") over derive-only status.
+ */
+function paymentStatusFromListTransaction(transaction, derivedLineStatus, statusCodeNorm, statusText, transactionStatusLine) {
+  return oePaymentStatus.mapDimeRowToPaymentRecordStatus(
+    derivedLineStatus,
+    statusCodeNorm,
+    statusText,
+    transactionStatusLine,
+    transaction.status ?? null,
+    transaction.pending
+  );
+}
+
+/**
+ * List API often lags webhooks: same txn can map to Pending while DB already has Completed.
+ * Never downgrade a successful payment row from merchant list sync alone.
+ */
+function shouldApplyListSyncStatusUpdate(existingStatus, newStatus, logger, transactionId) {
+  if (oePaymentStatus.isSuccessfulPaymentRecordStatus(existingStatus) && newStatus === 'Pending') {
+    logger.info(
+      `    Skip list sync status update for ${transactionId}: keep ${existingStatus} (DIME list maps to Pending; possible lag vs webhook)`
+    );
+    return false;
+  }
+  return true;
+}
+
 /**
  * Derive a simple status (completed/failed/pending) from DIME transaction fields.
  * DIME list response may have empty status_code/status_text; transaction_status e.g. "CC Pending", "CC Approved".
  */
 function deriveTransactionStatus(statusCode, statusText, transactionStatus) {
   if (statusCode !== null && statusCode !== undefined && statusCode !== '') {
-    if (statusCode === '00' && statusText?.toLowerCase().includes('approved')) return 'completed';
+    const st = (statusText || '').toLowerCase();
+    const looksApproved = st.includes('approved') || st.includes('approval');
+    if (statusCode === '00' && looksApproved) return 'completed';
     if (statusCode && statusCode !== '00') return 'failed';
   }
   const ts = (transactionStatus || '').toLowerCase();
@@ -701,29 +1016,6 @@ function normalizeDimeTransactionType(type) {
   if (t === 'CC') return 'Credit Card';
   if (t === 'ACH') return 'ACH';
   return type;
-}
-
-/**
- * Map DIME transaction status to our payment status (Completed, Pending, Failed, etc.)
- * Handles status_code+status_text, transaction_status (e.g. "CC Pending", "CC Approved"), and legacy dimeStatus string.
- */
-function mapDimeStatusToPaymentStatus(dimeStatus, statusCode = null, statusText = null, transactionStatus = null) {
-  if (statusCode !== null && statusCode !== undefined && statusCode !== '') {
-    if (statusCode === '00' && statusText?.toLowerCase().includes('approved')) return 'Completed';
-    if (statusCode && statusCode !== '00') return 'Failed';
-  }
-  const ts = (transactionStatus || '').toLowerCase();
-  if (ts.includes('approved') || ts.includes('completed') || ts.includes('success') || ts.includes('settled')) return 'Completed';
-  if (ts.includes('pending') || ts.includes('processing')) return 'Pending';
-  if (ts.includes('failed') || ts.includes('declined') || ts.includes('returned')) return 'Failed';
-  const statusMap = {
-    'completed': 'Completed', 'success': 'Completed', 'succeeded': 'Completed',
-    'failed': 'Failed', 'failure': 'Failed',
-    'pending': 'Pending', 'processing': 'Pending',
-    'refunded': 'Refunded', 'voided': 'Voided', 'canceled': 'Canceled', 'cancelled': 'Canceled'
-  };
-  const normalizedStatus = (dimeStatus || '').toLowerCase();
-  return statusMap[normalizedStatus] || (ts ? 'Pending' : 'Unknown');
 }
 
 /**

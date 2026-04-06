@@ -6,8 +6,102 @@
 const crypto = require('crypto');
 const { getPool, sql } = require('../shared/db');
 const { createLogger } = require('../shared/logger');
-const { createRecurringPaymentRecord, createFailedRecurringPaymentRecord, buildProductCommissionsJSON, buildProductVendorAmountsJSON, buildProductOwnerAmountsJSON } = require('../shared/createRecurringPaymentRecord');
+const { createRecurringPaymentRecord, createFailedRecurringPaymentRecord } = require('../shared/createRecurringPaymentRecord');
+const {
+  buildProductSnapshotForPayment,
+  getPricingFields,
+  householdAsOfDate,
+  getHouseholdFeeBucketsAsOf
+} = require('../shared/payment-product-snapshots');
+const oePaymentStatus = require('../shared/payment-status');
+const { recordIntegrationError } = require('../shared/integrationErrors');
 // const MessageQueueService = require('../../backend/services/messageQueue.service'); // TODO: Fix import path for Azure Functions
+
+/**
+ * DIME sometimes sends a JSON array; some payloads omit root `type` but include transaction_type (ACH/CC).
+ */
+function normalizeWebhookBody(raw) {
+  if (Array.isArray(raw)) {
+    return raw.length > 0 ? raw[0] : {};
+  }
+  return raw && typeof raw === 'object' ? raw : {};
+}
+
+function inferDimeEventType(webhookData) {
+  const direct = webhookData.type || webhookData.event_type;
+  if (direct) return direct;
+  const tt = String(webhookData.transaction_type || '').toLowerCase();
+  const ts = String(webhookData.transaction_status || '').toLowerCase();
+  const tsd = String(webhookData.transaction_status_description || '').toLowerCase();
+  // Recurring hints first — DIME often sends credit_card_charge-shaped payloads for monthly recurring without repeating "recurring" in transaction_type.
+  if (webhookData.recurring_payment_id || webhookData.schedule_id) {
+    return 'recurring_payment_success';
+  }
+  if (ts.includes('recurring') || tsd.includes('recurring')) {
+    return 'recurring_payment_success';
+  }
+  if (tt.includes('ach')) return 'ach_charge';
+  if (tt.includes('cc') || tt.includes('credit') || tt.includes('card')) return 'credit_card_charge';
+  return null;
+}
+
+/**
+ * Best-effort tenant for SystemIntegrationErrors when merchant_id / schedule lookups did not run.
+ */
+async function resolveTenantIdFromWebhookPayload(pool, webhookData) {
+  const merchantId = webhookData.merchant_id || webhookData.sid;
+  if (merchantId) {
+    try {
+      const tenantResult = await pool.request()
+        .input('merchantId', sql.NVarChar(255), merchantId)
+        .query(`
+          SELECT TOP 1 t.TenantId
+          FROM oe.Tenants t
+          WHERE JSON_VALUE(t.PaymentProcessorSettings, '$.processors.openenroll.dime.sid') = @merchantId
+        `);
+      if (tenantResult.recordset.length > 0) return tenantResult.recordset[0].TenantId;
+    } catch (_) { /* ignore */ }
+  }
+  const scheduleId = webhookData.schedule_id || webhookData.recurring_payment_id;
+  if (scheduleId) {
+    try {
+      const r = await pool.request()
+        .input('scheduleId', sql.NVarChar(255), String(scheduleId))
+        .query(`
+          SELECT TOP 1 g.TenantId
+          FROM oe.GroupRecurringPaymentPlans grp
+          INNER JOIN oe.Groups g ON grp.GroupId = g.GroupId
+          WHERE grp.DimeScheduleId = @scheduleId AND grp.IsActive = 1
+        `);
+      if (r.recordset.length > 0) return r.recordset[0].TenantId;
+    } catch (_) { /* ignore */ }
+  }
+  const cu = webhookData.customer_uuid;
+  if (cu) {
+    try {
+      const g = await pool.request()
+        .input('cu', sql.NVarChar(255), String(cu))
+        .query(`
+          SELECT TOP 1 TenantId FROM oe.Groups
+          WHERE ProcessorCustomerId = @cu AND Status = N'Active'
+        `);
+      if (g.recordset.length > 0) return g.recordset[0].TenantId;
+    } catch (_) { /* ignore */ }
+    try {
+      const m = await pool.request()
+        .input('cu', sql.NVarChar(255), String(cu))
+        .query(`
+          SELECT TOP 1 u.TenantId
+          FROM oe.MemberPaymentMethods mpm
+          INNER JOIN oe.Members mem ON mem.MemberId = mpm.MemberId
+          INNER JOIN oe.Users u ON u.UserId = mem.UserId
+          WHERE mpm.ProcessorCustomerId = @cu AND mpm.Status = N'Active'
+        `);
+      if (m.recordset.length > 0) return m.recordset[0].TenantId;
+    } catch (_) { /* ignore */ }
+  }
+  return null;
+}
 
 module.exports = async function (context, req) {
   const logger = createLogger(context);
@@ -16,15 +110,25 @@ module.exports = async function (context, req) {
   let pool;
 
   try {
+    let foundTenantId = null;
+    let tenantWebhookSecret = null;
+
     const signature = req.headers['x-dime-signature'];
-    const payload = JSON.stringify(req.body);
-    
+    const rawBody = req.body;
+    if (Array.isArray(rawBody) && rawBody.length > 1) {
+      logger.warn(`Webhook body is array of ${rawBody.length} events; processing first element only`);
+    }
+    const webhookData = normalizeWebhookBody(rawBody);
+    const payload = JSON.stringify(webhookData);
+
     // NEW DIME WEBHOOK STRUCTURE:
-    // The entire body IS the data, with 'type' field at root level
-    // Example: { "type": "recurring_payment_success", "transaction_number": "...", ... }
-    const webhookData = req.body;
-    const eventType = webhookData.type || webhookData.event_type; // Support both old and new format
-    
+    // Prefer type / event_type; else infer from transaction_type (DIME ACH/CC often omit root type)
+    let eventType = inferDimeEventType(webhookData);
+    if (!eventType) {
+      eventType = 'unknown_webhook';
+      logger.warn('Could not infer event type; using unknown_webhook (check DIME payload)');
+    }
+
     logger.info(`Event type: ${eventType}`);
     logger.info(`Webhook payload keys: ${Object.keys(webhookData).join(', ')}`);
 
@@ -46,9 +150,6 @@ module.exports = async function (context, req) {
     //
     // The signature verification is what proves authenticity - not just that it's from DIME,
     // but that it's from DIME for that specific merchant/tenant.
-    
-    let tenantWebhookSecret = null;
-    let foundTenantId = null;
     
     // Try to identify tenant from merchant_id/SID first (if DIME sends it)
     // In new format, these fields may not exist - try customer_uuid lookup instead
@@ -123,7 +224,7 @@ module.exports = async function (context, req) {
         try {
           logger.info(`Looking up tenant webhook secret for schedule: ${scheduleId}`);
           const tenantResult = await pool.request()
-            .input('scheduleId', sql.NVarChar(255), scheduleId)
+            .input('scheduleId', sql.NVarChar(255), String(scheduleId))
             .query(`
               SELECT TOP 1 t.TenantId, t.PaymentProcessorSettings
               FROM oe.GroupRecurringPaymentPlans grp
@@ -232,7 +333,23 @@ module.exports = async function (context, req) {
 
     } catch (error) {
       logger.error(`Error processing webhook: ${error.message}`);
-      
+      let errTenantId = foundTenantId;
+      if (!errTenantId && pool) {
+        try {
+          errTenantId = await resolveTenantIdFromWebhookPayload(pool, webhookData);
+        } catch (_) { /* ignore */ }
+      }
+      await recordIntegrationError({
+        category: 'payment_webhook',
+        source: 'DimeWebhookHandler',
+        tenantId: errTenantId,
+        message: error.message || 'Webhook processing error',
+        detail: {
+          eventType: eventType || null,
+          webhookEventId: webhookEventId || null,
+          stack: error.stack ? String(error.stack).slice(0, 4000) : null
+        }
+      });
       if (webhookEventId) {
         await markWebhookProcessed(pool, webhookEventId, false, error.message);
       }
@@ -242,6 +359,27 @@ module.exports = async function (context, req) {
 
   } catch (error) {
     logger.error(`Webhook processing failed: ${error.message}`);
+    let errTenantIdOuter = foundTenantId;
+    let wdForTenant = {};
+    try {
+      wdForTenant = normalizeWebhookBody(req.body);
+    } catch (_) {
+      wdForTenant = {};
+    }
+    if (!errTenantIdOuter && pool) {
+      try {
+        errTenantIdOuter = await resolveTenantIdFromWebhookPayload(pool, wdForTenant);
+      } catch (_) { /* ignore */ }
+    }
+    await recordIntegrationError({
+      category: 'payment_webhook',
+      source: 'DimeWebhookHandler',
+      tenantId: errTenantIdOuter,
+      message: error.message || 'Webhook outer failure',
+      detail: {
+        stack: error.stack ? String(error.stack).slice(0, 4000) : null
+      }
+    });
     context.res = { status: 500, body: { error: 'Internal server error' } };
   } finally {
     if (pool) {
@@ -354,17 +492,14 @@ function verifyWebhookSignature(signature, payload, tenantWebhookSecret = null) 
 
 async function storeWebhookEvent(pool, eventType, data, environment = 'unknown') {
   // NEW DIME WEBHOOK FORMAT - map fields correctly
+  const safeEventType =
+    eventType && String(eventType).trim() ? String(eventType).trim() : 'unknown_webhook';
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
-  const statusCode = data.status_code;
-  const statusText = data.status_text;
-  // Map status_code "00" = Approved/Completed, others = Failed
-  const status = (statusCode === '00' && statusText?.toLowerCase().includes('approved')) 
-    ? 'Completed' 
-    : (statusCode ? 'Failed' : (data.status || 'Unknown'));
+  const status = oePaymentStatus.mapDimePayloadToPaymentRecordStatus(data);
   
   const result = await pool.request()
-    .input('eventType', sql.NVarChar(100), eventType)
+    .input('eventType', sql.NVarChar(100), safeEventType || 'unknown_webhook')
     .input('eventId', sql.NVarChar(255), data.transaction_info_id || data.event_id || data.id || `webhook_${Date.now()}`)
     .input('processor', sql.NVarChar(50), 'DIME')
     .input('processorEventId', sql.NVarChar(255), data.transaction_info_id || data.event_id || data.id)
@@ -380,7 +515,7 @@ async function storeWebhookEvent(pool, eventType, data, environment = 'unknown')
       )
       OUTPUT inserted.WebhookEventId
       VALUES (
-        NEWID(), @eventType, @processor, @processorEventId, @merchantId, @payload,
+        NEWID(), COALESCE(@eventType, N'unknown_webhook'), @processor, @processorEventId, @merchantId, @payload,
         @transactionId, @amount, @status, 0, GETUTCDATE(), GETUTCDATE()
       )
     `);
@@ -887,10 +1022,8 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
   // NEW DIME WEBHOOK FORMAT
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
-  const statusCode = data.status_code;
-  const statusText = data.status_text;
-  // Map status_code "00" = Approved/Completed, others = Failed
-  const status = (statusCode === '00' && statusText?.toLowerCase().includes('approved')) ? 'Completed' : 'Failed';
+  const mapped = oePaymentStatus.mapDimePayloadToPaymentRecordStatus(data);
+  const status = mapped === 'Pending' ? 'Pending' : (mapped === 'Completed' ? 'Completed' : 'Failed');
   const paymentMethod = data.transaction_type || data.payment_method || data.paymentMethod || 'Credit Card';
 
   logger.info(`Credit Card Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}, Method: ${paymentMethod}`);
@@ -905,82 +1038,167 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
   const netRate = contextFromEnrollment.netRate || 0;
   const commission = contextFromEnrollment.commission || 0;
   const overrideRate = contextFromEnrollment.overrideRate || 0;
-  const systemFees = contextFromEnrollment.systemFees || 0;
+  let systemFees = contextFromEnrollment.systemFees || 0;
+  let processingFeeAmount = 0;
 
-  // Get failure attempt tracking info if payment failed
-  let attemptInfo = { attemptNumber: null, consecutiveFailures: null, originalPaymentId: null };
-  if (status === 'Failed') {
-    attemptInfo = await getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger);
-    logger.info(`Payment failure attempt ${attemptInfo.attemptNumber} (${attemptInfo.consecutiveFailures} consecutive failures)`);
-  }
-
-  // Build ProductCommissions, ProductVendorAmounts, and ProductOwnerAmounts JSON from enrollments
-  const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
-  const productVendorAmountsJSON = await buildProductVendorAmountsJSON(pool, householdId, groupId, logger);
-  const productOwnerAmountsJSON = await buildProductOwnerAmountsJSON(pool, householdId, groupId, logger);
-
-  // Insert payment record
-  const paymentRequest = pool.request();
-  paymentRequest
-    .input('transactionType', sql.NVarChar(50), 'Payment')
-    .input('amount', sql.Decimal(10,2), amount)
-    .input('status', sql.NVarChar(50), status)
-    .input('processor', sql.NVarChar(50), 'DIME')
+  // Check for existing payment (e.g. retry flow already updated this row by ProcessorTransactionId)
+  const existingResult = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
-    .input('paymentMethod', sql.NVarChar(50), paymentMethod)
-    .input('webhookEventId', sql.Int, webhookEventId)
-    .input('paymentDate', sql.DateTime2, new Date())
-    .input('enrollmentId', sql.UniqueIdentifier, enrollmentId)
-    .input('agentId', sql.UniqueIdentifier, agentId)
-    .input('householdId', sql.UniqueIdentifier, householdId)
-    .input('groupId', sql.UniqueIdentifier, groupId)
-    .input('tenantId', sql.UniqueIdentifier, tenantId)
-    .input('netRate', sql.Decimal(10,2), netRate)
-    .input('commission', sql.Decimal(10,2), commission)
-    .input('overrideRate', sql.Decimal(10,2), overrideRate)
-    .input('systemFees', sql.Decimal(10,2), systemFees)
-    .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
-    .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
-    .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
-    .input('attemptNumber', sql.Int, attemptInfo.attemptNumber)
-    .input('originalPaymentId', sql.UniqueIdentifier, attemptInfo.originalPaymentId)
-    .input('consecutiveFailures', sql.Int, attemptInfo.consecutiveFailures)
-    .input('failureReason', sql.NVarChar(sql.MAX), data.failure_reason || null)
-    .input('lastFailureDate', sql.DateTime2, status === 'Failed' ? new Date() : null)
     .query(`
-      INSERT INTO oe.Payments (
-        PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor, 
-        ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate, 
-        GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
-        ProductVendorAmounts, ProductOwnerAmounts,
-        AttemptNumber, OriginalPaymentId, ConsecutiveFailureCount, LastFailureDate,
-        CreatedDate, ModifiedDate
-      ) VALUES (
-        NEWID(), @enrollmentId, @agentId, @householdId, @transactionType, @amount, @status, @processor,
-        @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate, 
-        @groupId, @tenantId, @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
-        @productVendorAmounts, @productOwnerAmounts,
-        @attemptNumber, @originalPaymentId, @consecutiveFailures, @lastFailureDate,
-        GETUTCDATE(), GETUTCDATE()
-      )
+      SELECT PaymentId, GroupId, HouseholdId, InvoiceId, PaymentDate, EnrollmentId, RecurringScheduleId
+      FROM oe.Payments
+      WHERE ProcessorTransactionId = @processorTransactionId AND TransactionType = 'Payment'
     `);
+  const existingPayment = existingResult.recordset[0];
 
-  logger.success(`Credit card charge processed: ${transactionId}${attemptInfo.attemptNumber ? ` (Attempt ${attemptInfo.attemptNumber})` : ''}`);
-  
-  // Send email notification if payment failed
-  if (status === 'Failed') {
+  if (existingPayment) {
+    // Update existing payment (retry or other flow already created/updated it) with webhook event + JSON breakdown
+    const existingGroupId = existingPayment.GroupId || groupId;
+    const existingHouseholdId = existingPayment.HouseholdId || householdId;
+    const paymentDateForJson = existingPayment.PaymentDate || new Date();
+    const existingEnrId = existingPayment.EnrollmentId || enrollmentId;
+    const snapExisting = await buildProductSnapshotForPayment(
+      pool,
+      {
+        householdId: existingHouseholdId,
+        groupId: existingGroupId,
+        paymentDate: paymentDateForJson,
+        invoiceId: existingPayment.InvoiceId || null,
+        enrollmentId: existingEnrId || null,
+        productSnapshotScope:
+          !existingPayment.InvoiceId && existingEnrId && !existingPayment.RecurringScheduleId
+            ? 'enrollment'
+            : undefined
+      },
+      logger
+    );
+    const productCommissionsJSON = snapExisting ? snapExisting.productCommissionsJSON : null;
+    const productVendorAmountsJSON = snapExisting ? snapExisting.productVendorAmountsJSON : null;
+    const productOwnerAmountsJSON = snapExisting ? snapExisting.productOwnerAmountsJSON : null;
+
+    await pool.request()
+      .input('paymentId', sql.UniqueIdentifier, existingPayment.PaymentId)
+      .input('status', sql.NVarChar(50), status)
+      .input('webhookEventId', sql.Int, webhookEventId)
+      .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
+      .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
+      .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
+      .input('failureReason', sql.NVarChar(sql.MAX), status === 'Completed' ? null : (data.failure_reason || null))
+      .query(`
+        UPDATE oe.Payments
+        SET Status = @status, WebhookEventId = @webhookEventId,
+            ProductCommissions = @productCommissions, ProductVendorAmounts = @productVendorAmounts, ProductOwnerAmounts = @productOwnerAmounts,
+            FailureReason = @failureReason, ModifiedDate = GETUTCDATE()
+        WHERE PaymentId = @paymentId
+      `);
+
+    if (status === 'Completed' && existingPayment.InvoiceId) {
+      try {
+        await pool.request()
+          .input('invoiceId', sql.UniqueIdentifier, existingPayment.InvoiceId)
+          .input('amount', sql.Decimal(12,2), amount)
+          .query(`
+            UPDATE oe.Invoices
+            SET Status = 'Paid', PaidAmount = @amount, PaymentReceivedDate = GETUTCDATE(), ModifiedDate = GETUTCDATE()
+            WHERE InvoiceId = @invoiceId
+          `);
+        logger.info(`  Invoice ${existingPayment.InvoiceId} marked as Paid`);
+      } catch (invoiceError) {
+        logger.warn(`  Failed to update invoice status: ${invoiceError.message}`);
+      }
+    }
+    logger.success(`Credit card charge webhook applied to existing payment: ${transactionId}`);
+  } else {
+    // New payment: insert
+    let attemptInfo = { attemptNumber: null, consecutiveFailures: null, originalPaymentId: null };
+    if (status === 'Failed') {
+      attemptInfo = await getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger);
+      logger.info(`Payment failure attempt ${attemptInfo.attemptNumber} (${attemptInfo.consecutiveFailures} consecutive failures)`);
+    }
+
+    const paymentDateForNew = new Date();
     try {
-      logger.info(`Attempting to send payment failure notification. GroupId: ${groupId}, TenantId: ${tenantId}`);
-      await sendPaymentFailureNotification(pool, {
-        enrollment_id: data.enrollment_id,
-        amount: amount,
-        payment_method: paymentMethod,
-        transaction_id: transactionId,
-        failure_reason: data.failure_reason,
-        attempt_number: attemptInfo.attemptNumber
-      }, logger, groupId, tenantId);
-    } catch (emailError) {
-      logger.error('Failed to send payment failure notification:', emailError);
+      if (householdId) {
+        const asOf = householdAsOfDate(paymentDateForNew) || paymentDateForNew;
+        const feeBuckets = await getHouseholdFeeBucketsAsOf(pool, householdId, asOf, sql);
+        systemFees = feeBuckets.systemFees;
+        processingFeeAmount = feeBuckets.processingFeeAmount;
+      }
+    } catch (feeErr) {
+      logger.warn(`Household fee buckets for credit card insert: ${feeErr.message}`);
+    }
+    const snapNew = await buildProductSnapshotForPayment(
+      pool,
+      { householdId, groupId, paymentDate: paymentDateForNew, invoiceId: null },
+      logger
+    );
+    const productCommissionsJSON = snapNew ? snapNew.productCommissionsJSON : null;
+    const productVendorAmountsJSON = snapNew ? snapNew.productVendorAmountsJSON : null;
+    const productOwnerAmountsJSON = snapNew ? snapNew.productOwnerAmountsJSON : null;
+
+    const paymentRequest = pool.request();
+    paymentRequest
+      .input('transactionType', sql.NVarChar(50), 'Payment')
+      .input('amount', sql.Decimal(10,2), amount)
+      .input('status', sql.NVarChar(50), status)
+      .input('processor', sql.NVarChar(50), 'DIME')
+      .input('processorTransactionId', sql.NVarChar(255), transactionId)
+      .input('paymentMethod', sql.NVarChar(50), paymentMethod)
+      .input('webhookEventId', sql.Int, webhookEventId)
+      .input('paymentDate', sql.DateTime2, new Date())
+      .input('enrollmentId', sql.UniqueIdentifier, enrollmentId)
+      .input('agentId', sql.UniqueIdentifier, agentId)
+      .input('householdId', sql.UniqueIdentifier, householdId)
+      .input('groupId', sql.UniqueIdentifier, groupId)
+      .input('tenantId', sql.UniqueIdentifier, tenantId)
+      .input('netRate', sql.Decimal(10,2), netRate)
+      .input('commission', sql.Decimal(10,2), commission)
+      .input('overrideRate', sql.Decimal(10,2), overrideRate)
+      .input('systemFees', sql.Decimal(10,2), systemFees)
+      .input('processingFeeAmount', sql.Decimal(10,2), processingFeeAmount)
+      .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
+      .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
+      .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
+      .input('attemptNumber', sql.Int, attemptInfo.attemptNumber)
+      .input('originalPaymentId', sql.UniqueIdentifier, attemptInfo.originalPaymentId)
+      .input('consecutiveFailures', sql.Int, attemptInfo.consecutiveFailures)
+      .input('failureReason', sql.NVarChar(sql.MAX), data.failure_reason || null)
+      .input('lastFailureDate', sql.DateTime2, status === 'Failed' ? new Date() : null)
+      .query(`
+        INSERT INTO oe.Payments (
+          PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor, 
+          ProcessorTransactionId, PaymentMethod, FailureReason, WebhookEventId, PaymentDate, 
+          GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees, ProcessingFeeAmount, ProductCommissions,
+          ProductVendorAmounts, ProductOwnerAmounts,
+          AttemptNumber, OriginalPaymentId, ConsecutiveFailureCount, LastFailureDate,
+          CreatedDate, ModifiedDate
+        ) VALUES (
+          NEWID(), @enrollmentId, @agentId, @householdId, @transactionType, @amount, @status, @processor,
+          @processorTransactionId, @paymentMethod, @failureReason, @webhookEventId, @paymentDate, 
+          @groupId, @tenantId, @netRate, @commission, @overrideRate, @systemFees, @processingFeeAmount, @productCommissions,
+          @productVendorAmounts, @productOwnerAmounts,
+          @attemptNumber, @originalPaymentId, @consecutiveFailures, @lastFailureDate,
+          GETUTCDATE(), GETUTCDATE()
+        )
+      `);
+
+    logger.success(`Credit card charge processed: ${transactionId}${attemptInfo.attemptNumber ? ` (Attempt ${attemptInfo.attemptNumber})` : ''}`);
+
+    // Send email notification if payment failed (only for newly inserted payments)
+    if (status === 'Failed') {
+      try {
+        logger.info(`Attempting to send payment failure notification. GroupId: ${groupId}, TenantId: ${tenantId}`);
+        await sendPaymentFailureNotification(pool, {
+          enrollment_id: data.enrollment_id,
+          amount: amount,
+          payment_method: paymentMethod,
+          transaction_id: transactionId,
+          failure_reason: data.failure_reason,
+          attempt_number: attemptInfo.attemptNumber
+        }, logger, groupId, tenantId);
+      } catch (emailError) {
+        logger.error('Failed to send payment failure notification:', emailError);
+      }
     }
   }
 }
@@ -1149,15 +1367,130 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
   }
 }
 
+/**
+ * Group invoice ACH (local test): same pricing + product JSON as POST .../invoices/:id/charge (groupBilling.js).
+ * Payload may include invoice_id + amount matching a real invoice TotalAmount.
+ */
+async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, transactionId, amount, invoiceIdRaw) {
+  const mapped = oePaymentStatus.mapDimePayloadToPaymentRecordStatus(data);
+  const status = mapped === 'Pending' ? 'Pending' : (mapped === 'Completed' ? 'Completed' : 'Failed');
+  const paymentMethod = data.transaction_type || data.payment_method || data.paymentMethod || 'ACH';
+
+  const invResult = await pool.request()
+    .input('invoiceId', sql.UniqueIdentifier, invoiceIdRaw)
+    .query(`
+      SELECT TOP 1
+        i.InvoiceId,
+        i.GroupId,
+        i.LocationId,
+        i.TotalAmount,
+        i.BillingPeriodStart,
+        i.BillingPeriodEnd,
+        g.TenantId,
+        g.AgentId
+      FROM oe.Invoices i
+      INNER JOIN oe.Groups g ON g.GroupId = i.GroupId
+      WHERE i.InvoiceId = @invoiceId
+    `);
+  const invoice = invResult.recordset?.[0];
+  if (!invoice) {
+    logger.error(`ACH invoice test: InvoiceId not found: ${invoiceIdRaw}`);
+    throw new Error('invoice_id not found');
+  }
+
+  const paymentDateAch = new Date();
+  const periodOpts = {};
+  if (invoice.BillingPeriodStart && invoice.BillingPeriodEnd) {
+    periodOpts.periodStart = invoice.BillingPeriodStart;
+    periodOpts.periodEnd = invoice.BillingPeriodEnd;
+  }
+  const pricing = await getPricingFields(
+    pool,
+    invoice.GroupId,
+    null,
+    logger,
+    paymentDateAch,
+    periodOpts
+  );
+  const snapAch = await buildProductSnapshotForPayment(
+    pool,
+    {
+      groupId: invoice.GroupId,
+      householdId: null,
+      paymentDate: paymentDateAch,
+      invoiceId: invoice.InvoiceId,
+      enrollmentId: null,
+      productSnapshotScope: undefined
+    },
+    logger
+  );
+  const productCommissionsJSON = snapAch ? snapAch.productCommissionsJSON : null;
+  const productVendorAmountsJSON = snapAch ? snapAch.productVendorAmountsJSON : null;
+  const productOwnerAmountsJSON = snapAch ? snapAch.productOwnerAmountsJSON : null;
+
+  const enrollmentIdOptional = data.enrollment_id || null;
+
+  logger.info(
+    `ACH Charge (invoice): Transaction ${transactionId}, Amount: $${amount}, InvoiceId: ${invoice.InvoiceId}, GroupId: ${invoice.GroupId}`
+  );
+
+  await pool.request()
+    .input('transactionType', sql.NVarChar(50), 'Payment')
+    .input('amount', sql.Decimal(10, 2), amount)
+    .input('status', sql.NVarChar(50), status)
+    .input('processor', sql.NVarChar(50), 'DIME')
+    .input('processorTransactionId', sql.NVarChar(255), transactionId)
+    .input('paymentMethod', sql.NVarChar(50), paymentMethod)
+    .input('webhookEventId', sql.Int, webhookEventId)
+    .input('paymentDate', sql.DateTime2, paymentDateAch)
+    .input('enrollmentId', sql.UniqueIdentifier, enrollmentIdOptional)
+    .input('agentId', sql.UniqueIdentifier, invoice.AgentId || null)
+    .input('householdId', sql.UniqueIdentifier, null)
+    .input('groupId', sql.UniqueIdentifier, invoice.GroupId)
+    .input('tenantId', sql.UniqueIdentifier, invoice.TenantId)
+    .input('locationId', sql.UniqueIdentifier, invoice.LocationId || null)
+    .input('invoiceId', sql.UniqueIdentifier, invoice.InvoiceId)
+    .input('netRate', sql.Decimal(10, 2), pricing.netRate || 0)
+    .input('commission', sql.Decimal(10, 2), pricing.commission || 0)
+    .input('overrideRate', sql.Decimal(10, 2), pricing.overrideRate || 0)
+    .input('systemFees', sql.Decimal(10, 2), pricing.systemFees || 0)
+    .input('processingFeeAmount', sql.Decimal(10, 2), pricing.processingFeeAmount || 0)
+    .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
+    .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
+    .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
+    .query(`
+      INSERT INTO oe.Payments (
+        PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor,
+        ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
+        LocationId, InvoiceId,
+        NetRate, Commission, OverrideRate, SystemFees, ProcessingFeeAmount,
+        ProductCommissions, ProductVendorAmounts, ProductOwnerAmounts,
+        CreatedDate, ModifiedDate
+      ) VALUES (
+        NEWID(), @enrollmentId, @agentId, @householdId, @transactionType, @amount, @status, @processor,
+        @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
+        @locationId, @invoiceId,
+        @netRate, @commission, @overrideRate, @systemFees, @processingFeeAmount,
+        @productCommissions, @productVendorAmounts, @productOwnerAmounts,
+        GETUTCDATE(), GETUTCDATE()
+      )
+    `);
+
+  logger.success(`ACH charge processed (invoice): ${transactionId}`);
+}
+
 async function handleACHCharge(pool, data, webhookEventId, logger) {
   // NEW DIME WEBHOOK FORMAT
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
-  const statusCode = data.status_code;
-  const statusText = data.status_text;
-  // Map status_code "00" = Approved/Completed, others = Failed
-  const status = (statusCode === '00' && statusText?.toLowerCase().includes('approved')) ? 'Completed' : 'Failed';
+  const mapped = oePaymentStatus.mapDimePayloadToPaymentRecordStatus(data);
+  const status = mapped === 'Pending' ? 'Pending' : (mapped === 'Completed' ? 'Completed' : 'Failed');
   const paymentMethod = data.transaction_type || data.payment_method || data.paymentMethod || 'ACH';
+
+  const rawInvoiceId = data.invoice_id || data.invoiceId || null;
+  if (rawInvoiceId) {
+    return handleACHChargeWithInvoice(pool, data, webhookEventId, logger, transactionId, amount, rawInvoiceId);
+  }
 
   logger.info(`ACH Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}, Method: ${paymentMethod}`);
 
@@ -1170,12 +1503,119 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
   const netRate = contextFromEnrollment.netRate || 0;
   const commission = contextFromEnrollment.commission || 0;
   const overrideRate = contextFromEnrollment.overrideRate || 0;
-  const systemFees = contextFromEnrollment.systemFees || 0;
 
-  // Build ProductCommissions, ProductVendorAmounts, and ProductOwnerAmounts JSON from enrollments
-  const productCommissionsJSON = await buildProductCommissionsJSON(pool, householdId, groupId, logger);
-  const productVendorAmountsJSON = await buildProductVendorAmountsJSON(pool, householdId, groupId, logger);
-  const productOwnerAmountsJSON = await buildProductOwnerAmountsJSON(pool, householdId, groupId, logger);
+  // Same as credit_card_charge: enrollment / initial charge often creates oe.Payments first (Pending); settlement webhook must UPDATE.
+  const existingAchResult = await pool.request()
+    .input('processorTransactionId', sql.NVarChar(255), transactionId)
+    .query(`
+      SELECT PaymentId, GroupId, HouseholdId, InvoiceId, PaymentDate, EnrollmentId, RecurringScheduleId
+      FROM oe.Payments
+      WHERE ProcessorTransactionId = @processorTransactionId AND TransactionType = 'Payment'
+    `);
+  const existingAchPayment = existingAchResult.recordset[0];
+
+  if (existingAchPayment) {
+    const existingGroupId = existingAchPayment.GroupId || groupId;
+    const existingHouseholdId = existingAchPayment.HouseholdId || householdId;
+    const paymentDateForJson = existingAchPayment.PaymentDate || new Date();
+    const existingEnrId = existingAchPayment.EnrollmentId || data.enrollment_id || null;
+    const snapExistingAch = await buildProductSnapshotForPayment(
+      pool,
+      {
+        householdId: existingHouseholdId,
+        groupId: existingGroupId,
+        paymentDate: paymentDateForJson,
+        invoiceId: existingAchPayment.InvoiceId || null,
+        enrollmentId: existingEnrId || null,
+        productSnapshotScope:
+          !existingAchPayment.InvoiceId && existingEnrId && !existingAchPayment.RecurringScheduleId
+            ? 'enrollment'
+            : undefined
+      },
+      logger
+    );
+    const pcJson = snapExistingAch ? snapExistingAch.productCommissionsJSON : null;
+    const pvJson = snapExistingAch ? snapExistingAch.productVendorAmountsJSON : null;
+    const poJson = snapExistingAch ? snapExistingAch.productOwnerAmountsJSON : null;
+
+    await pool.request()
+      .input('paymentId', sql.UniqueIdentifier, existingAchPayment.PaymentId)
+      .input('status', sql.NVarChar(50), status)
+      .input('webhookEventId', sql.Int, webhookEventId)
+      .input('productCommissions', sql.NVarChar(sql.MAX), pcJson)
+      .input('productVendorAmounts', sql.NVarChar(sql.MAX), pvJson)
+      .input('productOwnerAmounts', sql.NVarChar(sql.MAX), poJson)
+      .input('failureReason', sql.NVarChar(sql.MAX), status === 'Completed' ? null : (data.failure_reason || null))
+      .query(`
+        UPDATE oe.Payments
+        SET Status = @status, WebhookEventId = @webhookEventId,
+            ProductCommissions = @productCommissions, ProductVendorAmounts = @productVendorAmounts, ProductOwnerAmounts = @productOwnerAmounts,
+            FailureReason = @failureReason, ModifiedDate = GETUTCDATE()
+        WHERE PaymentId = @paymentId
+      `);
+
+    if (status === 'Completed' && existingAchPayment.InvoiceId) {
+      try {
+        await pool.request()
+          .input('invoiceId', sql.UniqueIdentifier, existingAchPayment.InvoiceId)
+          .input('amount', sql.Decimal(12, 2), amount)
+          .query(`
+            UPDATE oe.Invoices
+            SET Status = 'Paid', PaidAmount = @amount, PaymentReceivedDate = GETUTCDATE(), ModifiedDate = GETUTCDATE()
+            WHERE InvoiceId = @invoiceId
+          `);
+        logger.info(`  Invoice ${existingAchPayment.InvoiceId} marked as Paid`);
+      } catch (invoiceError) {
+        logger.warn(`  Failed to update invoice status: ${invoiceError.message}`);
+      }
+    }
+    logger.success(`ACH charge webhook applied to existing payment: ${transactionId}`);
+    if (status === 'Failed') {
+      try {
+        await sendPaymentFailureNotification(pool, {
+          enrollment_id: data.enrollment_id,
+          amount: amount,
+          payment_method: paymentMethod,
+          transaction_id: transactionId,
+          failure_reason: data.failure_reason
+        }, logger);
+      } catch (emailError) {
+        logger.error('Failed to send payment failure notification:', emailError);
+      }
+    }
+    return;
+  }
+
+  const paymentDateAch = new Date();
+  // Product row scalars (single enrollment); fee rows are separate enrollments — align with PaymentAuditService / getPricingFields.
+  let systemFees = contextFromEnrollment.systemFees || 0;
+  let processingFeeAmount = 0;
+  try {
+    if (householdId) {
+      const asOf = householdAsOfDate(paymentDateAch) || paymentDateAch;
+      const feeBuckets = await getHouseholdFeeBucketsAsOf(pool, householdId, asOf, sql);
+      systemFees = feeBuckets.systemFees;
+      processingFeeAmount = feeBuckets.processingFeeAmount;
+    }
+  } catch (feeErr) {
+    logger.warn(`Household fee buckets for ACH insert: ${feeErr.message}`);
+  }
+
+  const snapAch = await buildProductSnapshotForPayment(
+    pool,
+    {
+      householdId,
+      groupId,
+      paymentDate: paymentDateAch,
+      invoiceId: null,
+      enrollmentId: data.enrollment_id || null,
+      productSnapshotScope: data.enrollment_id && householdId ? 'enrollment' : undefined
+    },
+    logger
+  );
+  const productCommissionsJSON = snapAch ? snapAch.productCommissionsJSON : null;
+  const productVendorAmountsJSON = snapAch ? snapAch.productVendorAmountsJSON : null;
+  const productOwnerAmountsJSON = snapAch ? snapAch.productOwnerAmountsJSON : null;
 
   // Insert payment record
   await pool.request()
@@ -1186,7 +1626,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .input('paymentMethod', sql.NVarChar(50), paymentMethod)
     .input('webhookEventId', sql.Int, webhookEventId)
-    .input('paymentDate', sql.DateTime2, new Date())
+    .input('paymentDate', sql.DateTime2, paymentDateAch)
     .input('enrollmentId', sql.UniqueIdentifier, data.enrollment_id || null)
     .input('agentId', sql.UniqueIdentifier, agentId)
     .input('householdId', sql.UniqueIdentifier, householdId)
@@ -1196,6 +1636,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     .input('commission', sql.Decimal(10,2), commission)
     .input('overrideRate', sql.Decimal(10,2), overrideRate)
     .input('systemFees', sql.Decimal(10,2), systemFees)
+    .input('processingFeeAmount', sql.Decimal(10,2), processingFeeAmount)
     .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
     .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
     .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
@@ -1203,13 +1644,13 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
       INSERT INTO oe.Payments (
         PaymentId, EnrollmentId, AgentId, HouseholdId, TransactionType, Amount, Status, Processor, 
         ProcessorTransactionId, PaymentMethod, WebhookEventId, PaymentDate, GroupId, TenantId,
-        NetRate, Commission, OverrideRate, SystemFees, ProductCommissions,
+        NetRate, Commission, OverrideRate, SystemFees, ProcessingFeeAmount, ProductCommissions,
         ProductVendorAmounts, ProductOwnerAmounts,
         CreatedDate, ModifiedDate
       ) VALUES (
         NEWID(), @enrollmentId, @agentId, @householdId, @transactionType, @amount, @status, @processor,
         @processorTransactionId, @paymentMethod, @webhookEventId, @paymentDate, @groupId, @tenantId,
-        @netRate, @commission, @overrideRate, @systemFees, @productCommissions,
+        @netRate, @commission, @overrideRate, @systemFees, @processingFeeAmount, @productCommissions,
         @productVendorAmounts, @productOwnerAmounts,
         GETUTCDATE(), GETUTCDATE()
       )
@@ -1437,13 +1878,16 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
   const transactionType = data.transaction_type || data.payment_method || 'Recurring';
-  const statusCode = data.status_code;
-  const statusText = data.status_text;
   const customerUuid = data.customer_uuid;
   
   // Try to find schedule_id - may not be in webhook, will need to look up by customer_uuid
-  let scheduleId = data.schedule_id || data.recurring_payment_id;
-  
+  let scheduleId = data.schedule_id ?? data.recurring_payment_id;
+  if (scheduleId != null && scheduleId !== '') {
+    scheduleId = String(scheduleId).trim();
+  } else {
+    scheduleId = null;
+  }
+
   // If no schedule_id, try to find it by customer_uuid and transaction_number
   if (!scheduleId && customerUuid) {
     try {
@@ -1460,7 +1904,7 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
         `);
       
       if (scheduleResult.recordset.length > 0) {
-        scheduleId = scheduleResult.recordset[0].DimeScheduleId;
+        scheduleId = String(scheduleResult.recordset[0].DimeScheduleId).trim();
         logger.info(`Found schedule_id ${scheduleId} for customer ${customerUuid}`);
       }
     } catch (error) {
@@ -1468,7 +1912,68 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     }
   }
 
+  // Individual households: DIME often omits schedule_id — resolve from IndividualRecurringSchedules or oe.Payments + MemberPaymentMethods
+  if (!scheduleId && customerUuid) {
+    try {
+      const indSched = await pool.request()
+        .input('customerUuid', sql.NVarChar(255), customerUuid)
+        .query(`
+          SELECT TOP 1 irs.DimeScheduleId
+          FROM oe.IndividualRecurringSchedules irs
+          INNER JOIN oe.Members m ON m.HouseholdId = irs.HouseholdId AND m.RelationshipType = N'P'
+          INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
+            AND mpm.ProcessorCustomerId = @customerUuid
+            AND mpm.Status = N'Active'
+          WHERE irs.IsActive = 1
+          ORDER BY irs.ModifiedDate DESC, irs.CreatedDate DESC
+        `);
+      if (indSched.recordset.length > 0) {
+        scheduleId = String(indSched.recordset[0].DimeScheduleId).trim();
+        logger.info(`Resolved individual schedule_id ${scheduleId} from IndividualRecurringSchedules for customer ${customerUuid}`);
+      }
+    } catch (err) {
+      const msg = String(err.message || '');
+      if (!msg.includes('Invalid object name') && !msg.includes('IndividualRecurringSchedules')) {
+        logger.warn(`IndividualRecurringSchedules schedule lookup: ${msg}`);
+      }
+    }
+  }
+  if (!scheduleId && customerUuid) {
+    try {
+      const paySched = await pool.request()
+        .input('customerUuid', sql.NVarChar(255), customerUuid)
+        .query(`
+          SELECT TOP 1 p.RecurringScheduleId
+          FROM oe.Payments p
+          INNER JOIN oe.Members m ON m.HouseholdId = p.HouseholdId AND m.RelationshipType = N'P'
+          INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
+            AND mpm.ProcessorCustomerId = @customerUuid
+            AND mpm.Status = N'Active'
+          WHERE p.RecurringScheduleId IS NOT NULL AND LTRIM(RTRIM(CAST(p.RecurringScheduleId AS NVARCHAR(255)))) <> N''
+          ORDER BY p.ModifiedDate DESC, p.PaymentDate DESC
+        `);
+      if (paySched.recordset.length > 0) {
+        scheduleId = String(paySched.recordset[0].RecurringScheduleId).trim();
+        logger.info(`Resolved schedule_id ${scheduleId} from oe.Payments for customer ${customerUuid}`);
+      }
+    } catch (err) {
+      logger.warn(`oe.Payments schedule lookup: ${err.message}`);
+    }
+  }
+
+  if (!scheduleId) {
+    throw new Error(
+      'recurring_payment_success: missing schedule_id / recurring_payment_id and could not resolve DimeScheduleId from customer_uuid'
+    );
+  }
+
   logger.info(`Recurring Payment Success: Schedule ${scheduleId}, Transaction ${transactionId}, Amount: $${amount}`);
+
+  if (oePaymentStatus.shouldTreatRecurringSuccessWebhookAsDeclined(data)) {
+    logger.warn('recurring_payment_success payload includes non-approved status fields; recording as failure instead of completed');
+    await handleRecurringPaymentFailed(pool, data, webhookEventId, logger);
+    return;
+  }
 
   // First, try to find if this is a GROUP recurring payment (with invoice linkage)
   const groupResult = await pool.request()
@@ -1640,9 +2145,14 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
   const statusText = data.status_text;
   const failureReason = data.status_text || data.failure_reason || data.status_code || 'Unknown';
   
-  // Try to find schedule_id
-  let scheduleId = data.schedule_id || data.recurring_payment_id;
-  
+  // Try to find schedule_id (DIME JSON may send numeric schedule_id; Tedious NVarChar requires a string)
+  let scheduleId = data.schedule_id ?? data.recurring_payment_id;
+  if (scheduleId != null && scheduleId !== '') {
+    scheduleId = String(scheduleId).trim();
+  } else {
+    scheduleId = null;
+  }
+
   // If no schedule_id, try to find it by customer_uuid
   if (!scheduleId && customerUuid) {
     try {
@@ -1658,7 +2168,7 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
         `);
       
       if (scheduleResult.recordset.length > 0) {
-        scheduleId = scheduleResult.recordset[0].DimeScheduleId;
+        scheduleId = String(scheduleResult.recordset[0].DimeScheduleId).trim();
         logger.info(`Found schedule_id ${scheduleId} for customer ${customerUuid}`);
       }
     } catch (error) {

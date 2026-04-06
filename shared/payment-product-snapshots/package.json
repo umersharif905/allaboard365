@@ -1,0 +1,4 @@
+{
+  "type": "commonjs",
+  "description": "Single source for oe.Payments ProductCommissions / ProductVendorAmounts / ProductOwnerAmounts JSON and related aggregates. Used by backend, payment audit, group billing, and oe_payment_manager (copied at deploy)."
+}
