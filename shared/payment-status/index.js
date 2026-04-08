@@ -128,6 +128,26 @@ function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
 }
 
 /**
+ * Map {@link mapDimePayloadToPaymentRecordStatus} output to what we persist on oe.Payments for CC/ACH charge webhooks.
+ *
+ * `mapDimePayloadToPaymentRecordStatus` returns **Failed** when (examples from DIME payloads / logs):
+ * - `status_code` is set and not `00` (decline / error codes)
+ * - `transaction_status` contains `failed`, `declined`, or `returned`
+ * - root `status` maps to `failed` / `failure`
+ *
+ * Everything else that is not Completed — including **Unknown** (unrecognized labels) — becomes **Pending** here,
+ * so in-flight ACH and ambiguous payloads are not mis-stored as Failed.
+ * Refunded / Voided / Canceled pass through unchanged.
+ */
+function mapChargeWebhookMappedStatusToDbStatus(mapped) {
+  const m = mapped == null ? '' : String(mapped).trim();
+  if (m === 'Completed') return 'Completed';
+  if (m === 'Failed') return 'Failed';
+  if (m === 'Refunded' || m === 'Voided' || m === 'Canceled') return m;
+  return 'Pending';
+}
+
+/**
  * Sync / list-transaction style: separate columns for legacy dime status + codes.
  * Same behavior as previous mapDimeStatusToPaymentStatus in DimePaymentSync.
  * @param rawListStatusFromApi DIME `status` on list rows (e.g. "Success") — must not be replaced by derive-only status.
@@ -170,6 +190,7 @@ module.exports = {
   shouldTreatRecurringSuccessWebhookAsDeclined,
   isDimePendingFlagTrue,
   mapDimePayloadToPaymentRecordStatus,
+  mapChargeWebhookMappedStatusToDbStatus,
   mapDimeRowToPaymentRecordStatus,
   isSuccessfulPaymentRecordStatus,
   SUCCESSFUL_PAYMENT_RECORD_STATUSES: SUCCESSFUL_PAYMENT_RECORD_STATUSES_EXACT,

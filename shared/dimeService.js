@@ -726,6 +726,136 @@ class DimeService {
       };
     }
   }
+
+  /**
+   * GET /api/transaction (body on GET) — same contract as backend DimeService.
+   * @param {string} tenantId
+   * @param {string} transactionId
+   * @param {string} transactionType 'ACH' | 'CC'
+   * @param {{ transactionInfoId?: string|null }} [options]
+   */
+  static async getTransaction(tenantId, transactionId, transactionType, options = {}) {
+    if (!tenantId || !transactionId || !transactionType) {
+      return { success: false, error: { message: 'tenantId, transactionId and transactionType are required' } };
+    }
+    try {
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
+      const payload = {
+        data: {
+          sid: config.sid,
+          transaction_id: String(transactionId).trim(),
+          transaction_type: transactionType === 'ACH' ? 'ACH' : 'CC'
+        }
+      };
+      const tid =
+        options.transactionInfoId != null && String(options.transactionInfoId).trim() !== ''
+          ? String(options.transactionInfoId).trim()
+          : null;
+      if (tid) {
+        payload.data.transaction_info_id = tid;
+      }
+      const response = await axios.request({
+        method: 'GET',
+        url: `${config.baseUrl}/api/transaction`,
+        headers,
+        data: payload
+      });
+      const data = response.data?.data || response.data;
+      const transactionInfoId = data?.transaction_info_id != null ? String(data.transaction_info_id) : null;
+      return {
+        success: true,
+        transactionInfoId,
+        data: data && typeof data === 'object' ? data : null,
+        rawResponse: response.data
+      };
+    } catch (error) {
+      return {
+        success: false,
+        error: {
+          message: error.response?.data?.message || error.message,
+          status: error.response?.status,
+          details: error.response?.data
+        }
+      };
+    }
+  }
+
+  /**
+   * Resolve a transaction for admin audit: try CC vs ACH when ambiguous, then GET /api/transactions/:id.
+   * Mirrors backend/services/dimeService.getTransactionForAudit.
+   */
+  static async getTransactionForAudit(tenantId, transactionId, paymentMethod, transactionInfoId = null) {
+    const pm = String(paymentMethod || '').toLowerCase();
+    const infoId =
+      transactionInfoId != null && String(transactionInfoId).trim() !== ''
+        ? String(transactionInfoId).trim()
+        : null;
+
+    let types;
+    if (pm.includes('ach') || pm.includes('bank') || pm.includes('checking') || pm.includes('savings')) {
+      types = ['ACH'];
+    } else if (pm.includes('recurring')) {
+      types = ['ACH', 'CC'];
+    } else if (pm.includes('card') || pm.includes('cc') || pm.includes('credit') || pm.includes('debit')) {
+      types = ['CC'];
+    } else {
+      types = ['CC', 'ACH'];
+    }
+
+    const attemptedTypes = [];
+    for (const txType of types) {
+      attemptedTypes.push(txType);
+      const r = await this.getTransaction(tenantId, transactionId, txType, { transactionInfoId: infoId });
+      if (r.success) {
+        return { ...r, attemptedTypes, source: 'GET /api/transaction' };
+      }
+      const st = r.error && r.error.status;
+      if (st != null && st !== 404) {
+        return { ...r, attemptedTypes };
+      }
+    }
+
+    try {
+      const config = await this.getConfigForTenant(tenantId);
+      const headers = this.getHeaders(config);
+      const tid = encodeURIComponent(String(transactionId).trim());
+      const response = await axios.get(`${config.baseUrl}/api/transactions/${tid}`, { headers });
+      const data = response.data?.data || response.data;
+      if (data && typeof data === 'object') {
+        return {
+          success: true,
+          data,
+          rawResponse: response.data,
+          attemptedTypes,
+          source: 'GET /api/transactions/:id'
+        };
+      }
+    } catch (e) {
+      const st = e.response && e.response.status;
+      if (st != null && st !== 404) {
+        return {
+          success: false,
+          error: {
+            message: (e.response.data && e.response.data.message) || e.message,
+            status: st,
+            details: e.response.data
+          },
+          attemptedTypes
+        };
+      }
+    }
+
+    return {
+      success: false,
+      error: {
+        message: 'No transaction found',
+        status: 404,
+        details: null
+      },
+      attemptedTypes
+    };
+  }
 }
 
 module.exports = DimeService;

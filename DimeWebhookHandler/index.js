@@ -371,12 +371,20 @@ module.exports = async function (context, req) {
         errTenantIdOuter = await resolveTenantIdFromWebhookPayload(pool, wdForTenant);
       } catch (_) { /* ignore */ }
     }
+    const wh = wdForTenant && typeof wdForTenant === 'object' ? wdForTenant : {};
     await recordIntegrationError({
       category: 'payment_webhook',
       source: 'DimeWebhookHandler',
       tenantId: errTenantIdOuter,
       message: error.message || 'Webhook outer failure',
       detail: {
+        eventType: wh.type || wh.event_type || inferDimeEventType(wh) || null,
+        webhookEventId: null,
+        transaction_number: wh.transaction_number != null ? String(wh.transaction_number) : null,
+        transaction_id: wh.transaction_id != null ? String(wh.transaction_id) : null,
+        schedule_id: wh.schedule_id != null ? String(wh.schedule_id) : null,
+        recurring_payment_id: wh.recurring_payment_id != null ? String(wh.recurring_payment_id) : null,
+        customer_uuid: wh.customer_uuid != null ? String(wh.customer_uuid) : null,
         stack: error.stack ? String(error.stack).slice(0, 4000) : null
       }
     });
@@ -606,15 +614,16 @@ async function getEnrollmentContext(pool, enrollmentId, logger) {
 }
 
 // Helper function to get failure attempt information for a payment
-async function getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger) {
+async function getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger, householdId = null) {
   try {
-    if (!groupId || !tenantId) {
+    if (!tenantId || (!groupId && !householdId)) {
       return { attemptNumber: 1, consecutiveFailures: 0, originalPaymentId: null };
     }
 
-    // Find the most recent failed payment for this group/tenant with same amount/method
+    // Find the most recent failed payment for this group or household with same amount/method
     const failureResult = await pool.request()
       .input('groupId', sql.UniqueIdentifier, groupId)
+      .input('householdId', sql.UniqueIdentifier, householdId)
       .input('tenantId', sql.UniqueIdentifier, tenantId)
       .input('amount', sql.Decimal(10,2), amount)
       .input('paymentMethod', sql.NVarChar(50), paymentMethod)
@@ -625,12 +634,15 @@ async function getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMet
           ConsecutiveFailureCount,
           OriginalPaymentId
         FROM oe.Payments
-        WHERE GroupId = @groupId 
-          AND TenantId = @tenantId
+        WHERE TenantId = @tenantId
           AND Amount = @amount
           AND PaymentMethod = @paymentMethod
           AND Status = 'Failed'
           AND TransactionType = 'Payment'
+          AND (
+            (@groupId IS NOT NULL AND GroupId = @groupId)
+            OR (@groupId IS NULL AND @householdId IS NOT NULL AND HouseholdId = @householdId)
+          )
         ORDER BY CreatedDate DESC
       `);
 
@@ -655,16 +667,174 @@ async function getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMet
   }
 }
 
-// Helper function to send payment failure notification email
-async function sendPaymentFailureNotification(pool, paymentData, logger, groupId, tenantId, isIndividualRecurring = false, locationId = null) {
+/**
+ * When DIME issues a new transaction id on settlement, find the single open row we already have for this charge
+ * (Pending/Failed) so we update it instead of inserting a duplicate.
+ */
+async function findOpenCreditCardPaymentRow(pool, { tenantId, groupId, householdId, amount, enrollmentId, invoiceId }) {
+  if (!tenantId || !amount) return null;
   try {
-    logger.info(`sendPaymentFailureNotification called - GroupId: ${groupId}, TenantId: ${tenantId}, EnrollmentId: ${paymentData.enrollment_id}`);
+    const req = pool.request();
+    req.input('tenantId', sql.UniqueIdentifier, tenantId);
+    req.input('amount', sql.Decimal(10, 2), amount);
+    let where = `
+      WHERE p.TenantId = @tenantId
+        AND p.TransactionType = N'Payment'
+        AND p.Status IN (N'Pending', N'Failed')
+        AND p.Amount = @amount
+        AND LOWER(ISNULL(p.Processor, N'')) LIKE N'%dime%'`;
+    if (invoiceId) {
+      req.input('invoiceId', sql.UniqueIdentifier, invoiceId);
+      where += ` AND p.InvoiceId = @invoiceId`;
+    } else if (enrollmentId) {
+      req.input('enrollmentId', sql.UniqueIdentifier, enrollmentId);
+      where += ` AND p.EnrollmentId = @enrollmentId`;
+    } else if (groupId) {
+      req.input('groupId', sql.UniqueIdentifier, groupId);
+      where += ` AND p.GroupId = @groupId`;
+    } else if (householdId) {
+      req.input('householdId', sql.UniqueIdentifier, householdId);
+      where += ` AND p.HouseholdId = @householdId`;
+    } else {
+      return null;
+    }
+    const result = await req.query(`
+      SELECT TOP 1
+        p.PaymentId, p.GroupId, p.HouseholdId, p.InvoiceId, p.PaymentDate, p.EnrollmentId, p.RecurringScheduleId, p.AgentId
+      FROM oe.Payments p
+      ${where}
+      ORDER BY p.ModifiedDate DESC
+    `);
+    return result.recordset[0] || null;
+  } catch (e) {
+    return null;
+  }
+}
+
+/**
+ * Best-effort AgentId for group-level payments (no enrollment on webhook).
+ */
+async function lookupAgentIdForGroup(pool, groupId, logger) {
+  if (!groupId) return null;
+  try {
+    const enrollmentResult = await pool.request()
+      .input('groupId', sql.UniqueIdentifier, groupId)
+      .query(`
+        SELECT TOP 1 e.AgentId
+        FROM oe.Enrollments e
+        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+        WHERE m.GroupId = @groupId
+          AND e.Status = N'Active'
+          AND e.AgentId IS NOT NULL
+        ORDER BY e.EffectiveDate DESC, e.CreatedDate DESC
+      `);
+    if (enrollmentResult.recordset.length > 0) {
+      const aid = enrollmentResult.recordset[0].AgentId;
+      logger.info(`lookupAgentIdForGroup: ${aid} for group ${groupId}`);
+      return aid || null;
+    }
+  } catch (e) {
+    logger.warn(`lookupAgentIdForGroup: ${e.message}`);
+  }
+  return null;
+}
+
+async function fetchAgentUserForPaymentEmail(pool, agentId, tenantId, logger) {
+  if (!agentId || !tenantId) return null;
+  try {
+    const r = await pool.request()
+      .input('agentId', sql.UniqueIdentifier, agentId)
+      .input('tenantId', sql.UniqueIdentifier, tenantId)
+      .query(`
+        SELECT u.UserId, u.Email, u.FirstName
+        FROM oe.Agents a
+        INNER JOIN oe.Users u ON u.UserId = a.UserId
+        WHERE a.AgentId = @agentId
+          AND a.TenantId = @tenantId
+      `);
+    if (r.recordset.length === 0) {
+      const r2 = await pool.request()
+        .input('agentId', sql.UniqueIdentifier, agentId)
+        .query(`
+          SELECT u.UserId, u.Email, u.FirstName
+          FROM oe.Agents a
+          INNER JOIN oe.Users u ON u.UserId = a.UserId
+          WHERE a.AgentId = @agentId
+        `);
+      if (r2.recordset.length === 0) return null;
+      r.recordset = r2.recordset;
+    }
+    const row = r.recordset[0];
+    const email = row.Email ? String(row.Email).trim() : '';
+    if (!email) return null;
+    return {
+      userId: row.UserId,
+      email,
+      firstName: row.FirstName ? String(row.FirstName).trim() : 'there'
+    };
+  } catch (e) {
+    logger.warn(`fetchAgentUserForPaymentEmail: ${e.message}`);
+    return null;
+  }
+}
+
+async function insertPaymentFailureEmailToQueue(pool, {
+  cleanTenantId,
+  recipientUserId,
+  recipientAddress,
+  subject,
+  htmlBody,
+  logger
+}) {
+  const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  const escapeSqlString = (str) => String(str).replace(/'/g, "''");
+  const cleanRecipientId = recipientUserId ? String(recipientUserId).trim() : null;
+  if (cleanRecipientId && !guidPattern.test(cleanRecipientId)) {
+    logger.error(`Invalid RecipientId for queue: ${cleanRecipientId}`);
+    return;
+  }
+  const recipientIdValue = cleanRecipientId ? `'${escapeSqlString(cleanRecipientId)}'` : 'NULL';
+  const minifiedEmailBody = htmlBody
+    .replace(/\r\n/g, '')
+    .replace(/\n/g, '')
+    .replace(/\r/g, '')
+    .replace(/\s+/g, ' ')
+    .replace(/>\s+</g, '><')
+    .trim();
+  const query = `
+      INSERT INTO oe.MessageQueue (
+        MessageId, TenantId, RecipientId, MessageType,
+        RecipientAddress, Subject, Body, Status,
+        RetryCount, CreatedDate, CreatedBy
+      ) VALUES (
+        NEWID(), 
+        '${escapeSqlString(cleanTenantId)}', 
+        ${recipientIdValue}, 
+        @messageType,
+        @recipientAddress, @subject, @body, 'Pending',
+        0, GETUTCDATE(), NULL
+      )
+    `;
+  const req = pool.request();
+  req.input('messageType', sql.NVarChar, 'Email');
+  req.input('recipientAddress', sql.NVarChar, recipientAddress);
+  req.input('subject', sql.NVarChar, subject);
+  req.input('body', sql.NVarChar(sql.MAX), minifiedEmailBody);
+  await req.query(query);
+}
+
+// Helper function to send payment failure notification email
+async function sendPaymentFailureNotification(pool, paymentData, logger, groupId, tenantId, isIndividualRecurring = false, locationId = null, agentId = null) {
+  let finalTenantId;
+  let groupContactEmail = null;
+  try {
+    logger.info(`sendPaymentFailureNotification called - GroupId: ${groupId}, TenantId: ${tenantId}, EnrollmentId: ${paymentData.enrollment_id}, AgentId: ${agentId}`);
     
     // Try to get group contact email if no enrollment_id
-    let groupContactEmail = null;
     let memberResult = null;
     let groupName = null;
     let userId = null;
+    let resolvedAgentId = agentId || null;
     
     if (groupId && !paymentData.enrollment_id) {
       // For group-level payments, get the group's contact email
@@ -684,6 +854,9 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
       } else {
         logger.warn(`No group found with GroupId: ${groupId}`);
       }
+      if (!resolvedAgentId) {
+        resolvedAgentId = await lookupAgentIdForGroup(pool, groupId, logger);
+      }
     }
     
     // Get member information for the payment (if enrollment_id exists)
@@ -698,7 +871,8 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
             u.LastName,
             u.Email,
             g.TenantId,
-            g.Name as GroupName
+            g.Name as GroupName,
+            e.AgentId AS EnrollmentAgentId
           FROM oe.Enrollments e
           LEFT JOIN oe.Members m ON e.MemberId = m.MemberId
           LEFT JOIN oe.Users u ON m.UserId = u.UserId
@@ -712,11 +886,14 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
         groupContactEmail = member.Email;
         userId = member.UserId;
         groupName = member.GroupName;
+        if (!resolvedAgentId && member.EnrollmentAgentId) {
+          resolvedAgentId = member.EnrollmentAgentId;
+        }
       }
     }
 
-    if (!groupContactEmail) {
-      logger.warn('No contact email found for payment failure notification');
+    if (!groupContactEmail && !resolvedAgentId) {
+      logger.warn('No contact email and no agent for payment failure notification');
       return;
     }
 
@@ -807,11 +984,41 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
       }
     }
 
-    // Get tenant settings for base URL - let frontend route decide where to go
+    // For group payments, RecipientId can be NULL
+    let recipientId = userId || null;
+    finalTenantId = tenantId;
+    
+    // If we have member data from enrollment, use it
+    if (paymentData.enrollment_id && memberResult && memberResult.recordset.length > 0) {
+      const member = memberResult.recordset[0];
+      recipientId = member.UserId;
+      finalTenantId = member.TenantId || tenantId;
+    }
+    
+    // Validate tenantId is a valid GUID or set to null
+    logger.info(`Validating TenantId: ${finalTenantId}, Type: ${typeof finalTenantId}, Raw value: ${JSON.stringify(finalTenantId)}`);
+    
+    if (!finalTenantId) {
+      logger.warn(`TenantId is ${finalTenantId} (undefined/null) - email not sent`);
+      return;
+    }
+
+    // Convert to string if needed and validate GUID format
+    let tenantIdStr = String(finalTenantId).trim();
+    const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!guidPattern.test(tenantIdStr)) {
+      logger.warn(`Invalid TenantId format: ${tenantIdStr}. Email not sent.`);
+      return;
+    }
+
+    logger.info(`TenantId validated: ${tenantIdStr}`);
+    finalTenantId = tenantIdStr;
+
+    // Get tenant settings for base URL (after finalTenantId is known)
     let baseUrl = 'https://app.allaboard365.com'; // Default fallback
     try {
       const tenantResult = await pool.request()
-        .input('tenantId', sql.UniqueIdentifier, tenantId)
+        .input('tenantId', sql.UniqueIdentifier, finalTenantId)
         .query(`
           SELECT 
             CustomDomain,
@@ -845,43 +1052,20 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
       logger.warn(`Could not fetch tenant settings for base URL: ${urlError.message}`);
     }
     
-    // Let frontend route decide - just go to dashboard, frontend will redirect based on role
     const dashboardUrl = `${baseUrl}/dashboard`;
-
-    // For group payments, RecipientId can be NULL
-    let recipientId = userId || null;
-    let finalTenantId = tenantId;
-    
-    // If we have member data from enrollment, use it
-    if (paymentData.enrollment_id && memberResult && memberResult.recordset.length > 0) {
-      const member = memberResult.recordset[0];
-      recipientId = member.UserId;
-      finalTenantId = member.TenantId || tenantId;
-    }
-    
-    // Validate tenantId is a valid GUID or set to null
-    logger.info(`Validating TenantId: ${finalTenantId}, Type: ${typeof finalTenantId}, Raw value: ${JSON.stringify(finalTenantId)}`);
-    
-    if (!finalTenantId) {
-      logger.warn(`TenantId is ${finalTenantId} (undefined/null) - email not sent`);
-      return;
-    }
-
-    // Convert to string if needed and validate GUID format
-    let tenantIdStr = String(finalTenantId).trim();
-    const guidPattern = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-    if (!guidPattern.test(tenantIdStr)) {
-      logger.warn(`Invalid TenantId format: ${tenantIdStr}. Email not sent.`);
-      return;
-    }
-
-    logger.info(`TenantId validated: ${tenantIdStr}`);
-    finalTenantId = tenantIdStr;
     
     // Format attempt number display
     const attemptDisplay = paymentData.attempt_number 
       ? ` (Attempt ${paymentData.attempt_number})`
       : '';
+
+    const memberDisplayName =
+      memberResult && memberResult.recordset.length > 0
+        ? `${memberResult.recordset[0].FirstName || ''} ${memberResult.recordset[0].LastName || ''}`.trim() || '—'
+        : '—';
+    const groupOrIndividualLabel = isIndividualRecurring
+      ? 'Individual (household)'
+      : (groupName || '—');
 
     // Generate email content - Follow same table-based format as other emails
     const subject = `Payment Failed - $${paymentData.amount}${attemptDisplay}`;
@@ -942,69 +1126,112 @@ ${paymentData.attempt_number ? `<p style="margin:5px 0;font-size:14px;color:#666
 </html>
     `;
     
-    // Insert directly into MessageQueue
-    logger.info(`Queuing email to MessageQueue - TenantId: ${finalTenantId}, Recipient: ${groupContactEmail}`);
-    console.log('DEBUG: finalTenantId =', finalTenantId, typeof finalTenantId);
-    
-    // Build the INSERT query with proper NULL handling
-    const recipientIdParam = recipientId || null;
-    
-    // Validate finalTenantId before using it (already validated earlier, but double-check)
-    if (!finalTenantId || (typeof finalTenantId === 'string' && !finalTenantId.trim())) {
-      logger.error(`Invalid tenantId for email queue: ${finalTenantId}`);
-      return;
-    }
-
-    // Clean GUIDs (already validated earlier at line 365, guidPattern declared there)
     const cleanTenantId = String(finalTenantId).trim();
-    const cleanRecipientId = recipientIdParam ? String(recipientIdParam).trim() : null;
-    
-    // Additional validation for recipientId if provided
-    if (cleanRecipientId && !guidPattern.test(cleanRecipientId)) {
-      logger.error(`Invalid RecipientId GUID format: ${cleanRecipientId}`);
-      return;
+
+    if (groupContactEmail) {
+      logger.info(`Queuing member/contact email - TenantId: ${cleanTenantId}, Recipient: ${groupContactEmail}`);
+      await insertPaymentFailureEmailToQueue(pool, {
+        cleanTenantId,
+        recipientUserId: recipientId || null,
+        recipientAddress: groupContactEmail,
+        subject,
+        htmlBody: emailBody,
+        logger
+      });
+      logger.info(`✅ Payment failure notification queued for ${groupContactEmail}`);
     }
 
-    // Embed GUIDs directly in SQL (already validated as proper GUIDs, safe from SQL injection)
-    // This avoids mssql library parameter conversion issues
-    const escapeSqlString = (str) => String(str).replace(/'/g, "''"); // Escape single quotes for SQL
-    const recipientIdValue = cleanRecipientId ? `'${escapeSqlString(cleanRecipientId)}'` : 'NULL';
-    
-    // Minify HTML to remove whitespace (exact same method as MonthlyPaymentScheduler)
-    const minifiedEmailBody = emailBody
-      .replace(/\r\n/g, '') // Remove Windows line breaks
-      .replace(/\n/g, '') // Remove Unix line breaks
-      .replace(/\r/g, '') // Remove Mac line breaks
-      .replace(/\s+/g, ' ') // Replace multiple spaces with single space
-      .replace(/>\s+</g, '><') // Remove spaces between tags
-      .trim(); // Remove leading/trailing whitespace
-    
-    const query = `
-      INSERT INTO oe.MessageQueue (
-        MessageId, TenantId, RecipientId, MessageType,
-        RecipientAddress, Subject, Body, Status,
-        RetryCount, CreatedDate, CreatedBy
-      ) VALUES (
-        NEWID(), 
-        '${escapeSqlString(cleanTenantId)}', 
-        ${recipientIdValue}, 
-        @messageType,
-        @recipientAddress, @subject, @body, 'Pending',
-        0, GETUTCDATE(), NULL
-      )
-    `;
-    
-    const request = pool.request();
-    request.input('messageType', sql.NVarChar, 'Email');
-    request.input('recipientAddress', sql.NVarChar, groupContactEmail);
-    request.input('subject', sql.NVarChar, subject);
-    request.input('body', sql.NVarChar(sql.MAX), minifiedEmailBody);
-    
-    logger.info(`Executing MessageQueue INSERT - TenantId: ${cleanTenantId} (embedded), RecipientId: ${cleanRecipientId || 'NULL'}`);
-    
-    await request.query(query);
-
-    logger.info(`✅ Payment failure notification queued for ${groupContactEmail}`);
+    if (resolvedAgentId) {
+      const agentUser = await fetchAgentUserForPaymentEmail(pool, resolvedAgentId, cleanTenantId, logger);
+      if (agentUser) {
+        const dup =
+          groupContactEmail &&
+          agentUser.email.toLowerCase() === String(groupContactEmail).trim().toLowerCase();
+        if (dup) {
+          logger.info('Skipping agent payment-failure email (same address as member/contact)');
+        } else {
+          const htmlEsc = (v) =>
+            String(v ?? '')
+              .replace(/&/g, '&amp;')
+              .replace(/</g, '&lt;')
+              .replace(/>/g, '&gt;')
+              .replace(/"/g, '&quot;');
+          const agentGreeting = htmlEsc(agentUser.firstName || 'there');
+          const memberLine = htmlEsc(memberDisplayName);
+          const groupLine = htmlEsc(groupOrIndividualLabel);
+          const methodLine = htmlEsc(paymentMethodDisplay);
+          const agentSubject = `Payment failed — member account — $${paymentData.amount}${attemptDisplay}`;
+          const safeReason = String(failureReason).replace(/</g, '&lt;').replace(/>/g, '&gt;');
+          const agentEmailBody = `
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Payment failed (member)</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f8f9fa;font-family:Arial,Helvetica,sans-serif;color:#333333;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f8f9fa;">
+<tr>
+<td align="center" style="padding:20px 0;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+<tr>
+<td style="padding:30px 30px 20px 30px;text-align:center;border-bottom:2px solid #b45309;">
+<h1 style="margin:0;font-size:24px;font-weight:600;color:#b45309;font-family:Arial,Helvetica,sans-serif;">Payment failed (member account)</h1>
+</td>
+</tr>
+<tr>
+<td style="padding:30px 30px;">
+<p style="margin:0 0 16px 0;font-size:16px;line-height:24px;color:#555555;font-family:Arial,Helvetica,sans-serif;">Hi ${agentGreeting},</p>
+<p style="margin:0 0 16px 0;font-size:16px;line-height:24px;color:#555555;font-family:Arial,Helvetica,sans-serif;">A payment <strong>did not go through</strong> for an enrollment you are associated with. The member or group contact may receive a separate notice with instructions to update their payment method.</p>
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f8f9fa;border-radius:6px;margin:16px 0;">
+<tr>
+<td style="padding:20px;">
+<p style="margin:5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;"><strong>Amount:</strong> $${paymentData.amount}</p>
+<p style="margin:5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;"><strong>Member:</strong> ${memberLine}</p>
+<p style="margin:5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;"><strong>Group / context:</strong> ${groupLine}</p>
+<p style="margin:5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;"><strong>Payment method:</strong> ${methodLine}</p>
+${paymentData.attempt_number ? `<p style="margin:5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;"><strong>Attempt:</strong> ${paymentData.attempt_number}</p>` : ''}
+<p style="margin:5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;"><strong>Failure reason:</strong> ${safeReason}</p>
+</td>
+</tr>
+</table>
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;">
+<tr>
+<td align="center">
+<a href="${dashboardUrl}" style="display:inline-block;background-color:#1f8dbf;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:4px;font-size:16px;font-weight:600;font-family:Arial,Helvetica,sans-serif;">Open dashboard</a>
+</td>
+</tr>
+</table>
+<p style="margin:16px 0 0 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">Ask the member to sign in at your tenant portal and update their payment method, or contact support if they need help.</p>
+</td>
+</tr>
+<tr>
+<td style="padding:25px 30px;background-color:#f8f9fa;border-top:1px solid #e9ecef;text-align:center;border-radius:0 0 8px 8px;">
+<p style="margin:0;font-size:13px;color:#666666;font-family:Arial,Helvetica,sans-serif;">Automated notice for agents. Sign in uses your tenant portal (custom domain when configured).</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+          `;
+          await insertPaymentFailureEmailToQueue(pool, {
+            cleanTenantId,
+            recipientUserId: agentUser.userId,
+            recipientAddress: agentUser.email,
+            subject: agentSubject,
+            htmlBody: agentEmailBody,
+            logger
+          });
+          logger.info(`✅ Agent payment failure notification queued for ${agentUser.email}`);
+        }
+      } else {
+        logger.warn(`No agent user email for AgentId ${resolvedAgentId}`);
+      }
+    }
   } catch (error) {
     logger.error('Error sending payment failure notification:', error);
     logger.error(`Error details - TenantId: ${finalTenantId || 'unknown'}, GroupContactEmail: ${groupContactEmail || 'unknown'}, Error: ${error.message}`);
@@ -1023,7 +1250,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
   const mapped = oePaymentStatus.mapDimePayloadToPaymentRecordStatus(data);
-  const status = mapped === 'Pending' ? 'Pending' : (mapped === 'Completed' ? 'Completed' : 'Failed');
+  const status = oePaymentStatus.mapChargeWebhookMappedStatusToDbStatus(mapped);
   const paymentMethod = data.transaction_type || data.payment_method || data.paymentMethod || 'Credit Card';
 
   logger.info(`Credit Card Charge: Transaction ${transactionId}, Amount: $${amount}, Status: ${status}, Method: ${paymentMethod}`);
@@ -1045,14 +1272,34 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
   const existingResult = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .query(`
-      SELECT PaymentId, GroupId, HouseholdId, InvoiceId, PaymentDate, EnrollmentId, RecurringScheduleId
+      SELECT PaymentId, GroupId, HouseholdId, InvoiceId, PaymentDate, EnrollmentId, RecurringScheduleId, AgentId
       FROM oe.Payments
       WHERE ProcessorTransactionId = @processorTransactionId AND TransactionType = 'Payment'
     `);
-  const existingPayment = existingResult.recordset[0];
+  let targetPayment = existingResult.recordset[0];
+  const invoiceIdFromWebhook = data.invoice_id || data.invoiceId || null;
+  if (
+    !targetPayment &&
+    (status === 'Completed' || status === 'Pending')
+  ) {
+    targetPayment = await findOpenCreditCardPaymentRow(pool, {
+      tenantId,
+      groupId,
+      householdId,
+      amount,
+      enrollmentId,
+      invoiceId: invoiceIdFromWebhook
+    });
+    if (targetPayment) {
+      logger.info(
+        `Credit card charge: mapping new transaction id ${transactionId} to existing open payment ${targetPayment.PaymentId}`
+      );
+    }
+  }
 
-  if (existingPayment) {
-    // Update existing payment (retry or other flow already created/updated it) with webhook event + JSON breakdown
+  if (targetPayment) {
+    // Update existing payment (same ProcessorTransactionId, or open row matched for new settlement id)
+    const existingPayment = targetPayment;
     const existingGroupId = existingPayment.GroupId || groupId;
     const existingHouseholdId = existingPayment.HouseholdId || householdId;
     const paymentDateForJson = existingPayment.PaymentDate || new Date();
@@ -1078,6 +1325,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
 
     await pool.request()
       .input('paymentId', sql.UniqueIdentifier, existingPayment.PaymentId)
+      .input('processorTransactionId', sql.NVarChar(255), transactionId)
       .input('status', sql.NVarChar(50), status)
       .input('webhookEventId', sql.Int, webhookEventId)
       .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
@@ -1086,7 +1334,8 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
       .input('failureReason', sql.NVarChar(sql.MAX), status === 'Completed' ? null : (data.failure_reason || null))
       .query(`
         UPDATE oe.Payments
-        SET Status = @status, WebhookEventId = @webhookEventId,
+        SET ProcessorTransactionId = @processorTransactionId,
+            Status = @status, WebhookEventId = @webhookEventId,
             ProductCommissions = @productCommissions, ProductVendorAmounts = @productVendorAmounts, ProductOwnerAmounts = @productOwnerAmounts,
             FailureReason = @failureReason, ModifiedDate = GETUTCDATE()
         WHERE PaymentId = @paymentId
@@ -1108,11 +1357,36 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
       }
     }
     logger.success(`Credit card charge webhook applied to existing payment: ${transactionId}`);
+    if (status === 'Failed') {
+      try {
+        const failureAgentId = existingPayment.AgentId || agentId;
+        await sendPaymentFailureNotification(
+          pool,
+          {
+            enrollment_id: data.enrollment_id || existingPayment.EnrollmentId,
+            amount: amount,
+            payment_method: paymentMethod,
+            transaction_id: transactionId,
+            failure_reason: data.failure_reason
+          },
+          logger,
+          existingGroupId,
+          tenantId,
+          false,
+          null,
+          failureAgentId
+        );
+      } catch (emailError) {
+        logger.error('Failed to send payment failure notification:', emailError);
+      }
+    }
   } else {
-    // New payment: insert
+    // New ProcessorTransactionId: insert a row. Distinct DIME transaction ids => distinct rows.
+    // Same transaction id is handled above (targetPayment). Per-row: AttemptNumber, OriginalPaymentId, LastFailureDate;
+    // full webhook payloads: oe.PaymentWebhookEvents (see storeWebhookEvent).
     let attemptInfo = { attemptNumber: null, consecutiveFailures: null, originalPaymentId: null };
     if (status === 'Failed') {
-      attemptInfo = await getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger);
+      attemptInfo = await getFailureAttemptInfo(pool, groupId, tenantId, amount, paymentMethod, logger, householdId);
       logger.info(`Payment failure attempt ${attemptInfo.attemptNumber} (${attemptInfo.consecutiveFailures} consecutive failures)`);
     }
 
@@ -1195,7 +1469,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
           transaction_id: transactionId,
           failure_reason: data.failure_reason,
           attempt_number: attemptInfo.attemptNumber
-        }, logger, groupId, tenantId);
+        }, logger, groupId, tenantId, false, null, agentId);
       } catch (emailError) {
         logger.error('Failed to send payment failure notification:', emailError);
       }
@@ -1300,7 +1574,7 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
   const originalPayment = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .query(`
-      SELECT PaymentId, GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees
+      SELECT PaymentId, GroupId, TenantId, AgentId, NetRate, Commission, OverrideRate, SystemFees
       FROM oe.Payments 
       WHERE ProcessorTransactionId = @processorTransactionId 
         AND TransactionType = 'Payment'
@@ -1314,6 +1588,7 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
   const originalPaymentId = originalPaymentData.PaymentId;
   const groupId = originalPaymentData.GroupId;
   const tenantId = originalPaymentData.TenantId;
+  const chargebackAgentId = originalPaymentData.AgentId || null;
   const netRate = originalPaymentData.NetRate || 0;
   const commission = originalPaymentData.Commission || 0;
   const overrideRate = originalPaymentData.OverrideRate || 0;
@@ -1361,7 +1636,7 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
       payment_method: 'Credit Card',
       transaction_id: transactionId,
       chargeback_reason: reason
-    }, logger);
+    }, logger, groupId, tenantId, false, null, chargebackAgentId);
   } catch (emailError) {
     logger.error('Failed to send chargeback notification:', emailError);
   }
@@ -1373,7 +1648,7 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
  */
 async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, transactionId, amount, invoiceIdRaw) {
   const mapped = oePaymentStatus.mapDimePayloadToPaymentRecordStatus(data);
-  const status = mapped === 'Pending' ? 'Pending' : (mapped === 'Completed' ? 'Completed' : 'Failed');
+  const status = oePaymentStatus.mapChargeWebhookMappedStatusToDbStatus(mapped);
   const paymentMethod = data.transaction_type || data.payment_method || data.paymentMethod || 'ACH';
 
   const invResult = await pool.request()
@@ -1434,6 +1709,71 @@ async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, tr
     `ACH Charge (invoice): Transaction ${transactionId}, Amount: $${amount}, InvoiceId: ${invoice.InvoiceId}, GroupId: ${invoice.GroupId}`
   );
 
+  const existingOpen = await pool.request()
+    .input('invoiceId', sql.UniqueIdentifier, invoice.InvoiceId)
+    .input('amount', sql.Decimal(10, 2), amount)
+    .query(`
+      SELECT TOP 1 PaymentId
+      FROM oe.Payments
+      WHERE InvoiceId = @invoiceId
+        AND TransactionType = N'Payment'
+        AND Status IN (N'Pending', N'Failed')
+        AND LOWER(ISNULL(Processor, N'')) LIKE N'%dime%'
+        AND ABS(Amount - @amount) < 0.01
+      ORDER BY ModifiedDate DESC
+    `);
+  const reusePaymentId = existingOpen.recordset[0]?.PaymentId;
+
+  if (reusePaymentId) {
+    await pool.request()
+      .input('paymentId', sql.UniqueIdentifier, reusePaymentId)
+      .input('processorTransactionId', sql.NVarChar(255), transactionId)
+      .input('status', sql.NVarChar(50), status)
+      .input('webhookEventId', sql.Int, webhookEventId)
+      .input('paymentDate', sql.DateTime2, paymentDateAch)
+      .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
+      .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
+      .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
+      .input('failureReason', sql.NVarChar(sql.MAX), status === 'Completed' ? null : (data.failure_reason || null))
+      .query(`
+        UPDATE oe.Payments
+        SET ProcessorTransactionId = @processorTransactionId,
+            Status = @status,
+            WebhookEventId = @webhookEventId,
+            PaymentDate = @paymentDate,
+            ProductCommissions = @productCommissions,
+            ProductVendorAmounts = @productVendorAmounts,
+            ProductOwnerAmounts = @productOwnerAmounts,
+            FailureReason = @failureReason,
+            ModifiedDate = GETUTCDATE()
+        WHERE PaymentId = @paymentId
+      `);
+    logger.success(`ACH charge (invoice) updated existing open payment ${reusePaymentId}: ${transactionId}`);
+    if (status === 'Failed') {
+      try {
+        await sendPaymentFailureNotification(
+          pool,
+          {
+            enrollment_id: enrollmentIdOptional,
+            amount,
+            payment_method: paymentMethod,
+            transaction_id: transactionId,
+            failure_reason: data.failure_reason
+          },
+          logger,
+          invoice.GroupId,
+          invoice.TenantId,
+          false,
+          invoice.LocationId || null,
+          invoice.AgentId || null
+        );
+      } catch (emailError) {
+        logger.error('Failed to send payment failure notification (ACH invoice, update):', emailError);
+      }
+    }
+    return;
+  }
+
   await pool.request()
     .input('transactionType', sql.NVarChar(50), 'Payment')
     .input('amount', sql.Decimal(10, 2), amount)
@@ -1477,6 +1817,28 @@ async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, tr
     `);
 
   logger.success(`ACH charge processed (invoice): ${transactionId}`);
+  if (status === 'Failed') {
+    try {
+      await sendPaymentFailureNotification(
+        pool,
+        {
+          enrollment_id: enrollmentIdOptional,
+          amount,
+          payment_method: paymentMethod,
+          transaction_id: transactionId,
+          failure_reason: data.failure_reason
+        },
+        logger,
+        invoice.GroupId,
+        invoice.TenantId,
+        false,
+        invoice.LocationId || null,
+        invoice.AgentId || null
+      );
+    } catch (emailError) {
+      logger.error('Failed to send payment failure notification (ACH invoice, insert):', emailError);
+    }
+  }
 }
 
 async function handleACHCharge(pool, data, webhookEventId, logger) {
@@ -1484,7 +1846,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
   const mapped = oePaymentStatus.mapDimePayloadToPaymentRecordStatus(data);
-  const status = mapped === 'Pending' ? 'Pending' : (mapped === 'Completed' ? 'Completed' : 'Failed');
+  const status = oePaymentStatus.mapChargeWebhookMappedStatusToDbStatus(mapped);
   const paymentMethod = data.transaction_type || data.payment_method || data.paymentMethod || 'ACH';
 
   const rawInvoiceId = data.invoice_id || data.invoiceId || null;
@@ -1540,6 +1902,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
 
     await pool.request()
       .input('paymentId', sql.UniqueIdentifier, existingAchPayment.PaymentId)
+      .input('processorTransactionId', sql.NVarChar(255), transactionId)
       .input('status', sql.NVarChar(50), status)
       .input('webhookEventId', sql.Int, webhookEventId)
       .input('productCommissions', sql.NVarChar(sql.MAX), pcJson)
@@ -1548,7 +1911,8 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
       .input('failureReason', sql.NVarChar(sql.MAX), status === 'Completed' ? null : (data.failure_reason || null))
       .query(`
         UPDATE oe.Payments
-        SET Status = @status, WebhookEventId = @webhookEventId,
+        SET ProcessorTransactionId = @processorTransactionId,
+            Status = @status, WebhookEventId = @webhookEventId,
             ProductCommissions = @productCommissions, ProductVendorAmounts = @productVendorAmounts, ProductOwnerAmounts = @productOwnerAmounts,
             FailureReason = @failureReason, ModifiedDate = GETUTCDATE()
         WHERE PaymentId = @paymentId
@@ -1578,7 +1942,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
           payment_method: paymentMethod,
           transaction_id: transactionId,
           failure_reason: data.failure_reason
-        }, logger);
+        }, logger, existingGroupId, tenantId, false, null, agentId);
       } catch (emailError) {
         logger.error('Failed to send payment failure notification:', emailError);
       }
@@ -1667,7 +2031,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
         payment_method: paymentMethod,
         transaction_id: transactionId,
         failure_reason: data.failure_reason
-      }, logger);
+      }, logger, groupId, tenantId, false, null, agentId);
     } catch (emailError) {
       logger.error('Failed to send payment failure notification:', emailError);
     }
@@ -1688,7 +2052,7 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
   const originalPayment = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .query(`
-      SELECT PaymentId, GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees
+      SELECT PaymentId, GroupId, TenantId, AgentId, NetRate, Commission, OverrideRate, SystemFees
       FROM oe.Payments 
       WHERE ProcessorTransactionId = @processorTransactionId 
         AND TransactionType = 'Payment'
@@ -1702,6 +2066,7 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
   const originalPaymentId = originalPaymentData.PaymentId;
   const groupId = originalPaymentData.GroupId;
   const tenantId = originalPaymentData.TenantId;
+  const achReturnAgentId = originalPaymentData.AgentId || null;
   const netRate = originalPaymentData.NetRate || 0;
   const commission = originalPaymentData.Commission || 0;
   const overrideRate = originalPaymentData.OverrideRate || 0;
@@ -2307,7 +2672,7 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
       payment_method: 'Recurring',
       transaction_id: transactionId,
       failure_reason: failureReason
-    }, logger, groupId, tenantId, isIndividualRecurring, locationId);
+    }, logger, groupId, tenantId, isIndividualRecurring, locationId, agentId);
   } catch (emailError) {
     logger.error('Failed to send payment failure notification:', emailError);
   }

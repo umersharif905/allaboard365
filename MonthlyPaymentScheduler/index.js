@@ -1256,6 +1256,26 @@ module.exports = async function (context, myTimer, options = {}) {
           
           if (shouldCreateDimeSchedule) {
             try {
+              // Total recurring charge (primary may include non-billing locations) — must be computed before cancel/setup
+              const nextBillingDate = paymentDate;
+              let scheduleAmount = fees.totalAmount;
+              if (location.LocationIsPrimary && locationsChargingToPrimary.length > 0) {
+                locationsChargingToPrimary.forEach((charge) => {
+                  scheduleAmount += charge.fees.totalAmount;
+                });
+                logger.info(`    DIME schedule amount includes non-billing locations: $${scheduleAmount.toFixed(2)}`);
+              }
+
+              // Do not cancel existing schedules or call DIME for negligible amounts (defense in depth; outer check uses same total)
+              if (scheduleAmount < 0.01) {
+                logger.info(
+                  `    ⏭️ Skipping DIME recurring schedule for ${location.LocationName}: amount $${scheduleAmount.toFixed(4)} below $0.01 (invoice kept; no processor schedule)`
+                );
+                if (transaction) {
+                  await transaction.commit();
+                  logger.success(`    ✅ Transaction committed (invoice only, no DIME schedule)`);
+                }
+              } else {
               // Cancel ALL existing schedules for this customer in DIME
               // This ensures we clean up any orphaned schedules that aren't in the database
               logger.info(`    Canceling all existing DIME schedules for customer ${group.ProcessorCustomerId}`);
@@ -1327,19 +1347,6 @@ module.exports = async function (context, myTimer, options = {}) {
                     }
                   }
                 }
-              }
-              
-              // Create new schedule - if primary location, include non-billing location charges
-              // Use the calculated paymentDate (5th of current month if run on/before 5th, or 5th of next month if after 5th)
-              const nextBillingDate = paymentDate;
-              
-              // Calculate schedule amount (define outside try-catch so it's accessible in error handlers)
-              let scheduleAmount = fees.totalAmount;
-              if (location.LocationIsPrimary && locationsChargingToPrimary.length > 0) {
-                locationsChargingToPrimary.forEach(charge => {
-                  scheduleAmount += charge.fees.totalAmount;
-                });
-                logger.info(`    DIME schedule amount includes non-billing locations: $${scheduleAmount.toFixed(2)}`);
               }
               
               logger.info(`    [DIME] Creating recurring payment: customer=${group.ProcessorCustomerId}, paymentMethod=${paymentMethod.ProcessorPaymentMethodId}, amount=$${scheduleAmount.toFixed(2)}`);
@@ -1435,6 +1442,7 @@ module.exports = async function (context, myTimer, options = {}) {
                   errorData: newSchedule.error?.data
                 });
                 // Don't throw - continue processing other locations, but log the failure
+              }
               }
             } catch (scheduleError) {
               logger.error(`    [DIME] Error creating recurring payment schedule: ${scheduleError.message}`);
