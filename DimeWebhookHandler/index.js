@@ -15,6 +15,30 @@ const {
 } = require('../shared/payment-product-snapshots');
 const oePaymentStatus = require('../shared/payment-status');
 const { recordIntegrationError } = require('../shared/integrationErrors');
+
+const INVOICE_API_BASE_URL = process.env.BACKEND_API_URL || process.env.OE_BACKEND_URL || '';
+const INVOICE_API_KEY = process.env.SCHEDULED_JOB_API_KEY || '';
+
+async function bestEffortResolveInvoice(logger, { paymentId, householdId, tenantId, paymentDate, paymentAmount }) {
+  if (!INVOICE_API_BASE_URL || !householdId) return;
+  try {
+    const url = `${INVOICE_API_BASE_URL}/api/invoices/resolve-for-payment`;
+    const res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        ...(INVOICE_API_KEY ? { 'x-api-key': INVOICE_API_KEY } : {})
+      },
+      body: JSON.stringify({ paymentId, householdId, tenantId, paymentDate, paymentAmount }),
+      signal: AbortSignal.timeout(10000)
+    });
+    if (!res.ok) {
+      logger.warn(`Invoice resolve HTTP ${res.status} (non-blocking)`);
+    }
+  } catch (err) {
+    logger.warn(`Invoice resolve failed (non-blocking): ${err?.message || err}`);
+  }
+}
 // const MessageQueueService = require('../../backend/services/messageQueue.service'); // TODO: Fix import path for Azure Functions
 
 /**
@@ -700,7 +724,8 @@ async function findOpenCreditCardPaymentRow(pool, { tenantId, groupId, household
     }
     const result = await req.query(`
       SELECT TOP 1
-        p.PaymentId, p.GroupId, p.HouseholdId, p.InvoiceId, p.PaymentDate, p.EnrollmentId, p.RecurringScheduleId, p.AgentId
+        p.PaymentId, p.GroupId, p.HouseholdId, p.InvoiceId, p.PaymentDate, p.EnrollmentId, p.RecurringScheduleId, p.AgentId,
+        p.SystemFees, p.ProcessingFeeAmount
       FROM oe.Payments p
       ${where}
       ORDER BY p.ModifiedDate DESC
@@ -1272,7 +1297,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
   const existingResult = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .query(`
-      SELECT PaymentId, GroupId, HouseholdId, InvoiceId, PaymentDate, EnrollmentId, RecurringScheduleId, AgentId
+      SELECT PaymentId, GroupId, HouseholdId, InvoiceId, PaymentDate, EnrollmentId, RecurringScheduleId, AgentId, SystemFees, ProcessingFeeAmount
       FROM oe.Payments
       WHERE ProcessorTransactionId = @processorTransactionId AND TransactionType = 'Payment'
     `);
@@ -1322,12 +1347,26 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
     const productCommissionsJSON = snapExisting ? snapExisting.productCommissionsJSON : null;
     const productVendorAmountsJSON = snapExisting ? snapExisting.productVendorAmountsJSON : null;
     const productOwnerAmountsJSON = snapExisting ? snapExisting.productOwnerAmountsJSON : null;
+    let updatedSystemFees = existingPayment.SystemFees || 0;
+    let updatedProcessingFeeAmount = existingPayment.ProcessingFeeAmount || 0;
+    try {
+      if (existingHouseholdId) {
+        const asOf = householdAsOfDate(paymentDateForJson) || paymentDateForJson;
+        const feeBuckets = await getHouseholdFeeBucketsAsOf(pool, existingHouseholdId, asOf, sql);
+        updatedSystemFees = feeBuckets.systemFees;
+        updatedProcessingFeeAmount = feeBuckets.processingFeeAmount;
+      }
+    } catch (feeErr) {
+      logger.warn(`Household fee buckets for credit card update: ${feeErr.message}`);
+    }
 
     await pool.request()
       .input('paymentId', sql.UniqueIdentifier, existingPayment.PaymentId)
       .input('processorTransactionId', sql.NVarChar(255), transactionId)
       .input('status', sql.NVarChar(50), status)
       .input('webhookEventId', sql.Int, webhookEventId)
+      .input('systemFees', sql.Decimal(10,2), updatedSystemFees)
+      .input('processingFeeAmount', sql.Decimal(10,2), updatedProcessingFeeAmount)
       .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
       .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
       .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
@@ -1336,6 +1375,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
         UPDATE oe.Payments
         SET ProcessorTransactionId = @processorTransactionId,
             Status = @status, WebhookEventId = @webhookEventId,
+            SystemFees = @systemFees, ProcessingFeeAmount = @processingFeeAmount,
             ProductCommissions = @productCommissions, ProductVendorAmounts = @productVendorAmounts, ProductOwnerAmounts = @productOwnerAmounts,
             FailureReason = @failureReason, ModifiedDate = GETUTCDATE()
         WHERE PaymentId = @paymentId
@@ -1457,6 +1497,10 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
       `);
 
     logger.success(`Credit card charge processed: ${transactionId}${attemptInfo.attemptNumber ? ` (Attempt ${attemptInfo.attemptNumber})` : ''}`);
+
+    if (status !== 'Failed' && householdId && !groupId) {
+      bestEffortResolveInvoice(logger, { paymentId: null, householdId, tenantId, paymentDate: new Date(), paymentAmount: amount });
+    }
 
     // Send email notification if payment failed (only for newly inserted payments)
     if (status === 'Failed') {
@@ -1731,6 +1775,8 @@ async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, tr
       .input('status', sql.NVarChar(50), status)
       .input('webhookEventId', sql.Int, webhookEventId)
       .input('paymentDate', sql.DateTime2, paymentDateAch)
+      .input('systemFees', sql.Decimal(10, 2), pricing.systemFees || 0)
+      .input('processingFeeAmount', sql.Decimal(10, 2), pricing.processingFeeAmount || 0)
       .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
       .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
       .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
@@ -1741,6 +1787,8 @@ async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, tr
             Status = @status,
             WebhookEventId = @webhookEventId,
             PaymentDate = @paymentDate,
+            SystemFees = @systemFees,
+            ProcessingFeeAmount = @processingFeeAmount,
             ProductCommissions = @productCommissions,
             ProductVendorAmounts = @productVendorAmounts,
             ProductOwnerAmounts = @productOwnerAmounts,
@@ -1870,7 +1918,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
   const existingAchResult = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), transactionId)
     .query(`
-      SELECT PaymentId, GroupId, HouseholdId, InvoiceId, PaymentDate, EnrollmentId, RecurringScheduleId
+      SELECT PaymentId, GroupId, HouseholdId, InvoiceId, PaymentDate, EnrollmentId, RecurringScheduleId, SystemFees, ProcessingFeeAmount
       FROM oe.Payments
       WHERE ProcessorTransactionId = @processorTransactionId AND TransactionType = 'Payment'
     `);
@@ -1899,12 +1947,26 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     const pcJson = snapExistingAch ? snapExistingAch.productCommissionsJSON : null;
     const pvJson = snapExistingAch ? snapExistingAch.productVendorAmountsJSON : null;
     const poJson = snapExistingAch ? snapExistingAch.productOwnerAmountsJSON : null;
+    let updatedSystemFees = existingAchPayment.SystemFees || 0;
+    let updatedProcessingFeeAmount = existingAchPayment.ProcessingFeeAmount || 0;
+    try {
+      if (existingHouseholdId) {
+        const asOf = householdAsOfDate(paymentDateForJson) || paymentDateForJson;
+        const feeBuckets = await getHouseholdFeeBucketsAsOf(pool, existingHouseholdId, asOf, sql);
+        updatedSystemFees = feeBuckets.systemFees;
+        updatedProcessingFeeAmount = feeBuckets.processingFeeAmount;
+      }
+    } catch (feeErr) {
+      logger.warn(`Household fee buckets for ACH update: ${feeErr.message}`);
+    }
 
     await pool.request()
       .input('paymentId', sql.UniqueIdentifier, existingAchPayment.PaymentId)
       .input('processorTransactionId', sql.NVarChar(255), transactionId)
       .input('status', sql.NVarChar(50), status)
       .input('webhookEventId', sql.Int, webhookEventId)
+      .input('systemFees', sql.Decimal(10,2), updatedSystemFees)
+      .input('processingFeeAmount', sql.Decimal(10,2), updatedProcessingFeeAmount)
       .input('productCommissions', sql.NVarChar(sql.MAX), pcJson)
       .input('productVendorAmounts', sql.NVarChar(sql.MAX), pvJson)
       .input('productOwnerAmounts', sql.NVarChar(sql.MAX), poJson)
@@ -1913,6 +1975,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
         UPDATE oe.Payments
         SET ProcessorTransactionId = @processorTransactionId,
             Status = @status, WebhookEventId = @webhookEventId,
+            SystemFees = @systemFees, ProcessingFeeAmount = @processingFeeAmount,
             ProductCommissions = @productCommissions, ProductVendorAmounts = @productVendorAmounts, ProductOwnerAmounts = @productOwnerAmounts,
             FailureReason = @failureReason, ModifiedDate = GETUTCDATE()
         WHERE PaymentId = @paymentId
@@ -2021,7 +2084,11 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     `);
 
   logger.success(`ACH charge processed: ${transactionId}`);
-  
+
+  if (status !== 'Failed' && householdId && !groupId) {
+    bestEffortResolveInvoice(logger, { paymentId: null, householdId, tenantId, paymentDate: new Date(), paymentAmount: amount });
+  }
+
   // Send email notification if payment failed
   if (status === 'Failed') {
     try {

@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobs.DimePremiumCalculator.Disabled": "true",
+    "AzureWebJobs.MonthlyPaymentSchedulerTrigger.Disabled": "true",
+    "AzureWebJobs.CommissionTrigger.Disabled": "true",
+    "AzureWebJobs.DimePaymentStatusAuditTimer.Disabled": "true"
+  }
+}

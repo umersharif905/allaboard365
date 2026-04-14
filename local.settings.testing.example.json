@@ -1,0 +1,20 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "DB_USER": "YOUR_SQL_LOGIN",
+    "DB_PASSWORD": "YOUR_PASSWORD",
+    "DB_SERVER": "allboard-prod.database.windows.net",
+    "DB_NAME": "allaboard-testing",
+    "ENCRYPTION_KEY": "copy-from-local.settings.json-if-needed",
+    "ADMIN_API_KEY": "generate-for-mark-payment-completed",
+    "NODE_ENV": "development",
+    "SKIP_EMAILS": "true",
+    "USE_TRANSACTIONS": "true",
+
+    "AzureWebJobs.DimePremiumCalculator.Disabled": "true",
+    "AzureWebJobs.MonthlyPaymentSchedulerTrigger.Disabled": "true",
+    "AzureWebJobs.CommissionTrigger.Disabled": "true"
+  }
+}

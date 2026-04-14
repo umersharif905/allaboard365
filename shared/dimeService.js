@@ -57,7 +57,7 @@ class DimeService {
       const settings = JSON.parse(settingsJson);
       
       if (!settings.processors?.openenroll?.enabled) {
-        throw new Error(`Open Enroll payment processor not enabled for tenant: ${tenantId}`);
+        throw new Error(`AllAboard365 payment processor not enabled for tenant: ${tenantId}`);
       }
 
       const dimeConfig = settings.processors.openenroll.dime;

@@ -1,17 +1,14 @@
 'use strict';
 
+// Deprecated: Invoice sync logic lives in backend/services/invoiceSync.service.js.
+// This file is kept so oe_payment_manager remains independently deployable.
+// It attempts to call the backend API first; falls back to local SQL if the API is unavailable.
+
 const { isSuccessfulPaymentRecordStatus } = require('./payment-status');
 
-/**
- * When a group payment row transitions from a non-success status to a successful one,
- * add this payment's amount to oe.Invoices.PaidAmount (capped at TotalAmount) and set Status to Paid when fully covered.
- * Same logic as backend/services/groupInvoiceSync.service.js (keep in sync).
- *
- * @param {import('mssql').ConnectionPool} pool
- * @param {typeof import('mssql')} sql
- * @param {{ invoiceId: string|null|undefined; paymentAmount: unknown; previousStatus: unknown; newStatus: unknown }} params
- * @returns {Promise<{ applied: boolean; reason?: string; newPaidAmount?: number; invoiceStatus?: string }>}
- */
+const BACKEND_API_URL = process.env.BACKEND_API_URL || process.env.OE_BACKEND_URL || '';
+const API_KEY = process.env.SCHEDULED_JOB_API_KEY || '';
+
 async function syncGroupInvoiceAfterPaymentStatusChange(pool, sql, params) {
   const invoiceId = params.invoiceId;
   const paymentAmount = params.paymentAmount;
@@ -37,6 +34,29 @@ async function syncGroupInvoiceAfterPaymentStatusChange(pool, sql, params) {
     return { applied: false, reason: 'invalid_amount' };
   }
 
+  // Try backend API first
+  if (BACKEND_API_URL) {
+    try {
+      const url = `${BACKEND_API_URL}/api/invoices/${invoiceId}/fulfill`;
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+          ...(API_KEY ? { 'x-api-key': API_KEY } : {})
+        },
+        body: JSON.stringify({ paymentAmount: amt }),
+        signal: AbortSignal.timeout(10000)
+      });
+      if (res.ok) {
+        const body = await res.json();
+        return { applied: true, newPaidAmount: body.data?.newPaidAmount, invoiceStatus: body.data?.invoiceStatus };
+      }
+    } catch {
+      // Fall through to local SQL
+    }
+  }
+
+  // Fallback: local SQL
   const invRes = await pool
     .request()
     .input('invoiceId', sql.UniqueIdentifier, invoiceId)
@@ -55,7 +75,7 @@ async function syncGroupInvoiceAfterPaymentStatusChange(pool, sql, params) {
   const prevPaid = parseFloat(inv.PaidAmount || 0) || 0;
   const newPaid = Math.min(total, prevPaid + amt);
   const isFullyPaid = total > 0 && newPaid >= total;
-  const newInvStatus = isFullyPaid ? 'Paid' : inv.Status;
+  const newInvStatus = isFullyPaid ? 'Paid' : (newPaid > 0 ? 'Partial' : inv.Status);
 
   await pool
     .request()

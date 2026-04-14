@@ -191,15 +191,17 @@ async function generateInvoice(pool, group, location, fees, billingDate, invoice
     .input('paidAmount', sql.Decimal(12,2), 0)
     .input('status', sql.NVarChar, 'Unpaid')
     .input('paymentDueDate', sql.Date, dueDate)
+    .input('tenantId', sql.UniqueIdentifier, group.TenantId || null)
+    .input('invoiceType', sql.NVarChar(20), 'Group')
     .query(`
       INSERT INTO oe.Invoices 
       (InvoiceId, GroupId, LocationId, InvoiceNumber, InvoiceDate, DueDate,
        BillingPeriodStart, BillingPeriodEnd, SubTotal, TaxAmount, TotalAmount,
-       PaidAmount, Status, PaymentDueDate, CreatedDate, ModifiedDate, CreatedBy, ModifiedBy)
+       PaidAmount, Status, PaymentDueDate, TenantId, InvoiceType, CreatedDate, ModifiedDate, CreatedBy, ModifiedBy)
       VALUES 
       (@invoiceId, @groupId, @locationId, @invoiceNumber, @invoiceDate, @dueDate,
        @billingPeriodStart, @billingPeriodEnd, @subTotal, @taxAmount, @totalAmount,
-       @paidAmount, @status, @paymentDueDate, GETUTCDATE(), GETUTCDATE(), NULL, NULL)
+       @paidAmount, @status, @paymentDueDate, @tenantId, @invoiceType, GETUTCDATE(), GETUTCDATE(), NULL, NULL)
     `);
   
   logger.success(`    Created invoice ${invoiceNumber}: $${totalAmount.toFixed(2)}${totalSetupFees > 0 ? ` (includes $${totalSetupFees.toFixed(2)} in setup fees for ${totalNewEnrollments} new enrollment${totalNewEnrollments !== 1 ? 's' : ''})` : ''}`);
