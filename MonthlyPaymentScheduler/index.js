@@ -173,6 +173,28 @@ async function generateInvoice(pool, group, location, fees, billingDate, invoice
     logger.info(`    Primary location total: $${totalAmount.toFixed(2)}`);
   }
   
+  // Compute financial breakdown columns (same helpers that populate oe.Payments)
+  let breakdowns = null;
+  try {
+    const snapshots = require('../shared/payment-product-snapshots');
+    const built = await snapshots.buildGroupProductSnapshotsForPeriod(pool, group.GroupId, billingPeriodStart, billingPeriodEnd, null);
+    const pricing = await snapshots.getPricingFields(pool, group.GroupId, null, null, null, { periodStart: billingPeriodStart, periodEnd: billingPeriodEnd });
+    const fees2 = await snapshots.getGroupFeeBucketsForPeriod(pool, group.GroupId, billingPeriodStart, billingPeriodEnd);
+    breakdowns = {
+      netRate: pricing.netRate,
+      overrideRate: pricing.overrideRate,
+      commission: pricing.commission,
+      systemFees: fees2.systemFees,
+      processingFeeAmount: fees2.processingFeeAmount,
+      setupFee: fees2.setupFee,
+      productCommissions: built?.productCommissionsJSON || null,
+      productVendorAmounts: built?.productVendorAmountsJSON || null,
+      productOwnerAmounts: built?.productOwnerAmountsJSON || null,
+    };
+  } catch (bdErr) {
+    logger.warn(`    Could not compute invoice breakdowns: ${bdErr.message}`);
+  }
+
   // Use transaction if provided, otherwise use pool.request()
   const request = transaction ? transaction.request() : pool.request();
   
@@ -193,15 +215,30 @@ async function generateInvoice(pool, group, location, fees, billingDate, invoice
     .input('paymentDueDate', sql.Date, dueDate)
     .input('tenantId', sql.UniqueIdentifier, group.TenantId || null)
     .input('invoiceType', sql.NVarChar(20), 'Group')
+    .input('netRate', sql.Decimal(18,6), breakdowns?.netRate ?? null)
+    .input('overrideRate', sql.Decimal(18,6), breakdowns?.overrideRate ?? null)
+    .input('commission', sql.Decimal(18,6), breakdowns?.commission ?? null)
+    .input('systemFees', sql.Decimal(18,6), breakdowns?.systemFees ?? null)
+    .input('processingFeeAmount', sql.Decimal(18,6), breakdowns?.processingFeeAmount ?? null)
+    .input('setupFee', sql.Decimal(18,6), breakdowns?.setupFee ?? null)
+    .input('productCommissions', sql.NVarChar(sql.MAX), breakdowns?.productCommissions ?? null)
+    .input('productVendorAmounts', sql.NVarChar(sql.MAX), breakdowns?.productVendorAmounts ?? null)
+    .input('productOwnerAmounts', sql.NVarChar(sql.MAX), breakdowns?.productOwnerAmounts ?? null)
     .query(`
       INSERT INTO oe.Invoices 
       (InvoiceId, GroupId, LocationId, InvoiceNumber, InvoiceDate, DueDate,
        BillingPeriodStart, BillingPeriodEnd, SubTotal, TaxAmount, TotalAmount,
-       PaidAmount, Status, PaymentDueDate, TenantId, InvoiceType, CreatedDate, ModifiedDate, CreatedBy, ModifiedBy)
+       PaidAmount, Status, PaymentDueDate, TenantId, InvoiceType,
+       NetRate, OverrideRate, Commission, SystemFees, ProcessingFeeAmount, SetupFee,
+       ProductCommissions, ProductVendorAmounts, ProductOwnerAmounts,
+       CreatedDate, ModifiedDate, CreatedBy, ModifiedBy)
       VALUES 
       (@invoiceId, @groupId, @locationId, @invoiceNumber, @invoiceDate, @dueDate,
        @billingPeriodStart, @billingPeriodEnd, @subTotal, @taxAmount, @totalAmount,
-       @paidAmount, @status, @paymentDueDate, @tenantId, @invoiceType, GETUTCDATE(), GETUTCDATE(), NULL, NULL)
+       @paidAmount, @status, @paymentDueDate, @tenantId, @invoiceType,
+       @netRate, @overrideRate, @commission, @systemFees, @processingFeeAmount, @setupFee,
+       @productCommissions, @productVendorAmounts, @productOwnerAmounts,
+       GETUTCDATE(), GETUTCDATE(), NULL, NULL)
     `);
   
   logger.success(`    Created invoice ${invoiceNumber}: $${totalAmount.toFixed(2)}${totalSetupFees > 0 ? ` (includes $${totalSetupFees.toFixed(2)} in setup fees for ${totalNewEnrollments} new enrollment${totalNewEnrollments !== 1 ? 's' : ''})` : ''}`);
