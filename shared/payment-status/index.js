@@ -185,6 +185,25 @@ function isSuccessfulPaymentRecordStatus(status) {
   );
 }
 
+const SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL = Object.freeze([
+  'completed',
+  'approval',
+  'success',
+  'succeeded',
+  'approved',
+  'paid',
+]);
+
+function sqlSuccessfulPaymentOrderKeyExpr(columnRef) {
+  const inList = SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL.map((s) => `N'${s}'`).join(', ');
+  return `(CASE WHEN LOWER(LTRIM(RTRIM(${columnRef}))) IN (${inList}) THEN 0 ELSE 1 END)`;
+}
+
+function sqlSuccessfulPaymentPredicate(columnRef) {
+  const inList = SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL.map((s) => `N'${s}'`).join(', ');
+  return `(LOWER(LTRIM(RTRIM(${columnRef}))) IN (${inList}))`;
+}
+
 module.exports = {
   isDimeChargeApproved,
   shouldTreatRecurringSuccessWebhookAsDeclined,
@@ -194,4 +213,7 @@ module.exports = {
   mapDimeRowToPaymentRecordStatus,
   isSuccessfulPaymentRecordStatus,
   SUCCESSFUL_PAYMENT_RECORD_STATUSES: SUCCESSFUL_PAYMENT_RECORD_STATUSES_EXACT,
+  SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL,
+  sqlSuccessfulPaymentOrderKeyExpr,
+  sqlSuccessfulPaymentPredicate,
 };

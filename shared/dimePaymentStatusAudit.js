@@ -1,14 +1,22 @@
 'use strict';
 
 /**
- * Same reconciliation logic as backend/services/dimePaymentStatusAudit.service.js.
+ * Same reconciliation logic as backend/services/dimePaymentStatusAudit.service.js (Azure Functions).
  * Optional `hoursBack` filters by PaymentDate in the last N hours (for timer jobs); do not combine with startDate/endDate.
  */
 
 const { getPool, sql } = require('./db');
 const DimeService = require('./dimeService');
-const { syncGroupInvoiceAfterPaymentStatusChange } = require('./groupInvoiceSync');
-const { mapDimePayloadToPaymentRecordStatus, isSuccessfulPaymentRecordStatus } = require('./payment-status');
+const {
+  getPaymentStatusInvoiceAdjustmentPlan,
+  applyPaymentStatusInvoiceAdjustmentInTxn
+} = require('./paymentAdminPatch');
+const {
+  mapDimePayloadToPaymentRecordStatus,
+  isSuccessfulPaymentRecordStatus,
+  sqlSuccessfulPaymentOrderKeyExpr,
+  sqlSuccessfulPaymentPredicate
+} = require('./payment-status');
 
 function canonicalDbPaymentStatus(status) {
   const s = String(status || '').trim();
@@ -25,66 +33,94 @@ function shouldSkipBecauseDbTerminal(canonical) {
   return canonical === 'Refunded' || canonical === 'Voided';
 }
 
-/**
- * @param {object} params
- * @param {string} params.tenantId
- * @param {string|null} [params.startDate] YYYY-MM-DD
- * @param {string|null} [params.endDate] YYYY-MM-DD
- * @param {number|null} [params.hoursBack] If set, only payments with PaymentDate in the last N hours (1–168). Mutually exclusive with startDate/endDate.
- * @param {boolean} [params.dryRun]
- * @param {number} [params.limit]
- */
-async function runAudit(params) {
-  const tenantId = params.tenantId;
-  const dryRun = params.dryRun !== false;
-  const limit = Math.min(1000, Math.max(1, Number(params.limit) || 500));
-  const startDate = params.startDate || null;
-  const endDate = params.endDate || null;
-  const hoursBack =
-    params.hoursBack != null && params.hoursBack !== ''
-      ? Math.min(168, Math.max(1, Number(params.hoursBack)))
-      : null;
+function paymentRowForInvoicePlan(row) {
+  return {
+    InvoiceId: row.InvoiceId,
+    TransactionType: row.TransactionType,
+    OriginalPaymentId: row.OriginalPaymentId,
+    Amount: row.Amount,
+    Status: row.Status
+  };
+}
 
-  if (hoursBack && (startDate || endDate)) {
-    throw new Error('Specify either hoursBack or startDate/endDate, not both');
+function mergeRowsByPaymentId(primary, secondary) {
+  const seen = new Set();
+  const out = [];
+  for (const r of primary) {
+    const id = String(r.PaymentId);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(r);
   }
+  for (const r of secondary) {
+    const id = String(r.PaymentId);
+    if (seen.has(id)) continue;
+    seen.add(id);
+    out.push(r);
+  }
+  return out;
+}
 
-  const pool = await getPool();
-  const request = pool.request();
-  request.input('tenantId', sql.UniqueIdentifier, tenantId);
-  request.input('limit', sql.Int, limit);
+async function loadCandidateRows(pool, opts) {
+  const {
+    tenantId,
+    limit,
+    hoursBack,
+    startDate,
+    endDate,
+    extraWhere,
+    prioritizeSuccessfulFirst,
+    extraSqlInputs = {}
+  } = opts;
+
   let dateClause = '';
-  if (hoursBack) {
-    request.input('hoursBack', sql.Int, hoursBack);
-    dateClause = ' AND p.PaymentDate >= DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME())';
-  } else {
-    if (startDate) {
-      request.input('startDate', sql.Date, startDate);
-      dateClause += ' AND CAST(p.PaymentDate AS DATE) >= @startDate';
-    }
-    if (endDate) {
-      request.input('endDate', sql.Date, endDate);
-      dateClause += ' AND CAST(p.PaymentDate AS DATE) <= @endDate';
-    }
-  }
+  const orderClause = prioritizeSuccessfulFirst
+    ? `ORDER BY ${sqlSuccessfulPaymentOrderKeyExpr('p.Status')}, p.PaymentDate DESC`
+    : `ORDER BY p.PaymentDate DESC`;
 
-  let rows;
-  try {
-    const result = await request.query(`
+  async function runWithColumns(includeProcessorTransactionInfoId, includeOriginalPaymentId) {
+    const req = pool.request();
+    req.input('tenantId', sql.UniqueIdentifier, tenantId);
+    req.input('limit', sql.Int, limit);
+    if (hoursBack) {
+      req.input('hoursBack', sql.Int, hoursBack);
+      dateClause = ' AND p.PaymentDate >= DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME())';
+    } else {
+      dateClause = '';
+      if (startDate) {
+        req.input('startDate', sql.Date, startDate);
+        dateClause += ' AND CAST(p.PaymentDate AS DATE) >= @startDate';
+      }
+      if (endDate) {
+        req.input('endDate', sql.Date, endDate);
+        dateClause += ' AND CAST(p.PaymentDate AS DATE) <= @endDate';
+      }
+    }
+    if (extraSqlInputs.successRecheckDays != null) {
+      req.input('successRecheckDays', sql.Int, extraSqlInputs.successRecheckDays);
+    }
+
+    const cols = [
+      'p.PaymentId',
+      'p.InvoiceId',
+      'p.Status',
+      'p.PaymentMethod',
+      'p.Processor',
+      'p.ProcessorTransactionId'
+    ];
+    if (includeProcessorTransactionInfoId) {
+      cols.push('p.ProcessorTransactionInfoId');
+    }
+    cols.push('p.PaymentDate', 'p.Amount', 'p.GroupId', 'p.HouseholdId', 'p.TransactionType');
+    if (includeOriginalPaymentId) {
+      cols.push('p.OriginalPaymentId');
+    }
+    cols.push('g.Name AS GroupName', 'ind.PrimaryMemberName');
+    const selectList = cols.join(',\n        ');
+
+    const q = `
       SELECT TOP (@limit)
-        p.PaymentId,
-        p.InvoiceId,
-        p.Status,
-        p.PaymentMethod,
-        p.Processor,
-        p.ProcessorTransactionId,
-        p.ProcessorTransactionInfoId,
-        p.PaymentDate,
-        p.Amount,
-        p.GroupId,
-        p.HouseholdId,
-        g.Name AS GroupName,
-        ind.PrimaryMemberName
+        ${selectList}
       FROM oe.Payments p
       LEFT JOIN oe.Groups g ON p.GroupId = g.GroupId
       OUTER APPLY (
@@ -101,64 +137,89 @@ async function runAudit(params) {
         AND LTRIM(RTRIM(CAST(p.ProcessorTransactionId AS NVARCHAR(128)))) <> ''
         AND (p.TransactionType IS NULL OR p.TransactionType = 'Payment')
       ${dateClause}
-      ORDER BY p.PaymentDate DESC
-    `);
-    rows = result.recordset || [];
-  } catch (e) {
-    if ((e.message || '').includes('ProcessorTransactionInfoId') || (e.message || '').includes('Invalid column name')) {
-      const r2 = await pool.request()
-        .input('tenantId', sql.UniqueIdentifier, tenantId)
-        .input('limit', sql.Int, limit);
-      let dc = '';
-      if (hoursBack) {
-        r2.input('hoursBack', sql.Int, hoursBack);
-        dc = ' AND p.PaymentDate >= DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME())';
-      } else {
-        if (startDate) {
-          r2.input('startDate', sql.Date, startDate);
-          dc += ' AND CAST(p.PaymentDate AS DATE) >= @startDate';
-        }
-        if (endDate) {
-          r2.input('endDate', sql.Date, endDate);
-          dc += ' AND CAST(p.PaymentDate AS DATE) <= @endDate';
-        }
-      }
-      const result = await r2.query(`
-        SELECT TOP (@limit)
-          p.PaymentId,
-          p.InvoiceId,
-          p.Status,
-          p.PaymentMethod,
-          p.Processor,
-          p.ProcessorTransactionId,
-          p.PaymentDate,
-          p.Amount,
-          p.GroupId,
-          p.HouseholdId,
-          g.Name AS GroupName,
-          ind.PrimaryMemberName
-        FROM oe.Payments p
-        LEFT JOIN oe.Groups g ON p.GroupId = g.GroupId
-        OUTER APPLY (
-          SELECT TOP 1
-            LTRIM(RTRIM(CONCAT(ISNULL(u.FirstName, N''), N' ', ISNULL(u.LastName, N'')))) AS PrimaryMemberName
-          FROM oe.Members m
-          INNER JOIN oe.Users u ON m.UserId = u.UserId
-          WHERE m.HouseholdId = p.HouseholdId AND m.RelationshipType = N'P'
-          ORDER BY m.CreatedDate
-        ) ind
-        WHERE p.TenantId = @tenantId
-          AND LOWER(ISNULL(p.Processor, '')) LIKE '%dime%'
-          AND p.ProcessorTransactionId IS NOT NULL
-          AND LTRIM(RTRIM(CAST(p.ProcessorTransactionId AS NVARCHAR(128)))) <> ''
-          AND (p.TransactionType IS NULL OR p.TransactionType = 'Payment')
-        ${dc}
-        ORDER BY p.PaymentDate DESC
-      `);
-      rows = (result.recordset || []).map((r) => ({ ...r, ProcessorTransactionInfoId: null }));
-    } else {
-      throw e;
+      ${extraWhere}
+      ${orderClause}
+    `;
+
+    const result = await req.query(q);
+    let rows = result.recordset || [];
+    if (!includeProcessorTransactionInfoId) {
+      rows = rows.map((r) => ({ ...r, ProcessorTransactionInfoId: null }));
     }
+    if (!includeOriginalPaymentId) {
+      rows = rows.map((r) => ({ ...r, OriginalPaymentId: null }));
+    }
+    return rows;
+  }
+
+  try {
+    const rows = await runWithColumns(true, true);
+    return { rows, usedFallbackNoInfoId: false, usedFallbackNoOriginal: false };
+  } catch (e) {
+    const msg = e.message || '';
+    if (msg.includes('ProcessorTransactionInfoId') || msg.includes('OriginalPaymentId') || msg.includes('Invalid column name')) {
+      try {
+        const rows = await runWithColumns(true, false);
+        return { rows, usedFallbackNoInfoId: false, usedFallbackNoOriginal: true };
+      } catch (e2) {
+        const rows = await runWithColumns(false, false);
+        return { rows, usedFallbackNoInfoId: true, usedFallbackNoOriginal: true };
+      }
+    }
+    throw e;
+  }
+}
+
+async function runAudit(params) {
+  const tenantId = params.tenantId;
+  const dryRun = params.dryRun !== false;
+  const limit = Math.min(1000, Math.max(1, Number(params.limit) || 500));
+  const startDate = params.startDate || null;
+  const endDate = params.endDate || null;
+  const hoursBack =
+    params.hoursBack != null && params.hoursBack !== ''
+      ? Math.min(168, Math.max(1, Number(params.hoursBack)))
+      : null;
+
+  const prioritizeSuccessfulFirst = params.prioritizeSuccessfulFirst !== false;
+  const successRecheckDays = Math.min(366, Math.max(0, Number(params.successRecheckDays) || 0));
+  const secondaryLimit = Math.min(1000, Math.max(0, Number(params.secondaryLimit) || 0));
+
+  if (hoursBack && (startDate || endDate)) {
+    throw new Error('Specify either hoursBack or startDate/endDate, not both');
+  }
+
+  const pool = await getPool();
+
+  const loadOptsBase = {
+    tenantId,
+    hoursBack,
+    startDate,
+    endDate,
+    prioritizeSuccessfulFirst: prioritizeSuccessfulFirst
+  };
+
+  const { rows: passARows } = await loadCandidateRows(pool, {
+    ...loadOptsBase,
+    limit,
+    extraWhere: ''
+  });
+
+  let rows = passARows;
+  let passBRows = [];
+
+  if (hoursBack && successRecheckDays > 0 && secondaryLimit > 0) {
+    const successPred = sqlSuccessfulPaymentPredicate('p.Status');
+    const extraB = ` AND ${successPred} AND p.PaymentDate < DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME()) AND p.PaymentDate >= DATEADD(DAY, -@successRecheckDays, SYSUTCDATETIME())`;
+    const { rows: bRows } = await loadCandidateRows(pool, {
+      ...loadOptsBase,
+      limit: secondaryLimit,
+      extraWhere: extraB,
+      prioritizeSuccessfulFirst: false,
+      extraSqlInputs: { successRecheckDays }
+    });
+    passBRows = bRows;
+    rows = mergeRowsByPaymentId(passARows, passBRows);
   }
 
   const outRows = [];
@@ -282,13 +343,20 @@ async function runAudit(params) {
 
     wouldUpdate += 1;
     const newStatus = dimeCanon;
+    const paymentRow = paymentRowForInvoicePlan(row);
+    const paymentIdStr = String(row.PaymentId);
 
     if (dryRun) {
-      const wouldSyncInvoice = !!(
-        row.InvoiceId &&
-        isSuccessfulPaymentRecordStatus(newStatus) &&
-        !isSuccessfulPaymentRecordStatus(row.Status)
+      const plan = await getPaymentStatusInvoiceAdjustmentPlan(
+        pool,
+        sql,
+        paymentIdStr,
+        paymentRow,
+        newStatus,
+        true
       );
+      const wouldSyncInvoice = plan.kind === 'sync';
+      const wouldUnfulfillInvoice = plan.kind === 'unfulfill';
       outRows.push({
         ...base,
         dbCanonical: dbCanon,
@@ -298,58 +366,112 @@ async function runAudit(params) {
         inSync: false,
         skipped: false,
         error: null,
-        wouldSyncInvoice
+        wouldSyncInvoice,
+        wouldUnfulfillInvoice,
+        invoiceAdjustmentKind: plan.kind,
+        invoicePlanReason: plan.invoiceSync?.reason,
+        invoicePlanWarnings: plan.invoiceSync?.warnings
       });
       continue;
     }
 
-    const upd = await pool
-      .request()
-      .input('paymentId', sql.UniqueIdentifier, row.PaymentId)
-      .input('tenantId', sql.UniqueIdentifier, tenantId)
-      .input('status', sql.NVarChar(50), newStatus)
-      .query(`
-        UPDATE oe.Payments
-        SET Status = @status, ModifiedDate = GETUTCDATE()
-        WHERE PaymentId = @paymentId AND TenantId = @tenantId
-      `);
-
-    if (upd.rowsAffected && upd.rowsAffected[0] > 0) {
-      updated += 1;
-    }
-
-    let invoiceSync = { applied: false, reason: 'skipped' };
-    try {
-      invoiceSync = await syncGroupInvoiceAfterPaymentStatusChange(pool, sql, {
-        invoiceId: row.InvoiceId,
-        paymentAmount: row.Amount,
-        previousStatus: row.Status,
-        newStatus
-      });
-    } catch (invErr) {
-      console.error('dimePaymentStatusAudit invoice sync:', invErr);
-      invoiceSync = { applied: false, reason: invErr.message || 'invoice_sync_error' };
-    }
-    if (invoiceSync.applied) {
-      invoicesSynced += 1;
-    }
-
-    outRows.push({
-      ...base,
-      dbCanonical: dbCanon,
-      dimeCanonical: dimeCanon,
-      dimeTransactionStatus: transactionStatusRaw,
+    const plan = await getPaymentStatusInvoiceAdjustmentPlan(
+      pool,
+      sql,
+      paymentIdStr,
+      paymentRow,
       newStatus,
-      currentStatus: newStatus,
-      inSync: true,
-      skipped: false,
-      error: null,
-      applied: true,
-      invoiceSynced: invoiceSync.applied,
-      invoiceSyncReason: invoiceSync.reason,
-      invoiceNewPaidAmount: invoiceSync.newPaidAmount,
-      invoiceStatus: invoiceSync.invoiceStatus
-    });
+      true
+    );
+
+    const transaction = new sql.Transaction(pool);
+    let invoiceSync = { applied: false, reason: plan.invoiceSync?.reason || 'skipped' };
+    try {
+      await transaction.begin();
+
+      const upd = await transaction
+        .request()
+        .input('paymentId', sql.UniqueIdentifier, row.PaymentId)
+        .input('tenantId', sql.UniqueIdentifier, tenantId)
+        .input('status', sql.NVarChar(50), newStatus)
+        .query(`
+          UPDATE oe.Payments
+          SET Status = @status, ModifiedDate = GETUTCDATE()
+          WHERE PaymentId = @paymentId AND TenantId = @tenantId
+        `);
+
+      const affected = upd.rowsAffected && upd.rowsAffected[0] > 0;
+      if (!affected) {
+        await transaction.rollback();
+        outRows.push({
+          ...base,
+          dbCanonical: dbCanon,
+          dimeCanonical: dimeCanon,
+          dimeTransactionStatus: transactionStatusRaw,
+          newStatus,
+          inSync: false,
+          skipped: false,
+          error: 'payment_update_no_rows',
+          applied: false
+        });
+        continue;
+      }
+
+      if (plan.kind) {
+        invoiceSync = await applyPaymentStatusInvoiceAdjustmentInTxn(
+          transaction,
+          sql,
+          plan.kind,
+          paymentRow,
+          newStatus
+        );
+      }
+
+      await transaction.commit();
+      updated += 1;
+
+      if (invoiceSync.applied) {
+        invoicesSynced += 1;
+      }
+
+      outRows.push({
+        ...base,
+        dbCanonical: dbCanon,
+        dimeCanonical: dimeCanon,
+        dimeTransactionStatus: transactionStatusRaw,
+        newStatus,
+        currentStatus: newStatus,
+        inSync: true,
+        skipped: false,
+        error: null,
+        applied: true,
+        invoiceSynced: invoiceSync.applied,
+        invoiceSyncReason: invoiceSync.reason,
+        invoiceNewPaidAmount: invoiceSync.newPaidAmount,
+        invoiceStatus: invoiceSync.invoiceStatus,
+        invoiceAdjustmentKind: plan.kind,
+        invoicePlanWarnings: plan.invoiceSync?.warnings
+      });
+    } catch (txnErr) {
+      try {
+        await transaction.rollback();
+      } catch (_rbErr) {
+        /* ignore */
+      }
+      console.error('dimePaymentStatusAudit transaction:', txnErr);
+      errors += 1;
+      outRows.push({
+        ...base,
+        dbCanonical: dbCanon,
+        dimeCanonical: dimeCanon,
+        dimeTransactionStatus: transactionStatusRaw,
+        newStatus,
+        inSync: false,
+        skipped: false,
+        error: txnErr.message || String(txnErr),
+        applied: false
+      });
+    }
   }
 
   return {
@@ -359,6 +481,11 @@ async function runAudit(params) {
     endDate,
     hoursBack,
     limit,
+    successRecheckDays,
+    secondaryLimit,
+    prioritizeSuccessfulFirst,
+    passAPrimaryCount: passARows.length,
+    passBCount: passBRows.length,
     examined,
     inSync,
     skipped,
@@ -370,26 +497,4 @@ async function runAudit(params) {
   };
 }
 
-/**
- * Tenants that have at least one DIME payment row in the lookback window (for scheduling per-tenant audit).
- * @param {number} hoursBack 1–168
- */
-async function listTenantIdsForDimeAudit(hoursBack) {
-  const hb = Math.min(168, Math.max(1, Number(hoursBack) || 48));
-  const pool = await getPool();
-  const result = await pool
-    .request()
-    .input('hoursBack', sql.Int, hb)
-    .query(`
-      SELECT DISTINCT p.TenantId
-      FROM oe.Payments p
-      WHERE LOWER(ISNULL(p.Processor, '')) LIKE '%dime%'
-        AND p.ProcessorTransactionId IS NOT NULL
-        AND LTRIM(RTRIM(CAST(p.ProcessorTransactionId AS NVARCHAR(128)))) <> ''
-        AND (p.TransactionType IS NULL OR p.TransactionType = 'Payment')
-        AND p.PaymentDate >= DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME())
-    `);
-  return (result.recordset || []).map((r) => String(r.TenantId));
-}
-
-module.exports = { runAudit, listTenantIdsForDimeAudit };
+module.exports = { runAudit, loadCandidateRows, mergeRowsByPaymentId };
