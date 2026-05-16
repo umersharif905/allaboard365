@@ -16,6 +16,16 @@ const {
 const oePaymentStatus = require('../shared/payment-status');
 const { recordIntegrationError } = require('../shared/integrationErrors');
 
+/** FailureReason persisted on CC/ACH charge webhooks when status is not Completed. */
+function storedFailureReasonForNonSuccessfulChargeWebhook(data, status) {
+  if (!data || typeof data !== 'object' || status === 'Completed') return null;
+  const formatted = oePaymentStatus.formatDimeChargeFailureReasonForStorage(data);
+  if (formatted && String(formatted).trim() !== '') return String(formatted).trim();
+  const raw = data.failure_reason;
+  if (typeof raw === 'string' && raw.trim() !== '') return raw.trim();
+  return null;
+}
+
 const INVOICE_API_BASE_URL = process.env.BACKEND_API_URL || process.env.OE_BACKEND_URL || '';
 const INVOICE_API_KEY = process.env.SCHEDULED_JOB_API_KEY || '';
 
@@ -1094,7 +1104,7 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
 
     // Generate email content - Follow same table-based format as other emails
     const subject = `Payment Failed - $${paymentData.amount}${attemptDisplay}`;
-    const failureReason = paymentData.failure_reason || paymentData.return_reason || paymentData.chargeback_reason || 'Unknown';
+    const failureReason = oePaymentStatus.formatDimeRecurringFailureReasonForStorage(paymentData);
     
     const emailBody = `
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -1370,7 +1380,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
       .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
       .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
       .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
-      .input('failureReason', sql.NVarChar(sql.MAX), status === 'Completed' ? null : (data.failure_reason || null))
+      .input('failureReason', sql.NVarChar(sql.MAX), storedFailureReasonForNonSuccessfulChargeWebhook(data, status))
       .query(`
         UPDATE oe.Payments
         SET ProcessorTransactionId = @processorTransactionId,
@@ -1407,7 +1417,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
             amount: amount,
             payment_method: paymentMethod,
             transaction_id: transactionId,
-            failure_reason: data.failure_reason
+            failure_reason: storedFailureReasonForNonSuccessfulChargeWebhook(data, status)
           },
           logger,
           existingGroupId,
@@ -1476,7 +1486,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
       .input('attemptNumber', sql.Int, attemptInfo.attemptNumber)
       .input('originalPaymentId', sql.UniqueIdentifier, attemptInfo.originalPaymentId)
       .input('consecutiveFailures', sql.Int, attemptInfo.consecutiveFailures)
-      .input('failureReason', sql.NVarChar(sql.MAX), data.failure_reason || null)
+      .input('failureReason', sql.NVarChar(sql.MAX), storedFailureReasonForNonSuccessfulChargeWebhook(data, status))
       .input('lastFailureDate', sql.DateTime2, status === 'Failed' ? new Date() : null)
       .query(`
         INSERT INTO oe.Payments (
@@ -1511,7 +1521,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
           amount: amount,
           payment_method: paymentMethod,
           transaction_id: transactionId,
-          failure_reason: data.failure_reason,
+          failure_reason: storedFailureReasonForNonSuccessfulChargeWebhook(data, status),
           attempt_number: attemptInfo.attemptNumber
         }, logger, groupId, tenantId, false, null, agentId);
       } catch (emailError) {
@@ -1610,7 +1620,11 @@ async function handleCreditCardChargeback(pool, data, webhookEventId, logger) {
   // NEW DIME WEBHOOK FORMAT
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
-  const reason = data.status_text || data.chargeback_reason || data.reason || 'Unknown';
+  const synthesizedChargebackReason = oePaymentStatus.formatDimeChargeFailureReasonForStorage(data);
+  const reason =
+    synthesizedChargebackReason && synthesizedChargebackReason.trim()
+      ? synthesizedChargebackReason.trim()
+      : (data.status_text || data.chargeback_reason || data.reason || 'Unknown');
 
   logger.error(`Credit Card Chargeback: Transaction ${transactionId}, Amount: $${amount}, Reason: ${reason}`);
 
@@ -1780,7 +1794,7 @@ async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, tr
       .input('productCommissions', sql.NVarChar(sql.MAX), productCommissionsJSON)
       .input('productVendorAmounts', sql.NVarChar(sql.MAX), productVendorAmountsJSON)
       .input('productOwnerAmounts', sql.NVarChar(sql.MAX), productOwnerAmountsJSON)
-      .input('failureReason', sql.NVarChar(sql.MAX), status === 'Completed' ? null : (data.failure_reason || null))
+      .input('failureReason', sql.NVarChar(sql.MAX), storedFailureReasonForNonSuccessfulChargeWebhook(data, status))
       .query(`
         UPDATE oe.Payments
         SET ProcessorTransactionId = @processorTransactionId,
@@ -1806,7 +1820,7 @@ async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, tr
             amount,
             payment_method: paymentMethod,
             transaction_id: transactionId,
-            failure_reason: data.failure_reason
+            failure_reason: storedFailureReasonForNonSuccessfulChargeWebhook(data, status)
           },
           logger,
           invoice.GroupId,
@@ -1874,7 +1888,7 @@ async function handleACHChargeWithInvoice(pool, data, webhookEventId, logger, tr
           amount,
           payment_method: paymentMethod,
           transaction_id: transactionId,
-          failure_reason: data.failure_reason
+          failure_reason: storedFailureReasonForNonSuccessfulChargeWebhook(data, status)
         },
         logger,
         invoice.GroupId,
@@ -1970,7 +1984,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
       .input('productCommissions', sql.NVarChar(sql.MAX), pcJson)
       .input('productVendorAmounts', sql.NVarChar(sql.MAX), pvJson)
       .input('productOwnerAmounts', sql.NVarChar(sql.MAX), poJson)
-      .input('failureReason', sql.NVarChar(sql.MAX), status === 'Completed' ? null : (data.failure_reason || null))
+      .input('failureReason', sql.NVarChar(sql.MAX), storedFailureReasonForNonSuccessfulChargeWebhook(data, status))
       .query(`
         UPDATE oe.Payments
         SET ProcessorTransactionId = @processorTransactionId,
@@ -2004,7 +2018,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
           amount: amount,
           payment_method: paymentMethod,
           transaction_id: transactionId,
-          failure_reason: data.failure_reason
+          failure_reason: storedFailureReasonForNonSuccessfulChargeWebhook(data, status)
         }, logger, existingGroupId, tenantId, false, null, agentId);
       } catch (emailError) {
         logger.error('Failed to send payment failure notification:', emailError);
@@ -2097,7 +2111,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
         amount: amount,
         payment_method: paymentMethod,
         transaction_id: transactionId,
-        failure_reason: data.failure_reason
+        failure_reason: storedFailureReasonForNonSuccessfulChargeWebhook(data, status)
       }, logger, groupId, tenantId, false, null, agentId);
     } catch (emailError) {
       logger.error('Failed to send payment failure notification:', emailError);
@@ -2110,7 +2124,11 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
   const returnCode = data.status_code || data.return_code || data.code;
-  const returnReason = data.status_text || data.return_reason || data.reason || 'Unknown';
+  const synthesizedReturn = oePaymentStatus.formatDimeChargeFailureReasonForStorage(data);
+  const returnReason =
+    synthesizedReturn && synthesizedReturn.trim()
+      ? synthesizedReturn.trim()
+      : (data.status_text || data.return_reason || data.reason || 'Unknown');
   const paymentMethod = data.transaction_type || data.payment_method || data.paymentMethod || 'ACH';
 
   logger.error(`ACH Payment Return: Transaction ${transactionId}, Amount: $${amount}, Code: ${returnCode}, Method: ${paymentMethod}`);
@@ -2574,8 +2592,7 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
   const amount = parseFloat(data.amount) || 0;
   const customerUuid = data.customer_uuid;
-  const statusText = data.status_text;
-  const failureReason = data.status_text || data.failure_reason || data.status_code || 'Unknown';
+  const failureReason = oePaymentStatus.formatDimeRecurringFailureReasonForStorage(data);
   
   // Try to find schedule_id (DIME JSON may send numeric schedule_id; Tedious NVarChar requires a string)
   let scheduleId = data.schedule_id ?? data.recurring_payment_id;

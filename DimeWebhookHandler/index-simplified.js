@@ -5,6 +5,7 @@
 
 const sql = require('mssql');
 const crypto = require('crypto');
+const oePaymentStatus = require('../shared/payment-status');
 
 // Database configuration
 const config = {
@@ -552,7 +553,7 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
   const scheduleId = data.schedule_id || data.recurring_payment_id;
   const transactionId = data.transaction_id;
   const amount = data.amount;
-  const failureReason = data.failure_reason || 'Unknown';
+  const failureReason = oePaymentStatus.formatDimeRecurringFailureReasonForStorage(data);
 
   logger.error(`Recurring Payment Failed: Schedule ${scheduleId}, Transaction ${transactionId}, Amount: $${amount}, Reason: ${failureReason}`);
 

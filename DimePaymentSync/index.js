@@ -569,7 +569,24 @@ module.exports = async function (context, req) {
           const scheduleId = scheduleIdRaw != null ? String(scheduleIdRaw) : null;
           if (!scheduleId) continue;
           const amount = parseFloat(schedule.amount) || 0;
-          const failureReason = schedule.error || schedule.failure_reason || 'Failed (from recurring list)';
+          const trimmedLastRunErr =
+            schedule.last_run_error_message != null &&
+            String(schedule.last_run_error_message).trim() !== ''
+              ? String(schedule.last_run_error_message).trim()
+              : null;
+          const fromExplicitFields =
+            (schedule.error != null && String(schedule.error).trim() !== ''
+              ? String(schedule.error).trim()
+              : null) ||
+            (schedule.failure_reason != null && String(schedule.failure_reason).trim() !== ''
+              ? String(schedule.failure_reason).trim()
+              : null) ||
+            trimmedLastRunErr;
+          const synthesized = oePaymentStatus.formatDimeRecurringFailureReasonForStorage(schedule);
+          const failureReason =
+            fromExplicitFields ||
+            (synthesized !== 'Unknown' ? synthesized : null) ||
+            'Failed (from recurring list)';
           const syntheticId = `dime-failed-${scheduleId}-${lastRunDate.toISOString().replace(/\.\d{3}Z$/, 'Z')}`;
 
           const existing = await pool.request()

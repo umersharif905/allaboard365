@@ -352,7 +352,7 @@ async function buildGroupProductSnapshotsForPeriod(pool, groupId, periodStart, p
       .query(`
         SELECT
           e.ProductId,
-          COUNT(*) AS EnrollmentCount,
+          COUNT(DISTINCT m.HouseholdId) AS EnrollmentCount,
           SUM(COALESCE(e.Commission, 0)) AS CommissionAmount,
           SUM(COALESCE(e.NetRate, 0)) AS VendorAmount,
           SUM(COALESCE(e.OverrideRate, 0)) AS OverrideAmount

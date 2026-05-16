@@ -204,6 +204,75 @@ function sqlSuccessfulPaymentPredicate(columnRef) {
   return `(LOWER(LTRIM(RTRIM(${columnRef}))) IN (${inList}))`;
 }
 
+/**
+ * DIME recurring_payment_failed payloads send `transaction_error` + `transaction_error_code`.
+ * Older samples used `failure_reason`. Keep in sync with ../../../shared/payment-status/index.js.
+ *
+ * @param {Record<string, unknown>} data
+ * @returns {string}
+ */
+function formatDimeRecurringFailureReasonForStorage(data) {
+  if (!data || typeof data !== 'object') return 'Unknown';
+  const legacy = typeof data.failure_reason === 'string' ? data.failure_reason.trim() : '';
+  if (legacy) return legacy;
+
+  const errMsg = typeof data.transaction_error === 'string' ? data.transaction_error.trim() : '';
+  const errCode = data.transaction_error_code != null ? String(data.transaction_error_code).trim() : '';
+
+  const alt = typeof data.error_message === 'string' ? data.error_message.trim() : '';
+
+  const body = errMsg || alt;
+  if (body) {
+    if (errCode) return `[${errCode}] ${body}`;
+    return body;
+  }
+  if (errCode) return `[${errCode}] (no message from processor)`;
+
+  const chargeFallback = formatDimeChargeFailureReasonForStorage(data);
+  if (chargeFallback) return chargeFallback;
+
+  return 'Unknown';
+}
+
+/**
+ * CC/ACH charge decline webhooks — align with docs/oe_payment_manager/dime-webhook-format.md.
+ *
+ * @param {Record<string, unknown>} data
+ * @returns {string}
+ */
+function formatDimeChargeFailureReasonForStorage(data) {
+  if (!data || typeof data !== 'object') return '';
+  const legacy = typeof data.failure_reason === 'string' ? data.failure_reason.trim() : '';
+  if (legacy) return legacy;
+
+  const ret = typeof data.return_reason === 'string' ? data.return_reason.trim() : '';
+  if (ret) return ret;
+  const cb = typeof data.chargeback_reason === 'string' ? data.chargeback_reason.trim() : '';
+  if (cb) return cb;
+
+  const errMsg = typeof data.transaction_error === 'string' ? data.transaction_error.trim() : '';
+  const errCode = data.transaction_error_code != null ? String(data.transaction_error_code).trim() : '';
+  if (errMsg) {
+    return errCode ? `[${errCode}] ${errMsg}` : errMsg;
+  }
+  if (errCode) return `[${errCode}] (no message from processor)`;
+
+  const alt = typeof data.error_message === 'string' ? data.error_message.trim() : '';
+  if (alt) return alt;
+
+  let code = data.status_code != null ? String(data.status_code).trim() : '';
+  if (code === '0') code = '00';
+  const text = String(data.status_text ?? data.statusText ?? '').trim();
+  if (code && text) return `[${code}] ${text}`;
+  if (text) return text;
+  if (code && code !== '00') return `Decline or error (processor code ${code})`;
+
+  const ts = String(data.transaction_status ?? data.transactionStatus ?? '').trim();
+  if (ts) return ts;
+
+  return '';
+}
+
 module.exports = {
   isDimeChargeApproved,
   shouldTreatRecurringSuccessWebhookAsDeclined,
@@ -216,4 +285,6 @@ module.exports = {
   SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL,
   sqlSuccessfulPaymentOrderKeyExpr,
   sqlSuccessfulPaymentPredicate,
+  formatDimeRecurringFailureReasonForStorage,
+  formatDimeChargeFailureReasonForStorage,
 };
