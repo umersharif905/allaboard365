@@ -2316,6 +2316,87 @@ async function handleDepositSent(pool, data, webhookEventId, logger) {
   logger.success(`Deposit sent processed: ${depositId}`);
 }
 
+/**
+ * Resolve individual recurring context by DIME schedule id.
+ * oe.Payments.RecurringScheduleId can lag after DIME schedule recreation; IndividualRecurringSchedules is authoritative.
+ */
+async function resolveIndividualRecurringContext(pool, scheduleId, logger) {
+  const scheduleIdStr = String(scheduleId).trim();
+
+  const paymentResult = await pool.request()
+    .input('scheduleId', sql.NVarChar(255), scheduleIdStr)
+    .query(`
+      SELECT TOP 1
+        p.HouseholdId,
+        p.EnrollmentId,
+        p.GroupId,
+        p.TenantId,
+        p.AgentId
+      FROM oe.Payments p
+      WHERE LTRIM(RTRIM(CAST(p.RecurringScheduleId AS NVARCHAR(255)))) = LTRIM(RTRIM(@scheduleId))
+      ORDER BY p.CreatedDate DESC
+    `);
+
+  if (paymentResult.recordset.length > 0) {
+    const row = paymentResult.recordset[0];
+    return {
+      householdId: row.HouseholdId,
+      enrollmentId: row.EnrollmentId,
+      groupId: row.GroupId,
+      tenantId: row.TenantId,
+      agentId: row.AgentId,
+      source: 'oe.Payments'
+    };
+  }
+
+  try {
+    const irsResult = await pool.request()
+      .input('scheduleId', sql.NVarChar(255), scheduleIdStr)
+      .query(`
+        SELECT TOP 1 irs.HouseholdId, irs.TenantId
+        FROM oe.IndividualRecurringSchedules irs
+        WHERE irs.IsActive = 1
+          AND LTRIM(RTRIM(CAST(irs.DimeScheduleId AS NVARCHAR(255)))) = LTRIM(RTRIM(@scheduleId))
+        ORDER BY irs.ModifiedDate DESC, irs.CreatedDate DESC
+      `);
+
+    if (irsResult.recordset.length > 0) {
+      const row = irsResult.recordset[0];
+      let agentId = null;
+      try {
+        const agentResult = await pool.request()
+          .input('householdId', sql.UniqueIdentifier, row.HouseholdId)
+          .query(`
+            SELECT TOP 1 m.AgentId
+            FROM oe.Members m
+            WHERE m.HouseholdId = @householdId AND m.RelationshipType = N'P'
+          `);
+        if (agentResult.recordset.length > 0) {
+          agentId = agentResult.recordset[0].AgentId;
+        }
+      } catch (agentErr) {
+        logger.warn(`Could not get AgentId for household ${row.HouseholdId}: ${agentErr.message}`);
+      }
+
+      return {
+        householdId: row.HouseholdId,
+        enrollmentId: null,
+        groupId: null,
+        tenantId: row.TenantId,
+        agentId,
+        source: 'IndividualRecurringSchedules'
+      };
+    }
+  } catch (err) {
+    const msg = String(err.message || '');
+    if (!msg.includes('Invalid object name') && !msg.includes('IndividualRecurringSchedules')) {
+      logger.warn(`IndividualRecurringSchedules lookup for schedule ${scheduleIdStr}: ${msg}`);
+    }
+  }
+
+  return null;
+}
+
 async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger) {
   // NEW DIME WEBHOOK FORMAT:
   // - transaction_number instead of transaction_id
@@ -2425,6 +2506,8 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     return;
   }
 
+  const paymentStatus = oePaymentStatus.mapRecurringSuccessWebhookToDbStatus(data);
+
   // First, try to find if this is a GROUP recurring payment (with invoice linkage)
   const groupResult = await pool.request()
     .input('scheduleId', sql.NVarChar(255), scheduleId)
@@ -2489,33 +2572,19 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
     logger.info(`Found GROUP recurring payment for GroupId: ${groupId}, LocationId: ${locationId}, InvoiceId: ${invoiceId}, AgentId: ${agentId}`);
   } else {
     // Not a group payment - check if it's an INDIVIDUAL recurring payment
-    // Look for existing payment record with this RecurringScheduleId
-    const individualResult = await pool.request()
-      .input('scheduleId', sql.NVarChar(255), scheduleId)
-      .query(`
-        SELECT TOP 1 
-          p.HouseholdId,
-          p.EnrollmentId,
-          p.GroupId,
-          p.TenantId,
-          p.AgentId
-        FROM oe.Payments p
-        WHERE p.RecurringScheduleId = @scheduleId
-        ORDER BY p.CreatedDate DESC
-      `);
+    const individualContext = await resolveIndividualRecurringContext(pool, scheduleId, logger);
 
-    if (individualResult.recordset.length === 0) {
+    if (!individualContext) {
       throw new Error(`No group or individual payment found for recurring schedule: ${scheduleId}`);
     }
 
-    const individualData = individualResult.recordset[0];
-    householdId = individualData.HouseholdId;
-    enrollmentId = individualData.EnrollmentId;
-    groupId = individualData.GroupId;
-    tenantId = individualData.TenantId;
-    agentId = individualData.AgentId;
+    householdId = individualContext.householdId;
+    enrollmentId = individualContext.enrollmentId;
+    groupId = individualContext.groupId;
+    tenantId = individualContext.tenantId;
+    agentId = individualContext.agentId;
     isIndividualRecurring = true;
-    logger.info(`Found INDIVIDUAL recurring payment for HouseholdId: ${householdId}`);
+    logger.info(`Found INDIVIDUAL recurring payment for HouseholdId: ${householdId} (via ${individualContext.source})`);
   }
 
   // Single source of truth: create oe.Payments row (same function used by DimePaymentSync)
@@ -2527,14 +2596,15 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
   await createRecurringPaymentRecord(pool, {
     groupId, tenantId, householdId, enrollmentId, agentId, locationId, invoiceId,
     scheduleId, amount, processorTransactionId: transactionId, paymentDate: new Date(),
-    paymentStatus: 'Completed', paymentMethod: 'Recurring',
+    paymentStatus,
+    paymentMethod: 'Recurring',
     nextBillingDate, webhookEventId
   }, logger);
 
   logger.success(`Recurring payment success processed for ${isIndividualRecurring ? 'household' : 'group'}: ${isIndividualRecurring ? householdId : groupId}, next billing: ${nextBillingDate.toISOString().split('T')[0]}`);
   
   // Update invoice status to Paid (for group payments with invoices)
-  if (invoiceId) {
+  if (invoiceId && oePaymentStatus.isSuccessfulPaymentRecordStatus(paymentStatus)) {
     try {
       await pool.request()
         .input('invoiceId', sql.UniqueIdentifier, invoiceId)
@@ -2625,6 +2695,32 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     }
   }
 
+  if (!scheduleId && customerUuid) {
+    try {
+      const indSched = await pool.request()
+        .input('customerUuid', sql.NVarChar(255), customerUuid)
+        .query(`
+          SELECT TOP 1 irs.DimeScheduleId
+          FROM oe.IndividualRecurringSchedules irs
+          INNER JOIN oe.Members m ON m.HouseholdId = irs.HouseholdId AND m.RelationshipType = N'P'
+          INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
+            AND mpm.ProcessorCustomerId = @customerUuid
+            AND mpm.Status = N'Active'
+          WHERE irs.IsActive = 1
+          ORDER BY irs.ModifiedDate DESC, irs.CreatedDate DESC
+        `);
+      if (indSched.recordset.length > 0) {
+        scheduleId = String(indSched.recordset[0].DimeScheduleId).trim();
+        logger.info(`Resolved individual schedule_id ${scheduleId} from IndividualRecurringSchedules for customer ${customerUuid}`);
+      }
+    } catch (err) {
+      const msg = String(err.message || '');
+      if (!msg.includes('Invalid object name') && !msg.includes('IndividualRecurringSchedules')) {
+        logger.warn(`IndividualRecurringSchedules schedule lookup: ${msg}`);
+      }
+    }
+  }
+
   logger.error(`Recurring Payment Failed: Schedule ${scheduleId}, Transaction ${transactionId}, Amount: $${amount}, Reason: ${failureReason}`);
 
   // First, try to find if this is a GROUP recurring payment (with invoice linkage)
@@ -2690,32 +2786,19 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     logger.info(`Found GROUP recurring payment failure for GroupId: ${groupId}, LocationId: ${locationId}, InvoiceId: ${invoiceId}, AgentId: ${agentId}`);
   } else {
     // Not a group payment - check if it's an INDIVIDUAL recurring payment
-    const individualResult = await pool.request()
-      .input('scheduleId', sql.NVarChar(255), scheduleId)
-      .query(`
-        SELECT TOP 1 
-          p.HouseholdId,
-          p.EnrollmentId,
-          p.GroupId,
-          p.TenantId,
-          p.AgentId
-        FROM oe.Payments p
-        WHERE p.RecurringScheduleId = @scheduleId
-        ORDER BY p.CreatedDate DESC
-      `);
+    const individualContext = await resolveIndividualRecurringContext(pool, scheduleId, logger);
 
-    if (individualResult.recordset.length === 0) {
+    if (!individualContext) {
       throw new Error(`No group or individual payment found for recurring schedule: ${scheduleId}`);
     }
 
-    const individualData = individualResult.recordset[0];
-    householdId = individualData.HouseholdId;
-    enrollmentId = individualData.EnrollmentId;
-    groupId = individualData.GroupId;
-    tenantId = individualData.TenantId;
-    agentId = individualData.AgentId;
+    householdId = individualContext.householdId;
+    enrollmentId = individualContext.enrollmentId;
+    groupId = individualContext.groupId;
+    tenantId = individualContext.tenantId;
+    agentId = individualContext.agentId;
     isIndividualRecurring = true;
-    logger.info(`Found INDIVIDUAL recurring payment failure for HouseholdId: ${householdId}`);
+    logger.info(`Found INDIVIDUAL recurring payment failure for HouseholdId: ${householdId} (via ${individualContext.source})`);
   }
 
   // Single source of truth: create failed oe.Payments row (same as DimePaymentSync failed-from-list)

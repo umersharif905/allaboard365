@@ -86,6 +86,9 @@ function isDimePendingFlagTrue(data) {
 function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
   const transactionStatus = options.transactionStatus ?? data?.transaction_status ?? data?.transactionStatus;
   if (data && typeof data === 'object') {
+    const tsEarly = String(transactionStatus || '').toLowerCase();
+    if (tsEarly.includes('pending') || tsEarly.includes('processing')) return 'Pending';
+
     let code = data.status_code != null ? String(data.status_code).trim() : '';
     if (code === '0') code = '00';
     const text = String(data.status_text ?? data.statusText ?? '');
@@ -102,10 +105,19 @@ function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
     return 'Completed';
   }
   if (ts.includes('pending') || ts.includes('processing')) return 'Pending';
-  if (ts.includes('failed') || ts.includes('declined') || ts.includes('returned')) return 'Failed';
+  if (ts.includes('failed') || ts.includes('declined') || ts.includes('returned') || ts.includes('rejected')) {
+    return 'Failed';
+  }
   // List API posted-credit labels (empty status_code/text is normal on list rows).
-  if (ts.includes('cc_credit') && !ts.includes('pending')) return 'Completed';
-  if (ts.includes('ach_payment_credit') && !ts.includes('pending')) return 'Completed';
+  if (ts.includes('cc_credit') && !ts.includes('pending') && !ts.includes('rejected')) return 'Completed';
+  if (
+    ts.includes('ach_payment_credit') &&
+    !ts.includes('pending') &&
+    !ts.includes('rejected') &&
+    !ts.includes('failed')
+  ) {
+    return 'Completed';
+  }
   // Settlement / sweep lines in merchant activity — not a card/ACH charge row; do not map to Pending.
   if (ts === 'deposit') return 'Unknown';
   const statusMap = {
@@ -145,6 +157,28 @@ function mapChargeWebhookMappedStatusToDbStatus(mapped) {
   if (m === 'Failed') return 'Failed';
   if (m === 'Refunded' || m === 'Voided' || m === 'Canceled') return m;
   return 'Pending';
+}
+
+function mapRecurringSuccessWebhookToDbStatus(dimePayload) {
+  const txType = String(
+    dimePayload?.transaction_type ?? dimePayload?.transactionType ?? ''
+  )
+    .trim()
+    .toUpperCase();
+  if (txType === 'ACH') {
+    const ts = String(
+      dimePayload?.transaction_status ?? dimePayload?.transactionStatus ?? ''
+    ).trim();
+    if (!ts) {
+      return 'Pending';
+    }
+    const lower = ts.toLowerCase();
+    if (lower.includes('pending') || lower.includes('processing')) {
+      return 'Pending';
+    }
+  }
+  const mapped = mapDimePayloadToPaymentRecordStatus(dimePayload);
+  return mapChargeWebhookMappedStatusToDbStatus(mapped);
 }
 
 /**
@@ -279,6 +313,7 @@ module.exports = {
   isDimePendingFlagTrue,
   mapDimePayloadToPaymentRecordStatus,
   mapChargeWebhookMappedStatusToDbStatus,
+  mapRecurringSuccessWebhookToDbStatus,
   mapDimeRowToPaymentRecordStatus,
   isSuccessfulPaymentRecordStatus,
   SUCCESSFUL_PAYMENT_RECORD_STATUSES: SUCCESSFUL_PAYMENT_RECORD_STATUSES_EXACT,

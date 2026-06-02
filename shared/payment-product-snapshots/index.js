@@ -91,8 +91,76 @@ async function resolveGroupPeriodFromInvoiceOrPaymentDate(pool, invoiceId, payme
 }
 
 /**
- * Fee enrollment rows only (SystemFee / PaymentProcessingFee / SetupFee) — single source for audit + getPricingFields.
- * Matches PaymentAuditService.computeHouseholdFeeBuckets semantics.
+ * Processing fee breakdown: included on product rows + remainder on PPF enrollment row.
+ * Legacy shim: when IncludedPPF > 0 and PPF row >= included, treat PPF as full total (pre-backfill rows).
+ */
+function resolveProcessingFeeTotalFromParts(includedOnProducts, remainderOnFeeRow) {
+  const included = n2(includedOnProducts);
+  const remainder = n2(remainderOnFeeRow);
+  if (included > 0 && remainder >= included - 0.01) {
+    return { includedOnProducts: included, remainderOnFeeRow: remainder, total: remainder, isLegacyFullPpfRow: true };
+  }
+  return {
+    includedOnProducts: included,
+    remainderOnFeeRow: remainder,
+    total: n2(included + remainder),
+    isLegacyFullPpfRow: false
+  };
+}
+
+/**
+ * Household processing fee: included allocations on product enrollments + PPF row remainder.
+ */
+async function getHouseholdProcessingFeeBreakdownAsOf(pool, householdId, asOfDate, sqlTypes = sql) {
+  const result = await pool.request()
+    .input('householdId', sqlTypes.UniqueIdentifier, householdId)
+    .input('asOfDate', sqlTypes.DateTime, asOfDate)
+    .query(`
+        SELECT
+          ISNULL(SUM(CASE
+            WHEN (e.EnrollmentType IS NULL OR e.EnrollmentType = 'Product')
+              AND e.ProductId IS NOT NULL
+              AND e.ProductId <> '${ZERO_GUID}'
+            THEN COALESCE(e.IncludedPaymentProcessingFeeAmount, 0)
+            ELSE 0
+          END), 0) AS IncludedOnProducts,
+          ISNULL(SUM(CASE WHEN e.EnrollmentType = 'PaymentProcessingFee'
+            THEN COALESCE(e.PremiumAmount, 0) ELSE 0 END), 0) AS RemainderOnFeeRow
+        FROM oe.Enrollments e
+        WHERE e.HouseholdId = @householdId
+          AND e.EffectiveDate <= @asOfDate
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > @asOfDate)
+      `);
+
+  const row = result.recordset?.[0] || {};
+  return resolveProcessingFeeTotalFromParts(row.IncludedOnProducts, row.RemainderOnFeeRow);
+}
+
+/**
+ * Group processing fee included-on-products sum for a billing window.
+ */
+async function getGroupIncludedProcessingFeeForPeriod(pool, groupId, periodStart, periodEnd, sqlTypes = sql) {
+  const result = await pool.request()
+    .input('groupId', sqlTypes.UniqueIdentifier, groupId)
+    .input('periodStart', sqlTypes.Date, periodStart)
+    .input('periodEnd', sqlTypes.Date, periodEnd)
+    .query(`
+        SELECT ISNULL(SUM(COALESCE(e.IncludedPaymentProcessingFeeAmount, 0)), 0) AS IncludedOnProducts
+        FROM oe.Enrollments e
+        INNER JOIN oe.Members m ON e.MemberId = m.MemberId
+        WHERE m.GroupId = @groupId
+          AND (e.EnrollmentType IS NULL OR e.EnrollmentType = 'Product')
+          AND e.ProductId IS NOT NULL
+          AND e.ProductId <> '${ZERO_GUID}'
+          AND CAST(e.EffectiveDate AS DATE) <= @periodEnd
+          AND (e.TerminationDate IS NULL OR e.TerminationDate > @periodStart)
+      `);
+  return n2(result.recordset?.[0]?.IncludedOnProducts);
+}
+
+/**
+ * Fee enrollment rows (SystemFee / PaymentProcessingFee / SetupFee) — single source for audit + getPricingFields.
+ * processingFeeAmount = full household processing fee (included on products + PPF remainder), with legacy shim.
  */
 async function getHouseholdFeeBucketsAsOf(pool, householdId, asOfDate, sqlTypes = sql) {
   const result = await pool.request()
@@ -101,7 +169,6 @@ async function getHouseholdFeeBucketsAsOf(pool, householdId, asOfDate, sqlTypes 
     .query(`
         SELECT
           ISNULL(SUM(CASE WHEN e.EnrollmentType = 'SystemFee' THEN COALESCE(e.PremiumAmount, 0) ELSE 0 END), 0) AS SystemFees,
-          ISNULL(SUM(CASE WHEN e.EnrollmentType = 'PaymentProcessingFee' THEN COALESCE(e.PremiumAmount, 0) ELSE 0 END), 0) AS ProcessingFeeAmount,
           ISNULL(SUM(CASE WHEN e.EnrollmentType = 'SetupFee' THEN COALESCE(e.PremiumAmount, 0) ELSE 0 END), 0) AS SetupFee
         FROM oe.Enrollments e
         WHERE e.HouseholdId = @householdId
@@ -111,9 +178,13 @@ async function getHouseholdFeeBucketsAsOf(pool, householdId, asOfDate, sqlTypes 
       `);
 
   const row = result.recordset?.[0] || {};
+  const ppfBreakdown = await getHouseholdProcessingFeeBreakdownAsOf(pool, householdId, asOfDate, sqlTypes);
+
   return {
     systemFees: n2(row.SystemFees),
-    processingFeeAmount: n2(row.ProcessingFeeAmount),
+    processingFeeAmount: ppfBreakdown.total,
+    processingFeeRemainder: ppfBreakdown.remainderOnFeeRow,
+    processingFeeIncludedOnProducts: ppfBreakdown.includedOnProducts,
     setupFee: n2(row.SetupFee)
   };
 }
@@ -130,7 +201,7 @@ async function getGroupFeeBucketsForPeriod(pool, groupId, periodStart, periodEnd
     .query(`
         SELECT
           ISNULL(SUM(CASE WHEN e.EnrollmentType = 'SystemFee' THEN COALESCE(e.PremiumAmount, 0) ELSE 0 END), 0) AS SystemFees,
-          ISNULL(SUM(CASE WHEN e.EnrollmentType = 'PaymentProcessingFee' THEN COALESCE(e.PremiumAmount, 0) ELSE 0 END), 0) AS ProcessingFeeAmount,
+          ISNULL(SUM(CASE WHEN e.EnrollmentType = 'PaymentProcessingFee' THEN COALESCE(e.PremiumAmount, 0) ELSE 0 END), 0) AS PpfRemainderOnFeeRows,
           ISNULL(SUM(CASE WHEN e.EnrollmentType = 'SetupFee' THEN COALESCE(e.PremiumAmount, 0) ELSE 0 END), 0) AS SetupFee
         FROM oe.Enrollments e
         INNER JOIN oe.Members m ON e.MemberId = m.MemberId
@@ -141,9 +212,16 @@ async function getGroupFeeBucketsForPeriod(pool, groupId, periodStart, periodEnd
       `);
 
   const row = result.recordset?.[0] || {};
+  const includedOnProducts = await getGroupIncludedProcessingFeeForPeriod(
+    pool, groupId, periodStart, periodEnd, sqlTypes
+  );
+  const ppfParts = resolveProcessingFeeTotalFromParts(includedOnProducts, row.PpfRemainderOnFeeRows);
+
   return {
     systemFees: n2(row.SystemFees),
-    processingFeeAmount: n2(row.ProcessingFeeAmount),
+    processingFeeAmount: ppfParts.total,
+    processingFeeRemainder: ppfParts.remainderOnFeeRow,
+    processingFeeIncludedOnProducts: ppfParts.includedOnProducts,
     setupFee: n2(row.SetupFee)
   };
 }
@@ -446,6 +524,9 @@ module.exports = {
   householdAsOfDate,
   resolveGroupPeriodFromPaymentDate,
   resolveGroupPeriodFromInvoiceOrPaymentDate,
+  resolveProcessingFeeTotalFromParts,
+  getHouseholdProcessingFeeBreakdownAsOf,
+  getGroupIncludedProcessingFeeForPeriod,
   getHouseholdFeeBucketsAsOf,
   getGroupFeeBucketsForPeriod,
   getPricingFields,

@@ -797,6 +797,8 @@ class DimeService {
       types = ['ACH'];
     } else if (pm.includes('recurring')) {
       types = ['ACH', 'CC'];
+    } else if (pm === 'dime') {
+      types = ['ACH', 'CC'];
     } else if (pm.includes('card') || pm.includes('cc') || pm.includes('credit') || pm.includes('debit')) {
       types = ['CC'];
     } else {

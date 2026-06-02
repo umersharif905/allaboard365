@@ -33,6 +33,19 @@ function shouldSkipBecauseDbTerminal(canonical) {
   return canonical === 'Refunded' || canonical === 'Voided';
 }
 
+/** SET clause when reconciling oe.Payments.Status from DIME audit. */
+function auditPaymentStatusUpdateSetClause(newStatus) {
+  if (isSuccessfulPaymentRecordStatus(newStatus)) {
+    return 'Status = @status, FailureReason = NULL, ModifiedDate = GETUTCDATE()';
+  }
+  return 'Status = @status, ModifiedDate = GETUTCDATE()';
+}
+
+function isStaleAchSettlementFailureReason(reason) {
+  const r = String(reason || '').trim().toLowerCase();
+  return r.includes('ach_payment_credit_pending') || (r.includes('ach_payment') && r.includes('pending'));
+}
+
 function paymentRowForInvoicePlan(row) {
   return {
     InvoiceId: row.InvoiceId,
@@ -99,6 +112,9 @@ async function loadCandidateRows(pool, opts) {
     if (extraSqlInputs.successRecheckDays != null) {
       req.input('successRecheckDays', sql.Int, extraSqlInputs.successRecheckDays);
     }
+    if (extraSqlInputs.pendingLookbackDays != null) {
+      req.input('pendingLookbackDays', sql.Int, extraSqlInputs.pendingLookbackDays);
+    }
 
     const cols = [
       'p.PaymentId',
@@ -106,7 +122,8 @@ async function loadCandidateRows(pool, opts) {
       'p.Status',
       'p.PaymentMethod',
       'p.Processor',
-      'p.ProcessorTransactionId'
+      'p.ProcessorTransactionId',
+      'p.FailureReason'
     ];
     if (includeProcessorTransactionInfoId) {
       cols.push('p.ProcessorTransactionInfoId');
@@ -184,6 +201,14 @@ async function runAudit(params) {
   const prioritizeSuccessfulFirst = params.prioritizeSuccessfulFirst !== false;
   const successRecheckDays = Math.min(366, Math.max(0, Number(params.successRecheckDays) || 0));
   const secondaryLimit = Math.min(1000, Math.max(0, Number(params.secondaryLimit) || 0));
+  const pendingLookbackDays =
+    params.pendingLookbackDays != null && params.pendingLookbackDays !== ''
+      ? Math.min(366, Math.max(0, Number(params.pendingLookbackDays)))
+      : 14;
+  const pendingSecondaryLimit =
+    params.pendingSecondaryLimit != null && params.pendingSecondaryLimit !== ''
+      ? Math.min(1000, Math.max(0, Number(params.pendingSecondaryLimit)))
+      : 200;
 
   if (hoursBack && (startDate || endDate)) {
     throw new Error('Specify either hoursBack or startDate/endDate, not both');
@@ -220,6 +245,22 @@ async function runAudit(params) {
     });
     passBRows = bRows;
     rows = mergeRowsByPaymentId(passARows, passBRows);
+  }
+
+  let passCRows = [];
+  if (hoursBack && pendingLookbackDays > 0 && pendingSecondaryLimit > 0) {
+    const extraC = ` AND LOWER(LTRIM(p.Status)) = N'pending'
+      AND p.PaymentDate < DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME())
+      AND p.PaymentDate >= DATEADD(DAY, -@pendingLookbackDays, SYSUTCDATETIME())`;
+    const { rows: cRows } = await loadCandidateRows(pool, {
+      ...loadOptsBase,
+      limit: pendingSecondaryLimit,
+      extraWhere: extraC,
+      prioritizeSuccessfulFirst: false,
+      extraSqlInputs: { pendingLookbackDays }
+    });
+    passCRows = cRows;
+    rows = mergeRowsByPaymentId(rows, passCRows);
   }
 
   const outRows = [];
@@ -327,16 +368,45 @@ async function runAudit(params) {
 
     const mismatch = dbCanon !== dimeCanon;
     if (!mismatch) {
+      const staleFailure =
+        dbCanon === 'Completed' && isStaleAchSettlementFailureReason(row.FailureReason);
+      if (staleFailure && !dryRun) {
+        try {
+          await pool
+            .request()
+            .input('paymentId', sql.UniqueIdentifier, row.PaymentId)
+            .input('tenantId', sql.UniqueIdentifier, tenantId)
+            .query(`
+              UPDATE oe.Payments
+              SET FailureReason = NULL, ModifiedDate = GETUTCDATE()
+              WHERE PaymentId = @paymentId AND TenantId = @tenantId
+            `);
+          updated += 1;
+        } catch (clearErr) {
+          errors += 1;
+          outRows.push({
+            ...base,
+            dbCanonical: dbCanon,
+            dimeCanonical: dimeCanon,
+            error: clearErr.message || String(clearErr),
+            inSync: false,
+            skipped: false
+          });
+          continue;
+        }
+      }
       inSync += 1;
       outRows.push({
         ...base,
         dbCanonical: dbCanon,
         dimeCanonical: dimeCanon,
         dimeTransactionStatus: transactionStatusRaw,
-        newStatus: null,
+        newStatus: staleFailure ? 'Completed' : null,
         inSync: true,
         skipped: false,
-        error: null
+        error: null,
+        applied: staleFailure && !dryRun,
+        clearedStaleFailureReason: staleFailure
       });
       continue;
     }
@@ -396,7 +466,7 @@ async function runAudit(params) {
         .input('status', sql.NVarChar(50), newStatus)
         .query(`
           UPDATE oe.Payments
-          SET Status = @status, ModifiedDate = GETUTCDATE()
+          SET ${auditPaymentStatusUpdateSetClause(newStatus)}
           WHERE PaymentId = @paymentId AND TenantId = @tenantId
         `);
 
@@ -486,6 +556,9 @@ async function runAudit(params) {
     prioritizeSuccessfulFirst,
     passAPrimaryCount: passARows.length,
     passBCount: passBRows.length,
+    passCCount: passCRows.length,
+    pendingLookbackDays,
+    pendingSecondaryLimit,
     examined,
     inSync,
     skipped,
