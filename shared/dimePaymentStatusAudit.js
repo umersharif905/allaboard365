@@ -115,6 +115,12 @@ async function loadCandidateRows(pool, opts) {
     if (extraSqlInputs.pendingLookbackDays != null) {
       req.input('pendingLookbackDays', sql.Int, extraSqlInputs.pendingLookbackDays);
     }
+    // Upper bound (older-than) for secondary sweeps; passed explicitly because
+    // those passes run with hoursBack=null so the auto ">= -hoursBack" lower bound
+    // is not applied (otherwise the window self-contradicts and sweeps nothing).
+    if (extraSqlInputs.windowUpperHours != null) {
+      req.input('windowUpperHours', sql.Int, extraSqlInputs.windowUpperHours);
+    }
 
     const cols = [
       'p.PaymentId',
@@ -235,13 +241,16 @@ async function runAudit(params) {
 
   if (hoursBack && successRecheckDays > 0 && secondaryLimit > 0) {
     const successPred = sqlSuccessfulPaymentPredicate('p.Status');
-    const extraB = ` AND ${successPred} AND p.PaymentDate < DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME()) AND p.PaymentDate >= DATEADD(DAY, -@successRecheckDays, SYSUTCDATETIME())`;
+    const extraB = ` AND ${successPred} AND p.PaymentDate < DATEADD(HOUR, -@windowUpperHours, SYSUTCDATETIME()) AND p.PaymentDate >= DATEADD(DAY, -@successRecheckDays, SYSUTCDATETIME())`;
     const { rows: bRows } = await loadCandidateRows(pool, {
       ...loadOptsBase,
+      hoursBack: null,
+      startDate: null,
+      endDate: null,
       limit: secondaryLimit,
       extraWhere: extraB,
       prioritizeSuccessfulFirst: false,
-      extraSqlInputs: { successRecheckDays }
+      extraSqlInputs: { successRecheckDays, windowUpperHours: hoursBack }
     });
     passBRows = bRows;
     rows = mergeRowsByPaymentId(passARows, passBRows);
@@ -249,15 +258,18 @@ async function runAudit(params) {
 
   let passCRows = [];
   if (hoursBack && pendingLookbackDays > 0 && pendingSecondaryLimit > 0) {
-    const extraC = ` AND LOWER(LTRIM(p.Status)) = N'pending'
-      AND p.PaymentDate < DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME())
+    const extraC = ` AND LOWER(LTRIM(RTRIM(p.Status))) = N'pending'
+      AND p.PaymentDate < DATEADD(HOUR, -@windowUpperHours, SYSUTCDATETIME())
       AND p.PaymentDate >= DATEADD(DAY, -@pendingLookbackDays, SYSUTCDATETIME())`;
     const { rows: cRows } = await loadCandidateRows(pool, {
       ...loadOptsBase,
+      hoursBack: null,
+      startDate: null,
+      endDate: null,
       limit: pendingSecondaryLimit,
       extraWhere: extraC,
       prioritizeSuccessfulFirst: false,
-      extraSqlInputs: { pendingLookbackDays }
+      extraSqlInputs: { pendingLookbackDays, windowUpperHours: hoursBack }
     });
     passCRows = cRows;
     rows = mergeRowsByPaymentId(rows, passCRows);

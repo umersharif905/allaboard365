@@ -800,7 +800,10 @@ class DimeService {
     } else if (pm === 'dime') {
       types = ['ACH', 'CC'];
     } else if (pm.includes('card') || pm.includes('cc') || pm.includes('credit') || pm.includes('debit')) {
-      types = ['CC'];
+      // CC first, then ACH fallback: some rows stored as "Card" were actually ACH
+      // (mislabeled at creation); without the ACH retry the CC lookup 404s and the
+      // payment can never be reconciled.
+      types = ['CC', 'ACH'];
     } else {
       types = ['CC', 'ACH'];
     }
