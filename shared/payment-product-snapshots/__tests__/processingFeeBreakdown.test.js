@@ -14,10 +14,22 @@ describe('payment-product-snapshots processing fee breakdown', () => {
     expect(r.isLegacyFullPpfRow).toBe(false);
   });
 
-  test('resolveProcessingFeeTotalFromParts legacy shim when PPF row holds full fee', () => {
+  test('resolveProcessingFeeTotalFromParts legacy shim when PPF row equals included (flat portfolio)', () => {
     const r = resolveProcessingFeeTotalFromParts(10.25, 10.25);
     expect(r.total).toBe(10.25);
     expect(r.isLegacyFullPpfRow).toBe(true);
+  });
+
+  test('resolveProcessingFeeTotalFromParts legacy full row when remainder embeds included allocation', () => {
+    const r = resolveProcessingFeeTotalFromParts(2.7, 10.84);
+    expect(r.total).toBe(10.84);
+    expect(r.isLegacyFullPpfRow).toBe(true);
+  });
+
+  test('resolveProcessingFeeTotalFromParts post-backfill remainder row', () => {
+    const r = resolveProcessingFeeTotalFromParts(2.7, 8.14);
+    expect(r.total).toBe(10.84);
+    expect(r.isLegacyFullPpfRow).toBe(false);
   });
 
   test('resolveProcessingFeeTotalFromParts all-included household (no PPF row)', () => {

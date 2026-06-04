@@ -13,7 +13,7 @@
     "DIME_WEBHOOK_SECRET": "your_webhook_secret",
     "ADMIN_API_KEY": "your_admin_api_key_generate_with_crypto",
     "NODE_ENV": "development",
-    "DIME_STATUS_AUDIT_LOOKBACK_HOURS": "48",
+    "DIME_STATUS_AUDIT_LOOKBACK_HOURS": "168",
     "DIME_STATUS_AUDIT_LIMIT": "500",
     "DIME_STATUS_AUDIT_TIMER_DISABLED": "true",
     "DIME_STATUS_AUDIT_TENANT_IDS": ""

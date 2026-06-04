@@ -49,6 +49,36 @@ async function bestEffortResolveInvoice(logger, { paymentId, householdId, tenant
     logger.warn(`Invoice resolve failed (non-blocking): ${err?.message || err}`);
   }
 }
+/**
+ * POST to the backend's internal payment-bounce endpoint, which runs the tested
+ * paymentBounceService.processBounce: flips the original payment to Failed and
+ * un-fulfills the linked invoice (idempotent). Authenticated with the scheduled-job
+ * key the function already holds. Throws on non-2xx so callers can log it.
+ */
+async function postPaymentBounce(logger, payload) {
+  if (!INVOICE_API_BASE_URL) {
+    logger.warn('postPaymentBounce skipped: BACKEND_API_URL not configured');
+    return;
+  }
+  const url = `${INVOICE_API_BASE_URL}/api/internal/payment-bounces/process`;
+  const res = await fetch(url, {
+    method: 'POST',
+    headers: {
+      'content-type': 'application/json',
+      ...(INVOICE_API_KEY ? { 'x-api-key': INVOICE_API_KEY } : {})
+    },
+    body: JSON.stringify(payload),
+    signal: AbortSignal.timeout(15000)
+  });
+  const body = await res.json().catch(() => ({}));
+  // 404 ORIGINAL_NOT_FOUND is non-fatal (e.g. return for a charge we never recorded);
+  // anything else non-2xx is a real failure worth surfacing.
+  if (!res.ok && !(res.status === 404 && body && body.code === 'ORIGINAL_NOT_FOUND')) {
+    throw new Error(`payment-bounce HTTP ${res.status}: ${body && body.message ? body.message : 'unknown'}`);
+  }
+  logger.info(`processBounce result: ${res.status} ${body && (body.alreadyProcessed ? 'alreadyProcessed' : body.success ? 'flipped+unfulfilled' : body.code || '')}`);
+}
+
 // const MessageQueueService = require('../../backend/services/messageQueue.service'); // TODO: Fix import path for Azure Functions
 
 /**
@@ -67,7 +97,22 @@ function inferDimeEventType(webhookData) {
   const tt = String(webhookData.transaction_type || '').toLowerCase();
   const ts = String(webhookData.transaction_status || '').toLowerCase();
   const tsd = String(webhookData.transaction_status_description || '').toLowerCase();
-  // Recurring hints first — DIME often sends credit_card_charge-shaped payloads for monthly recurring without repeating "recurring" in transaction_type.
+  // Returns / rejects / chargebacks MUST be classified before the generic ACH/CC
+  // "charge" fallbacks below. DIME sends these with transaction_status like
+  // ACH_PAYMENT_RETURNED / ACH_PAYMENT_CREDIT_REJECTED / *_CHARGEBACK and often no root
+  // `type`; without this guard `tt.includes('ach')` mislabels a return as `ach_charge`,
+  // so the original Completed payment is never flipped to Failed (overstated invoice).
+  const statusBlob = `${ts} ${tsd}`;
+  if (statusBlob.includes('chargeback')) return 'credit_card_chargeback';
+  if (statusBlob.includes('refund')) {
+    return tt.includes('cc') || tt.includes('credit') || tt.includes('card') ? 'credit_card_refund' : 'ach_refund';
+  }
+  // "credit_rejected" / "payment_returned" / "returned" / "rejected" all mean the ACH did
+  // not clear. (Exclude the *_FEE lines — those are the $25 NSF fee, handled informationally.)
+  if ((statusBlob.includes('return') || statusBlob.includes('reject')) && !statusBlob.includes('fee')) {
+    return 'ach_payment_return';
+  }
+  // Recurring hints — DIME often sends credit_card_charge-shaped payloads for monthly recurring without repeating "recurring" in transaction_type.
   if (webhookData.recurring_payment_id || webhookData.schedule_id) {
     return 'recurring_payment_success';
   }
@@ -137,6 +182,8 @@ async function resolveTenantIdFromWebhookPayload(pool, webhookData) {
   return null;
 }
 
+// Azure Functions entrypoint. Pure helpers are attached to module.exports below
+// (after definition) for unit testing without invoking the handler.
 module.exports = async function (context, req) {
   const logger = createLogger(context);
   logger.info('Webhook received');
@@ -2122,6 +2169,10 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
 async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
   // NEW DIME WEBHOOK FORMAT
   const transactionId = data.transaction_number || data.transaction_id || data.transactionNumber;
+  // The original charge is identified by parent_transaction_info_id on a return event;
+  // fall back to the return's own transaction_number (DIME often reuses it for ACH returns).
+  const originalRef = data.parent_transaction_info_id || data.original_transaction_id || transactionId;
+  const customerUuid = data.customer_uuid || data.customerUuid || null;
   const amount = parseFloat(data.amount) || 0;
   const returnCode = data.status_code || data.return_code || data.code;
   const synthesizedReturn = oePaymentStatus.formatDimeChargeFailureReasonForStorage(data);
@@ -2131,11 +2182,11 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
       : (data.status_text || data.return_reason || data.reason || 'Unknown');
   const paymentMethod = data.transaction_type || data.payment_method || data.paymentMethod || 'ACH';
 
-  logger.error(`ACH Payment Return: Transaction ${transactionId}, Amount: $${amount}, Code: ${returnCode}, Method: ${paymentMethod}`);
+  logger.error(`ACH Payment Return: Transaction ${transactionId} (original ref ${originalRef}), Amount: $${amount}, Code: ${returnCode}, Method: ${paymentMethod}`);
 
   // Find original payment (including pricing fields)
   const originalPayment = await pool.request()
-    .input('processorTransactionId', sql.NVarChar(255), transactionId)
+    .input('processorTransactionId', sql.NVarChar(255), String(originalRef))
     .query(`
       SELECT PaymentId, GroupId, TenantId, AgentId, NetRate, Commission, OverrideRate, SystemFees
       FROM oe.Payments 
@@ -2144,7 +2195,7 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
     `);
 
   if (originalPayment.recordset.length === 0) {
-    throw new Error(`Original payment not found: ${transactionId}`);
+    throw new Error(`Original payment not found: ${originalRef}`);
   }
 
   const originalPaymentData = originalPayment.recordset[0];
@@ -2190,8 +2241,26 @@ async function handleACHPaymentReturn(pool, data, webhookEventId, logger) {
       )
     `);
 
-  logger.success(`ACH payment return processed: ${transactionId}`);
-  
+  logger.success(`ACH payment return ledger row recorded: ${transactionId}`);
+
+  // CRITICAL: flip the ORIGINAL payment to Failed and un-fulfill its invoice. The ledger
+  // row above is audit-only; without this the original stays Completed and the invoice
+  // stays Paid (the overstatement bug). Reuse the backend's tested processBounce so there
+  // is a single source of truth for bounce/un-fulfill semantics (idempotent).
+  try {
+    await postPaymentBounce(logger, {
+      originalProcessorTransactionId: String(originalRef),
+      returnType: 'ACH_Return',
+      amount,
+      returnCode,
+      returnReason,
+      webhookEventId,
+      customerUuid
+    });
+  } catch (bounceErr) {
+    logger.error(`processBounce call failed (original payment NOT flipped): ${bounceErr?.message || bounceErr}`);
+  }
+
   // Send email notification for ACH return (payment failure)
   try {
     await sendPaymentFailureNotification(pool, {
@@ -2844,3 +2913,6 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
     logger.error('Failed to send payment failure notification:', emailError);
   }
 }
+
+// Exported for unit tests (does not affect the Azure Functions entrypoint above).
+module.exports.inferDimeEventType = inferDimeEventType;

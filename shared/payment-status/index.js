@@ -88,6 +88,9 @@ function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
   if (data && typeof data === 'object') {
     const tsEarly = String(transactionStatus || '').toLowerCase();
     if (tsEarly.includes('pending') || tsEarly.includes('processing')) return 'Pending';
+    // A refund label wins over any status_code/text below: a settled refund can carry
+    // an approval code, but it is money out, not a capture.
+    if (tsEarly.includes('refund')) return 'Refunded';
 
     let code = data.status_code != null ? String(data.status_code).trim() : '';
     if (code === '0') code = '00';
@@ -101,6 +104,11 @@ function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
     if (isDimePendingFlagTrue(data)) return 'Pending';
   }
   const ts = String(transactionStatus || '').toLowerCase();
+  // Refund labels (e.g. ACH_PAYMENT_REFUND, CC_REFUND) are money flowing OUT to the
+  // member — distinct from a "returned"/failed debit. Map before the credit/approved
+  // checks so a settled refund is not mistaken for a successful capture, and so these
+  // rows do not fall through to Unknown (which left them stuck Pending forever).
+  if (ts.includes('refund')) return 'Refunded';
   if (ts.includes('approved') || ts.includes('completed') || ts.includes('success') || ts.includes('settled')) {
     return 'Completed';
   }

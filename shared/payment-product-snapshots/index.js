@@ -92,13 +92,52 @@ async function resolveGroupPeriodFromInvoiceOrPaymentDate(pool, invoiceId, payme
 
 /**
  * Processing fee breakdown: included on product rows + remainder on PPF enrollment row.
- * Legacy shim: when IncludedPPF > 0 and PPF row >= included, treat PPF as full total (pre-backfill rows).
+ * Post-backfill: PPF row = non-included remainder only → total = included + remainder.
+ * Legacy (pre-backfill): PPF row stored the full fee; included on products is display-only.
  */
 function resolveProcessingFeeTotalFromParts(includedOnProducts, remainderOnFeeRow) {
   const included = n2(includedOnProducts);
   const remainder = n2(remainderOnFeeRow);
-  if (included > 0 && remainder >= included - 0.01) {
-    return { includedOnProducts: included, remainderOnFeeRow: remainder, total: remainder, isLegacyFullPpfRow: true };
+  if (included <= 0.005) {
+    return {
+      includedOnProducts: included,
+      remainderOnFeeRow: remainder,
+      total: remainder,
+      isLegacyFullPpfRow: false
+    };
+  }
+  // Heavily-included portfolio: included allocation exceeds the small PPF remainder row.
+  if (included > remainder + 0.01) {
+    return {
+      includedOnProducts: included,
+      remainderOnFeeRow: remainder,
+      total: n2(included + remainder),
+      isLegacyFullPpfRow: false
+    };
+  }
+  // Equal split edge case (pre-backfill): PPF row holds the full fee.
+  if (Math.abs(remainder - included) <= 0.01) {
+    return {
+      includedOnProducts: included,
+      remainderOnFeeRow: remainder,
+      total: remainder,
+      isLegacyFullPpfRow: true
+    };
+  }
+  // Remainder exceeds included: post-backfill remainder row OR legacy full-fee row.
+  // Legacy rows embed the included allocation inside the PPF amount (R = I + P vs post-backfill R = P).
+  if (remainder > included + 0.01) {
+    const impliedPostBackfillRemainder = n2(remainder - included);
+    const ratio = impliedPostBackfillRemainder > 0.005
+      ? remainder / impliedPostBackfillRemainder
+      : 999;
+    const isLegacyFullPpfRow = ratio <= 1.4;
+    return {
+      includedOnProducts: included,
+      remainderOnFeeRow: remainder,
+      total: isLegacyFullPpfRow ? remainder : n2(included + remainder),
+      isLegacyFullPpfRow
+    };
   }
   return {
     includedOnProducts: included,
