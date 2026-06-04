@@ -15,6 +15,7 @@ const {
 } = require('../shared/payment-product-snapshots');
 const oePaymentStatus = require('../shared/payment-status');
 const { recordIntegrationError } = require('../shared/integrationErrors');
+const { buildTenantAppBaseUrl } = require('../shared/tenantAppUrl');
 
 /** FailureReason persisted on CC/ACH charge webhooks when status is not Completed. */
 function storedFailureReasonForNonSuccessfulChargeWebhook(data, status) {
@@ -821,6 +822,29 @@ async function lookupAgentIdForGroup(pool, groupId, logger) {
   return null;
 }
 
+async function lookupPrimaryMemberDisplayName(pool, householdId, logger) {
+  if (!householdId) return null;
+  try {
+    const r = await pool.request()
+      .input('householdId', sql.UniqueIdentifier, householdId)
+      .query(`
+        SELECT TOP 1
+          LTRIM(RTRIM(CONCAT(ISNULL(u.FirstName, N''), N' ', ISNULL(u.LastName, N'')))) AS DisplayName
+        FROM oe.Members m
+        INNER JOIN oe.Users u ON u.UserId = m.UserId
+        WHERE m.HouseholdId = @householdId
+          AND m.RelationshipType = N'P'
+        ORDER BY m.CreatedDate ASC
+      `);
+    const name = r.recordset[0]?.DisplayName;
+    const trimmed = name != null ? String(name).trim() : '';
+    return trimmed || null;
+  } catch (e) {
+    logger.warn(`lookupPrimaryMemberDisplayName: ${e.message}`);
+    return null;
+  }
+}
+
 async function fetchAgentUserForPaymentEmail(pool, agentId, tenantId, logger) {
   if (!agentId || !tenantId) return null;
   try {
@@ -1096,58 +1120,54 @@ async function sendPaymentFailureNotification(pool, paymentData, logger, groupId
     logger.info(`TenantId validated: ${tenantIdStr}`);
     finalTenantId = tenantIdStr;
 
-    // Get tenant settings for base URL (after finalTenantId is known)
-    let baseUrl = 'https://app.allaboard365.com'; // Default fallback
+    // Resolve primary member display name when enrollment lookup did not populate it
+    let primaryMemberDisplayName = null;
+    if (memberResult && memberResult.recordset.length > 0) {
+      const m = memberResult.recordset[0];
+      primaryMemberDisplayName =
+        `${m.FirstName || ''} ${m.LastName || ''}`.trim() || null;
+    }
+    const householdIdForLookup = paymentData.household_id || null;
+    if (!primaryMemberDisplayName && householdIdForLookup) {
+      primaryMemberDisplayName = await lookupPrimaryMemberDisplayName(
+        pool,
+        householdIdForLookup,
+        logger
+      );
+    }
+
+    // Tenant app base URL for deep links (custom domain, verified DefaultUrlPath, or app host)
+    let baseUrl = 'https://app.allaboard365.com';
     try {
       const tenantResult = await pool.request()
         .input('tenantId', sql.UniqueIdentifier, finalTenantId)
         .query(`
-          SELECT 
-            CustomDomain,
-            AdvancedSettings
+          SELECT CustomDomain, DefaultUrlPath, IsDefaultUrlPathVerified, AdvancedSettings
           FROM oe.Tenants
           WHERE TenantId = @tenantId
         `);
-      
       if (tenantResult.recordset.length > 0) {
-        const tenant = tenantResult.recordset[0];
-        const customDomain = tenant.CustomDomain;
-        let verificationStatus = null;
-        
-        // Parse AdvancedSettings JSON if available
-        if (tenant.AdvancedSettings) {
-          try {
-            const advancedSettings = JSON.parse(tenant.AdvancedSettings);
-            verificationStatus = advancedSettings.domain?.verificationStatus || null;
-          } catch (e) {
-            logger.warn(`Could not parse AdvancedSettings JSON: ${e.message}`);
-          }
-        }
-        
-        // Use custom domain if available and verified
-        if (customDomain && 
-            (verificationStatus?.toLowerCase() === 'verified' || !verificationStatus)) {
-          baseUrl = `https://${customDomain}`;
-        }
+        baseUrl = buildTenantAppBaseUrl(tenantResult.recordset[0]);
       }
     } catch (urlError) {
       logger.warn(`Could not fetch tenant settings for base URL: ${urlError.message}`);
     }
-    
-    const dashboardUrl = `${baseUrl}/dashboard`;
+
+    const memberDashboardUrl = `${baseUrl}/member/dashboard`;
+    const agentDashboardUrl = `${baseUrl}/agent/dashboard`;
     
     // Format attempt number display
     const attemptDisplay = paymentData.attempt_number 
       ? ` (Attempt ${paymentData.attempt_number})`
       : '';
 
-    const memberDisplayName =
-      memberResult && memberResult.recordset.length > 0
-        ? `${memberResult.recordset[0].FirstName || ''} ${memberResult.recordset[0].LastName || ''}`.trim() || '—'
-        : '—';
-    const groupOrIndividualLabel = isIndividualRecurring
-      ? 'Individual (household)'
-      : (groupName || '—');
+    const memberDisplayName = primaryMemberDisplayName || '—';
+    const isGroupPayment = Boolean(groupId && !isIndividualRecurring);
+    const groupOrIndividualLabel = isGroupPayment
+      ? (groupName || '—')
+      : isIndividualRecurring
+        ? (groupName ? `${groupName} (household)` : 'Individual (household)')
+        : (groupName || '—');
 
     // Generate email content - Follow same table-based format as other emails
     const subject = `Payment Failed - $${paymentData.amount}${attemptDisplay}`;
@@ -1188,7 +1208,7 @@ ${paymentData.attempt_number ? `<p style="margin:5px 0;font-size:14px;color:#666
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:30px 0;">
 <tr>
 <td align="center">
-<a href="${dashboardUrl}" style="display:inline-block;background-color:#1f8dbf;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:4px;font-size:16px;font-weight:600;font-family:Arial,Helvetica,sans-serif;">Update Payment Method</a>
+<a href="${memberDashboardUrl}" style="display:inline-block;background-color:#1f8dbf;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:4px;font-size:16px;font-weight:600;font-family:Arial,Helvetica,sans-serif;">Update Payment Method</a>
 </td>
 </tr>
 </table>
@@ -1242,7 +1262,9 @@ ${paymentData.attempt_number ? `<p style="margin:5px 0;font-size:14px;color:#666
           const memberLine = htmlEsc(memberDisplayName);
           const groupLine = htmlEsc(groupOrIndividualLabel);
           const methodLine = htmlEsc(paymentMethodDisplay);
-          const agentSubject = `Payment failed — member account — $${paymentData.amount}${attemptDisplay}`;
+          const agentSubject = isGroupPayment
+            ? `Payment failed — group account — $${paymentData.amount}${attemptDisplay}`
+            : `Payment failed — member account — $${paymentData.amount}${attemptDisplay}`;
           const safeReason = String(failureReason).replace(/</g, '&lt;').replace(/>/g, '&gt;');
           const agentEmailBody = `
 <!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
@@ -1259,7 +1281,7 @@ ${paymentData.attempt_number ? `<p style="margin:5px 0;font-size:14px;color:#666
 <table role="presentation" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
 <tr>
 <td style="padding:30px 30px 20px 30px;text-align:center;border-bottom:2px solid #b45309;">
-<h1 style="margin:0;font-size:24px;font-weight:600;color:#b45309;font-family:Arial,Helvetica,sans-serif;">Payment failed (member account)</h1>
+<h1 style="margin:0;font-size:24px;font-weight:600;color:#b45309;font-family:Arial,Helvetica,sans-serif;">Payment failed (${isGroupPayment ? 'group account' : 'member account'})</h1>
 </td>
 </tr>
 <tr>
@@ -1281,7 +1303,7 @@ ${paymentData.attempt_number ? `<p style="margin:5px 0;font-size:14px;color:#666
 <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:24px 0;">
 <tr>
 <td align="center">
-<a href="${dashboardUrl}" style="display:inline-block;background-color:#1f8dbf;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:4px;font-size:16px;font-weight:600;font-family:Arial,Helvetica,sans-serif;">Open dashboard</a>
+<a href="${agentDashboardUrl}" style="display:inline-block;background-color:#1f8dbf;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:4px;font-size:16px;font-weight:600;font-family:Arial,Helvetica,sans-serif;">Open dashboard</a>
 </td>
 </tr>
 </table>
@@ -1461,6 +1483,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
           pool,
           {
             enrollment_id: data.enrollment_id || existingPayment.EnrollmentId,
+            household_id: existingHouseholdId,
             amount: amount,
             payment_method: paymentMethod,
             transaction_id: transactionId,
@@ -1565,6 +1588,7 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
         logger.info(`Attempting to send payment failure notification. GroupId: ${groupId}, TenantId: ${tenantId}`);
         await sendPaymentFailureNotification(pool, {
           enrollment_id: data.enrollment_id,
+          household_id: householdId,
           amount: amount,
           payment_method: paymentMethod,
           transaction_id: transactionId,
@@ -2062,6 +2086,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
       try {
         await sendPaymentFailureNotification(pool, {
           enrollment_id: data.enrollment_id,
+          household_id: existingHouseholdId,
           amount: amount,
           payment_method: paymentMethod,
           transaction_id: transactionId,
@@ -2155,6 +2180,7 @@ async function handleACHCharge(pool, data, webhookEventId, logger) {
     try {
       await sendPaymentFailureNotification(pool, {
         enrollment_id: data.enrollment_id,
+        household_id: householdId,
         amount: amount,
         payment_method: paymentMethod,
         transaction_id: transactionId,
@@ -2904,6 +2930,7 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
   try {
     await sendPaymentFailureNotification(pool, {
       enrollment_id: enrollmentId,
+      household_id: householdId,
       amount: amount,
       payment_method: 'Recurring',
       transaction_id: transactionId,
