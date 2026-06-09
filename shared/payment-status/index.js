@@ -167,6 +167,42 @@ function mapChargeWebhookMappedStatusToDbStatus(mapped) {
   return 'Pending';
 }
 
+/**
+ * Synchronous charge-card / charge-ach API responses. DIME often returns approval (status_code 00)
+ * before settlement; card rows may include pending:true or CC_CREDIT without fund_date/settle_date.
+ * Persist Pending until settled — do not mark invoices paid on the sync response alone.
+ *
+ * @param {Record<string, unknown>|null|undefined} data
+ * @returns {string} oe.Payments.Status
+ */
+function mapDimeSyncChargeResponseToDbStatus(data) {
+  if (!data || typeof data !== 'object') return 'Pending';
+
+  const mapped = mapDimePayloadToPaymentRecordStatus(data);
+  if (mapped === 'Failed' || mapped === 'Refunded' || mapped === 'Voided' || mapped === 'Canceled') {
+    return mapChargeWebhookMappedStatusToDbStatus(mapped);
+  }
+
+  if (isDimePendingFlagTrue(data)) {
+    return 'Pending';
+  }
+
+  const txType = String(data.transaction_type ?? data.transactionType ?? '').trim().toUpperCase();
+  const ts = String(data.transaction_status ?? data.transactionStatus ?? '').toLowerCase();
+  const fundDate = data.fund_date ?? data.fundDate;
+  const settleDate = data.settle_date ?? data.settleDate;
+  const hasSettlement =
+    (fundDate != null && String(fundDate).trim() !== '') ||
+    (settleDate != null && String(settleDate).trim() !== '');
+
+  const isCardCharge = txType === 'CC' || ts.includes('cc_credit');
+  if (isCardCharge && !hasSettlement) {
+    return 'Pending';
+  }
+
+  return mapChargeWebhookMappedStatusToDbStatus(mapped);
+}
+
 function mapRecurringSuccessWebhookToDbStatus(dimePayload) {
   const txType = String(
     dimePayload?.transaction_type ?? dimePayload?.transactionType ?? ''
@@ -310,9 +346,26 @@ function formatDimeChargeFailureReasonForStorage(data) {
   if (code && code !== '00') return `Decline or error (processor code ${code})`;
 
   const ts = String(data.transaction_status ?? data.transactionStatus ?? '').trim();
-  if (ts) return ts;
+  // Posted-credit labels (e.g. CC_CREDIT) mean money in — not a decline reason for Pending rows.
+  if (ts && !isDimePostedCreditTransactionStatus(ts)) return ts;
 
   return '';
+}
+
+/** DIME list/sync labels for successful captures — must not be stored as FailureReason. */
+function isDimePostedCreditTransactionStatus(transactionStatus) {
+  const ts = String(transactionStatus || '').toLowerCase();
+  if (!ts) return false;
+  if (ts.includes('cc_credit') && !ts.includes('rejected') && !ts.includes('failed')) return true;
+  if (
+    ts.includes('ach_payment_credit') &&
+    !ts.includes('pending') &&
+    !ts.includes('rejected') &&
+    !ts.includes('failed')
+  ) {
+    return true;
+  }
+  return false;
 }
 
 module.exports = {
@@ -321,6 +374,7 @@ module.exports = {
   isDimePendingFlagTrue,
   mapDimePayloadToPaymentRecordStatus,
   mapChargeWebhookMappedStatusToDbStatus,
+  mapDimeSyncChargeResponseToDbStatus,
   mapRecurringSuccessWebhookToDbStatus,
   mapDimeRowToPaymentRecordStatus,
   isSuccessfulPaymentRecordStatus,
@@ -330,4 +384,5 @@ module.exports = {
   sqlSuccessfulPaymentPredicate,
   formatDimeRecurringFailureReasonForStorage,
   formatDimeChargeFailureReasonForStorage,
+  isDimePostedCreditTransactionStatus,
 };

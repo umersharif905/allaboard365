@@ -4,16 +4,18 @@
   "description": "Azure Functions for OpenEnroll group payment processing",
   "scripts": {
     "start": "func start",
+    "test": "jest",
     "generate-admin-key": "node generate-admin-api-key.js",
     "deploy": "bash ./deploy.sh",
     "deploy:staging": "PAYMENT_MANAGER_APP_NAME=open-enroll-payment-manager-staging bash ./deploy.sh"
   },
   "dependencies": {
     "@azure/functions": "^4.0.0",
-    "mssql": "^10.0.1",
-    "axios": "^1.6.0"
+    "axios": "^1.6.0",
+    "mssql": "^10.0.1"
   },
   "devDependencies": {
-    "azure-functions-core-tools": "^4.x"
+    "azure-functions-core-tools": "^4.x",
+    "jest": "^29.7.0"
   }
 }

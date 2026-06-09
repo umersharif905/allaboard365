@@ -123,8 +123,27 @@ async function syncInvoiceAfterPaymentStatusChangeInTxn(transaction, sql, params
   return { applied: true, newPaidAmount: newPaid, invoiceStatus: newInvStatus };
 }
 
+async function unfulfillInvoiceForPaymentAmount(pool, sql, invoiceId, paymentAmount) {
+  if (!invoiceId) return { applied: false, reason: 'no_invoice_id' };
+  const transaction = new sql.Transaction(pool);
+  try {
+    await transaction.begin();
+    const result = await unfulfillInvoiceInTxn(transaction, sql, invoiceId, paymentAmount);
+    await transaction.commit();
+    return result;
+  } catch (err) {
+    try {
+      await transaction.rollback();
+    } catch (_rollbackErr) {
+      /* ignore */
+    }
+    throw err;
+  }
+}
+
 module.exports = {
   unfulfillInvoiceInTxn,
+  unfulfillInvoiceForPaymentAmount,
   syncInvoiceAfterPaymentStatusChangeInTxn,
   recalcStatusFromAmounts
 };

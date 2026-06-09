@@ -91,13 +91,18 @@ async function resolveGroupPeriodFromInvoiceOrPaymentDate(pool, invoiceId, payme
 }
 
 /**
- * Processing fee breakdown: included on product rows + remainder on PPF enrollment row.
- * Post-backfill: PPF row = non-included remainder only → total = included + remainder.
+ * Processing fee breakdown for audit / payment snapshots (not authoritative monthly due).
+ *
+ * Post-backfill: PPF row PremiumAmount is authoritative; `includedOnProducts` is display metadata.
  * Legacy (pre-backfill): PPF row stored the full fee; included on products is display-only.
+ *
+ * @deprecated For invoice/recurring totals use SUM(oe.Enrollments.PremiumAmount) only.
+ * See backend/utils/includedFeeDeprecation.js.
  */
 function resolveProcessingFeeTotalFromParts(includedOnProducts, remainderOnFeeRow) {
   const included = n2(includedOnProducts);
   const remainder = n2(remainderOnFeeRow);
+  // Post-migration: included fee is display-only; PPF row PremiumAmount is authoritative.
   if (included <= 0.005) {
     return {
       includedOnProducts: included,
@@ -106,7 +111,7 @@ function resolveProcessingFeeTotalFromParts(includedOnProducts, remainderOnFeeRo
       isLegacyFullPpfRow: false
     };
   }
-  // Heavily-included portfolio: included allocation exceeds the small PPF remainder row.
+  // Pre-migration fallback (migration script + audit still use full resolver shape).
   if (included > remainder + 0.01) {
     return {
       includedOnProducts: included,
@@ -115,7 +120,6 @@ function resolveProcessingFeeTotalFromParts(includedOnProducts, remainderOnFeeRo
       isLegacyFullPpfRow: false
     };
   }
-  // Equal split edge case (pre-backfill): PPF row holds the full fee.
   if (Math.abs(remainder - included) <= 0.01) {
     return {
       includedOnProducts: included,
@@ -124,8 +128,6 @@ function resolveProcessingFeeTotalFromParts(includedOnProducts, remainderOnFeeRo
       isLegacyFullPpfRow: true
     };
   }
-  // Remainder exceeds included: post-backfill remainder row OR legacy full-fee row.
-  // Legacy rows embed the included allocation inside the PPF amount (R = I + P vs post-backfill R = P).
   if (remainder > included + 0.01) {
     const impliedPostBackfillRemainder = n2(remainder - included);
     const ratio = impliedPostBackfillRemainder > 0.005
@@ -148,7 +150,9 @@ function resolveProcessingFeeTotalFromParts(includedOnProducts, remainderOnFeeRo
 }
 
 /**
- * Household processing fee: included allocations on product enrollments + PPF row remainder.
+ * Household processing fee breakdown for payment audit snapshots.
+ *
+ * @deprecated `IncludedPaymentProcessingFeeAmount` sums are display-only; do not use for billing totals.
  */
 async function getHouseholdProcessingFeeBreakdownAsOf(pool, householdId, asOfDate, sqlTypes = sql) {
   const result = await pool.request()
