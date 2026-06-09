@@ -16,7 +16,7 @@ const {
 const oePaymentStatus = require('../shared/payment-status');
 const { recordIntegrationError } = require('../shared/integrationErrors');
 const { buildTenantAppBaseUrl } = require('../shared/tenantAppUrl');
-const { unfulfillInvoiceForPaymentAmount } = require('../shared/invoicePaymentTxn');
+const { unfulfillInvoiceForPaymentAmount, recalcStatusFromAmounts } = require('../shared/invoicePaymentTxn');
 
 /** FailureReason persisted on CC/ACH charge webhooks when status is not Completed. */
 function storedFailureReasonForNonSuccessfulChargeWebhook(data, status) {
@@ -916,9 +916,147 @@ async function lookupOriginalPaymentIdForNewCharge(pool, { tenantId, groupId, ho
   }
 }
 
-async function syncInvoiceForUnsettledPayment(pool, sqlLib, invoiceId, paymentAmount, paymentStatus, logger) {
+/** True when settled payments on other processor txn ids (plus credit) cover the invoice total. */
+async function isInvoiceCoveredByOtherSettledPayments(pool, sqlLib, invoiceId, excludeProcessorTransactionId) {
+  const invRes = await pool
+    .request()
+    .input('invoiceId', sqlLib.UniqueIdentifier, invoiceId)
+    .query(`
+      SELECT TotalAmount, COALESCE(CreditAmount, 0) AS CreditAmount
+      FROM oe.Invoices
+      WHERE InvoiceId = @invoiceId
+    `);
+
+  if (!invRes.recordset?.length) return false;
+
+  const total = parseFloat(invRes.recordset[0].TotalAmount) || 0;
+  const credit = parseFloat(invRes.recordset[0].CreditAmount) || 0;
+  const excludeTxn =
+    excludeProcessorTransactionId != null && String(excludeProcessorTransactionId).trim() !== ''
+      ? String(excludeProcessorTransactionId).trim()
+      : null;
+
+  const payRes = await pool
+    .request()
+    .input('invoiceId', sqlLib.UniqueIdentifier, invoiceId)
+    .input('excludeTxn', sqlLib.NVarChar(255), excludeTxn)
+    .query(`
+      SELECT Amount, Status, ProcessorTransactionId
+      FROM oe.Payments
+      WHERE InvoiceId = @invoiceId
+        AND TransactionType = N'Payment'
+        AND (
+          @excludeTxn IS NULL
+          OR LTRIM(RTRIM(ISNULL(ProcessorTransactionId, N''))) <> LTRIM(RTRIM(@excludeTxn))
+        )
+    `);
+
+  let settledSum = 0;
+  for (const row of payRes.recordset || []) {
+    if (oePaymentStatus.isSuccessfulPaymentRecordStatus(String(row.Status ?? ''))) {
+      settledSum += parseFloat(row.Amount) || 0;
+    }
+  }
+
+  return settledSum + credit >= total - 0.005;
+}
+
+/**
+ * After recurring_payment_failed: never downgrade an invoice already covered by money.
+ * Real reversals (ACH return/chargeback) decrement PaidAmount elsewhere.
+ */
+async function syncInvoiceStatusAfterRecurringPaymentFailure(pool, sqlLib, invoiceId, logger) {
+  const invRes = await pool
+    .request()
+    .input('invoiceId', sqlLib.UniqueIdentifier, invoiceId)
+    .query(`
+      SELECT TotalAmount, PaidAmount, COALESCE(CreditAmount, 0) AS CreditAmount, Status
+      FROM oe.Invoices
+      WHERE InvoiceId = @invoiceId
+    `);
+
+  if (!invRes.recordset?.length) {
+    logger.warn(`  Invoice ${invoiceId} not found for failure status sync`);
+    return { applied: false, reason: 'invoice_not_found' };
+  }
+
+  const inv = invRes.recordset[0];
+  const total = parseFloat(inv.TotalAmount) || 0;
+  const paid = parseFloat(inv.PaidAmount) || 0;
+  const credit = parseFloat(inv.CreditAmount) || 0;
+  const currentStatus = String(inv.Status ?? '');
+
+  if (currentStatus === 'Paid' || paid + credit >= total - 0.005) {
+    logger.info(
+      `  Invoice ${invoiceId} skip failure status downgrade (covered: paid=${paid}, credit=${credit}, total=${total})`
+    );
+    return { applied: false, reason: 'already_covered' };
+  }
+
+  const newStatus = recalcStatusFromAmounts(total, paid, credit);
+  await pool
+    .request()
+    .input('invoiceId', sqlLib.UniqueIdentifier, invoiceId)
+    .input('status', sqlLib.NVarChar(50), newStatus)
+    .query(`
+      UPDATE oe.Invoices
+      SET Status = @status,
+          ModifiedDate = GETUTCDATE()
+      WHERE InvoiceId = @invoiceId
+    `);
+
+  logger.info(`  Invoice ${invoiceId} status set to ${newStatus} after recurring payment failure`);
+  return { applied: true, invoiceStatus: newStatus };
+}
+
+async function syncInvoiceForUnsettledPayment(
+  pool,
+  sqlLib,
+  invoiceId,
+  paymentAmount,
+  paymentStatus,
+  logger,
+  options = {}
+) {
   if (!invoiceId || oePaymentStatus.isSuccessfulPaymentRecordStatus(paymentStatus)) return;
+
+  const excludeTxn = options.excludeProcessorTransactionId ?? null;
+  const existingPaymentStatus = options.existingPaymentStatus ?? null;
+
+  if (existingPaymentStatus === 'Failed') {
+    logger.info(`  Invoice ${invoiceId} skip unfulfill: payment row already Failed`);
+    return;
+  }
+
+  if (excludeTxn != null && String(excludeTxn).trim() !== '') {
+    try {
+      const rowRes = await pool
+        .request()
+        .input('txn', sqlLib.NVarChar(255), String(excludeTxn).trim())
+        .input('invoiceId', sqlLib.UniqueIdentifier, invoiceId)
+        .query(`
+          SELECT TOP 1 Status
+          FROM oe.Payments
+          WHERE InvoiceId = @invoiceId
+            AND LTRIM(RTRIM(ProcessorTransactionId)) = LTRIM(RTRIM(@txn))
+          ORDER BY ModifiedDate DESC
+        `);
+      if (rowRes.recordset?.[0]?.Status === 'Failed') {
+        logger.info(`  Invoice ${invoiceId} skip unfulfill: txn ${excludeTxn} already Failed`);
+        return;
+      }
+    } catch (lookupErr) {
+      logger.warn(`  Could not check existing payment status for txn ${excludeTxn}: ${lookupErr.message}`);
+    }
+  }
+
   try {
+    const covered = await isInvoiceCoveredByOtherSettledPayments(pool, sqlLib, invoiceId, excludeTxn);
+    if (covered) {
+      logger.info(`  Invoice ${invoiceId} skip unfulfill: covered by other settled payment(s)`);
+      return;
+    }
+
     const result = await unfulfillInvoiceForPaymentAmount(pool, sqlLib, invoiceId, paymentAmount);
     if (result?.applied) {
       logger.info(`  Invoice ${invoiceId} unfulfilled (${paymentStatus} charge not settled)`);
@@ -1766,7 +1904,11 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
         existingPayment.InvoiceId,
         amount,
         status,
-        logger
+        logger,
+        {
+          excludeProcessorTransactionId: transactionId,
+          existingPaymentStatus: existingPayment.Status
+        }
       );
     }
     logger.success(`Credit card charge webhook applied to existing payment: ${transactionId}`);
@@ -1900,7 +2042,9 @@ async function handleCreditCardCharge(pool, data, webhookEventId, logger) {
         logger.warn(`  Failed to update invoice status: ${invoiceError.message}`);
       }
     } else if (invoiceIdFromWebhook) {
-      await syncInvoiceForUnsettledPayment(pool, sql, invoiceIdFromWebhook, amount, status, logger);
+      await syncInvoiceForUnsettledPayment(pool, sql, invoiceIdFromWebhook, amount, status, logger, {
+        excludeProcessorTransactionId: transactionId
+      });
     }
 
     if (status !== 'Failed' && householdId && !groupId) {
@@ -3288,18 +3432,10 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
 
   logger.error(`Recurring payment failure processed for ${isIndividualRecurring ? 'household' : 'group'}: ${isIndividualRecurring ? householdId : groupId}, retry scheduled for: ${nextRetryDate.toISOString().split('T')[0]}`);
   
-  // Update invoice status to Unpaid (for group payments with invoices)
+  // Update invoice status for group payments with invoices (skip if already covered)
   if (invoiceId) {
     try {
-      await pool.request()
-        .input('invoiceId', sql.UniqueIdentifier, invoiceId)
-        .query(`
-          UPDATE oe.Invoices
-          SET Status = 'Unpaid',
-              ModifiedDate = GETUTCDATE()
-          WHERE InvoiceId = @invoiceId
-        `);
-      logger.error(`  Invoice ${invoiceId} marked as Unpaid`);
+      await syncInvoiceStatusAfterRecurringPaymentFailure(pool, sql, invoiceId, logger);
     } catch (invoiceError) {
       logger.error(`  Failed to update invoice status: ${invoiceError.message}`);
     }
@@ -3346,6 +3482,8 @@ module.exports.storedFailureReasonForNonSuccessfulChargeWebhook = storedFailureR
 module.exports.findOpenCreditCardPaymentRow = findOpenCreditCardPaymentRow;
 module.exports.lookupOriginalPaymentIdForNewCharge = lookupOriginalPaymentIdForNewCharge;
 module.exports.syncInvoiceForUnsettledPayment = syncInvoiceForUnsettledPayment;
+module.exports.syncInvoiceStatusAfterRecurringPaymentFailure = syncInvoiceStatusAfterRecurringPaymentFailure;
+module.exports.isInvoiceCoveredByOtherSettledPayments = isInvoiceCoveredByOtherSettledPayments;
 module.exports.resolveProcessorTransactionIdFromWebhookData = resolveProcessorTransactionIdFromWebhookData;
 module.exports.resolveDimeTransactionInfoId = resolveDimeTransactionInfoId;
 module.exports.buildAchReturnOriginalLookupRefs = buildAchReturnOriginalLookupRefs;
