@@ -582,4 +582,27 @@ async function runAudit(params) {
   };
 }
 
-module.exports = { runAudit, loadCandidateRows, mergeRowsByPaymentId };
+/**
+ * Tenants with auditable DIME payment rows in the lookback window — used by
+ * DimePaymentStatusAuditTimer to decide which tenants to reconcile.
+ * @param {number} hoursBack
+ * @returns {Promise<string[]>}
+ */
+async function listTenantIdsForDimeAudit(hoursBack) {
+  const hours = Math.min(168, Math.max(1, Number(hoursBack) || 168));
+  const pool = await getPool();
+  const result = await pool.request()
+    .input('hoursBack', sql.Int, hours)
+    .query(`
+      SELECT DISTINCT CAST(p.TenantId AS NVARCHAR(36)) AS TenantId
+      FROM oe.Payments p
+      WHERE p.TenantId IS NOT NULL
+        AND LOWER(ISNULL(p.Processor, '')) LIKE '%dime%'
+        AND p.ProcessorTransactionId IS NOT NULL
+        AND (p.TransactionType IS NULL OR p.TransactionType = 'Payment')
+        AND p.PaymentDate >= DATEADD(HOUR, -@hoursBack, SYSUTCDATETIME())
+    `);
+  return (result.recordset || []).map((r) => String(r.TenantId));
+}
+
+module.exports = { runAudit, loadCandidateRows, mergeRowsByPaymentId, listTenantIdsForDimeAudit };
