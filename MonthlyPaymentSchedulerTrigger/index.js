@@ -10,8 +10,8 @@ const monthlyScheduler = require('../MonthlyPaymentScheduler');
  */
 module.exports = async function (context, myTimer) {
   try {
-    context.log('📅 MonthlyPaymentSchedulerTrigger fired (1st of month at 6 AM UTC)');
-    await monthlyScheduler(context, myTimer, {});
+    context.log('📅 MonthlyPaymentSchedulerTrigger fired (1st of month at 6 AM UTC) — FIRST cohort');
+    await monthlyScheduler(context, myTimer, { cohort: 'FIRST' });
     context.log('✅ MonthlyPaymentSchedulerTrigger completed');
   } catch (error) {
     context.log.error('❌ MonthlyPaymentSchedulerTrigger failed:', error);
