@@ -139,13 +139,13 @@ async function getLocationPaymentMethod(pool, groupId, locationId, useLocationAC
 /**
  * Generate invoice record for a location
  */
-async function generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges = [], transaction = null) {
+async function generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges = [], transaction = null, paymentDay = 5) {
   const invoiceId = require('crypto').randomUUID();
-  
-  // Calculate due date (5th of current month - payment date)
-  // Invoice is generated on 1st, payment is charged on 5th of same month
+
+  // Calculate due date = the cohort charge day of the billing month.
+  // FIRST cohort: invoice anchored the 1st, charged the 5th. FIFTEENTH: anchored the 15th, charged the 20th.
   const dueDate = new Date(billingDate);
-  dueDate.setDate(5); // Payment date is 5th of the same month
+  dueDate.setDate(paymentDay);
   
   // Billing period (current month)
   const billingPeriodStart = new Date(billingDate.getFullYear(), billingDate.getMonth(), 1);
@@ -257,7 +257,7 @@ async function generateInvoice(pool, group, location, fees, billingDate, invoice
  * Uses UseLocationACH to determine which template to use
  * @param {Array} additionalLocations - Array of locations being charged to this invoice (for primary location)
  */
-async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMethod, billingDate, useLocationACH, logger, additionalLocations = []) {
+async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMethod, billingDate, useLocationACH, logger, additionalLocations = [], paymentDay = 5) {
   try {
     const tenantQuery = `SELECT TenantId FROM oe.Groups WHERE GroupId = @groupId`;
     const tenantResult = await pool.request()
@@ -290,15 +290,15 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
       day: 'numeric'
     });
     
-    // Calculate payment date (5th of the month) from billing date (1st of the month)
+    // Calculate payment date (cohort charge day) from the billing date
     const calculatePaymentDate = (billingDate) => {
       const date = new Date(billingDate);
-      date.setDate(5); // Payment happens on the 5th
+      date.setDate(paymentDay); // FIRST cohort = 5th, FIFTEENTH cohort = 20th
       return date;
     };
-    
+
     const paymentDate = calculatePaymentDate(billingDate);
-    
+
     // Build additional locations breakdown HTML (if primary location includes other locations)
     let additionalLocationsHtml = '';
     if (additionalLocations.length > 0) {
@@ -448,7 +448,7 @@ async function sendLocationInvoiceEmail(pool, group, location, fees, paymentMeth
 /**
  * Send consolidated group invoice email (to group contact + primary location contact)
  */
-async function sendConsolidatedInvoiceEmail(pool, group, locationResults, billingDate, logger) {
+async function sendConsolidatedInvoiceEmail(pool, group, locationResults, billingDate, logger, paymentDay = 5) {
   try {
     const tenantQuery = `SELECT TenantId FROM oe.Groups WHERE GroupId = @groupId`;
     const tenantResult = await pool.request()
@@ -601,15 +601,15 @@ async function sendConsolidatedInvoiceEmail(pool, group, locationResults, billin
       day: 'numeric'
     });
     
-    // Calculate payment date (5th of the month) from billing date (1st of the month)
+    // Calculate payment date (cohort charge day) from the billing date
     const calculatePaymentDate = (billingDate) => {
       const date = new Date(billingDate);
-      date.setDate(5); // Payment happens on the 5th
+      date.setDate(paymentDay); // FIRST cohort = 5th, FIFTEENTH cohort = 20th
       return date;
     };
-    
+
     const paymentDate = calculatePaymentDate(billingDate);
-    
+
     // Replace template variables
     const variables = {
       groupName: group.GroupName,
@@ -906,6 +906,14 @@ module.exports = async function (context, myTimer, options = {}) {
   const startTime = new Date();
   const singleGroupId = options && options.groupId;
   const billingDateOverride = options && options.billingDate; // YYYY-MM-DD for regenerate flow
+  // Billing cohort (one cohort per group, driven by oe.Groups.AllowMidMonthEffective):
+  //   FIRST     => members effective the 1st,  invoice anchored the 1st,  charged the 5th
+  //   FIFTEENTH => members effective the 15th, invoice anchored the 15th, charged the 20th
+  // Resolved from options.cohort (set by the timer triggers), or — for a single-group
+  // manual/regenerate run — derived from that group's flag after the pool connects.
+  let cohort = (options && options.cohort === 'FIFTEENTH') ? 'FIFTEENTH'
+             : (options && options.cohort === 'FIRST') ? 'FIRST'
+             : null;
 
   logger.section('Monthly Payment Scheduler Started (Multi-Location Billing)');
   logger.info(`Execution Date: ${startTime.toISOString()}`);
@@ -943,30 +951,49 @@ module.exports = async function (context, myTimer, options = {}) {
     // Connect to database
     pool = await getPool();
     logger.success('Database connected');
-    
-    // Calculate billing date and payment date
+
+    // Resolve billing cohort. For a single-group manual/regenerate run with no explicit
+    // cohort, derive it from the group's AllowMidMonthEffective flag so the run uses the
+    // correct charge day (5th vs 20th).
+    if (!cohort && singleGroupId) {
+      try {
+        const flagResult = await pool.request()
+          .input('groupId', sql.UniqueIdentifier, singleGroupId)
+          .query(`SELECT ISNULL(AllowMidMonthEffective, 0) AS AllowMidMonthEffective FROM oe.Groups WHERE GroupId = @groupId`);
+        const flag = flagResult.recordset[0]?.AllowMidMonthEffective;
+        cohort = (flag === true || flag === 1) ? 'FIFTEENTH' : 'FIRST';
+      } catch (e) {
+        logger.warn(`Could not resolve cohort for group ${singleGroupId}, defaulting FIRST: ${e.message}`);
+      }
+    }
+    if (!cohort) cohort = 'FIRST';
+    const ANCHOR_DAY = cohort === 'FIFTEENTH' ? 15 : 1;   // invoice / billing-period anchor day
+    const PAYMENT_DAY = cohort === 'FIFTEENTH' ? 20 : 5;  // DIME charge day-of-month
+    logger.info(`Billing cohort: ${cohort} (anchor day ${ANCHOR_DAY}, charge day ${PAYMENT_DAY})`);
+
+    // Calculate billing date and payment date (cohort-aware)
     // Override: when billingDateOverride (YYYY-MM-DD) is provided (e.g. from regenerate flow), use it
-    // Otherwise: If run on or before the 5th: invoice for current month; if after 5th: next month
+    // Otherwise: if run on or before the charge day, invoice for the current month; else next month
     const today = new Date();
     const currentDay = today.getDate();
-    
+
     let billingDate;
     let paymentDate;
-    
+
     if (billingDateOverride) {
       const [y, m, d] = billingDateOverride.split('-').map(Number);
       billingDate = new Date(y, (m || 1) - 1, d || 1);
       paymentDate = new Date(billingDate);
-      paymentDate.setDate(5);
+      paymentDate.setDate(PAYMENT_DAY);
       if (paymentDate < billingDate) paymentDate.setMonth(paymentDate.getMonth() + 1);
-    } else if (currentDay <= 5) {
-      // Run on 1st-5th: invoice for current month, payment on 5th of current month
-      billingDate = new Date(today.getFullYear(), today.getMonth(), 1);
-      paymentDate = new Date(today.getFullYear(), today.getMonth(), 5);
+    } else if (currentDay <= PAYMENT_DAY) {
+      // Run on/before the charge day: invoice for current month, payment this month
+      billingDate = new Date(today.getFullYear(), today.getMonth(), ANCHOR_DAY);
+      paymentDate = new Date(today.getFullYear(), today.getMonth(), PAYMENT_DAY);
     } else {
-      // Run after 5th: invoice for next month, payment on 5th of next month
-      billingDate = new Date(today.getFullYear(), today.getMonth() + 1, 1);
-      paymentDate = new Date(today.getFullYear(), today.getMonth() + 1, 5);
+      // Run after the charge day: invoice for next month, payment next month
+      billingDate = new Date(today.getFullYear(), today.getMonth() + 1, ANCHOR_DAY);
+      paymentDate = new Date(today.getFullYear(), today.getMonth() + 1, PAYMENT_DAY);
     }
     
     logger.info(`Billing Date (Invoice Date): ${billingDate.toISOString().split('T')[0]}`);
@@ -984,7 +1011,11 @@ module.exports = async function (context, myTimer, options = {}) {
         g.ProcessorCustomerId
       FROM oe.Groups g
       WHERE g.Status = 'Active'
-      ${singleGroupId ? 'AND g.GroupId = @groupId' : ''}
+      ${singleGroupId
+        ? 'AND g.GroupId = @groupId'
+        : (cohort === 'FIFTEENTH'
+            ? 'AND g.AllowMidMonthEffective = 1'
+            : 'AND ISNULL(g.AllowMidMonthEffective, 0) = 0')}
       ORDER BY g.Name
     `;
     const groupsRequest = pool.request();
@@ -1207,7 +1238,7 @@ module.exports = async function (context, myTimer, options = {}) {
               totalAmount: 0
             };
             
-            const zeroInvoice = await generateInvoice(pool, group, location, zeroFees, billingDate, invoiceNumber, logger, []);
+            const zeroInvoice = await generateInvoice(pool, group, location, zeroFees, billingDate, invoiceNumber, logger, [], null, PAYMENT_DAY);
             logger.info(`    Created $0 invoice for ${location.LocationName} (charged to primary): ${invoiceNumber}`);
             results.invoicesCreated++;
             
@@ -1224,7 +1255,7 @@ module.exports = async function (context, myTimer, options = {}) {
               const emailSent = await sendLocationInvoiceEmail(
                 pool, group, location, fees, paymentMethod, billingDate,
                 false, // UseLocationACH = false
-                logger
+                logger, [], PAYMENT_DAY
               );
               if (emailSent) results.emailsSent++;
               else results.emailsFailed++;
@@ -1276,7 +1307,7 @@ module.exports = async function (context, myTimer, options = {}) {
           }
           
           try {
-            invoice = await generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges, transaction);
+            invoice = await generateInvoice(pool, group, location, fees, billingDate, invoiceNumber, logger, additionalCharges, transaction, PAYMENT_DAY);
             results.invoicesCreated++;
             
             // Store result for consolidated email
@@ -1434,12 +1465,13 @@ module.exports = async function (context, myTimer, options = {}) {
                   .input('scheduleId', sql.NVarChar(255), newSchedule.scheduleId)
                   .input('amount', sql.Decimal(10,2), scheduleAmount)
                   .input('nextBillingDate', sql.DateTime2, nextBillingDate)
+                  .input('billingDay', sql.Int, PAYMENT_DAY)
                   .query(`
                     INSERT INTO oe.GroupRecurringPaymentPlans (
                       PlanId, GroupId, LocationId, InvoiceId, DimeScheduleId, MonthlyAmount, BillingDay,
                       NextBillingDate, IsActive, CreatedDate, ModifiedDate
                     ) VALUES (
-                      NEWID(), @groupId, @locationId, @invoiceId, @scheduleId, @amount, 5,
+                      NEWID(), @groupId, @locationId, @invoiceId, @scheduleId, @amount, @billingDay,
                       @nextBillingDate, 1, GETUTCDATE(), GETUTCDATE()
                     )
                   `);
@@ -1560,7 +1592,7 @@ module.exports = async function (context, myTimer, options = {}) {
             
             const emailSent = await sendLocationInvoiceEmail(
               pool, group, location, fees, paymentMethod, billingDate,
-              shouldUseNormalTemplate, logger, additionalLocationsInfo
+              shouldUseNormalTemplate, logger, additionalLocationsInfo, PAYMENT_DAY
             );
             if (emailSent) {
               results.emailsSent++;
@@ -1582,7 +1614,7 @@ module.exports = async function (context, myTimer, options = {}) {
         
         // Send consolidated email if multiple locations (only if not skipping emails)
         if (locationResults.length > 1 && !SKIP_EMAILS) {
-          const consolidatedSent = await sendConsolidatedInvoiceEmail(pool, group, locationResults, billingDate, logger);
+          const consolidatedSent = await sendConsolidatedInvoiceEmail(pool, group, locationResults, billingDate, logger, PAYMENT_DAY);
           if (consolidatedSent) {
             results.emailsSent++;
           } else {
