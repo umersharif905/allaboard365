@@ -35,8 +35,10 @@ function classifyLedgerStatus(status) {
   if (s.includes('FEE')) return 'fee';
   if (s.includes('REJECT') || s.includes('RETURN') || s.includes('FAIL') || s.includes('DECLIN') || s.includes('VOID')) return 'failed';
   if (s.includes('REFUND')) return 'refund';
-  if (s.includes('CREDIT') || s.includes('APPROVED') || s.includes('SETTLED') || s.includes('SUCCESS') || s.includes('COMPLETE')) return 'credit';
+  // PENDING must outrank CREDIT: ACH_PAYMENT_CREDIT_PENDING is in-flight money,
+  // not a settled credit — misclassifying it caused false "settled, no DB row" alerts.
   if (s.includes('PENDING') || s.includes('PROCESSING')) return 'pending';
+  if (s.includes('CREDIT') || s.includes('APPROVED') || s.includes('SETTLED') || s.includes('SUCCESS') || s.includes('COMPLETE')) return 'credit';
   return 'other';
 }
 
@@ -44,17 +46,39 @@ function classifyLedgerStatus(status) {
  * Group raw DIME ledger lines by transaction_number and net credits against
  * returns/rejections on the same txn (a return line carries the principal amount).
  *
- * @param {Array<Object>} lines raw DIME transaction objects
+ * CK_DEBIT lines (refund checks mailed to the customer) carry NO transaction
+ * number, so they are netted by amount against the earliest matching settled
+ * credit in the same customer ledger — otherwise a charge that DIME refunded
+ * by check looks like settled-but-unrecorded money (Barry #462, B56D2227 #451).
+ *
+ * @param {Array<Object>} lines raw DIME transaction objects (one customer's ledger)
  * @returns {Array<{ transactionNumber: string, credit: number, clawedBack: boolean,
- *                   settled: boolean, creditDate: string|null, description: string }>}
+ *                   settled: boolean, refundedByCheck: boolean, creditDate: string|null, description: string }>}
  */
+/**
+ * DIME returns money as display strings, sometimes with thousands separators
+ * (e.g. "1,536.17") which Number()/parseFloat mangle. Strip separators first.
+ */
+function parseDimeMoney(value) {
+  if (typeof value === 'number') return value;
+  const cleaned = String(value ?? '').replace(/[$,\s]/g, '');
+  const n = parseFloat(cleaned);
+  return Number.isFinite(n) ? n : 0;
+}
+
 function netLedgerByTransaction(lines) {
   const byNum = new Map();
+  const checkRefunds = [];
   for (const t of lines || []) {
     const num = String(t.transaction_number || t.transaction_id || t.id || '').trim();
-    if (!num) continue;
     const status = t.transaction_status || t.status || '';
-    const amount = Number(t.amount ?? 0);
+    const amount = parseDimeMoney(t.amount);
+    if (!num) {
+      if (String(status).toUpperCase().includes('CK_DEBIT') && amount > 0) {
+        checkRefunds.push({ amount, date: String(t.transaction_date || t.created_at || '').slice(0, 10) || null });
+      }
+      continue;
+    }
     const cls = classifyLedgerStatus(status);
     if (!byNum.has(num)) {
       byNum.set(num, {
@@ -62,6 +86,7 @@ function netLedgerByTransaction(lines) {
         credit: 0,
         clawedBack: false,
         settled: false,
+        refundedByCheck: false,
         creditDate: null,
         description: '',
         lines: []
@@ -80,6 +105,19 @@ function netLedgerByTransaction(lines) {
     g.clawedBack = g.credit > 0 && g.lines.some((l) => l.cls === 'failed' && l.amount >= g.credit);
     g.settled = g.credit > 0 && !g.clawedBack;
     delete g.lines;
+  }
+  // Net refund checks against settled credits: earliest credit of the exact
+  // amount that predates (or equals) the check date is the one refunded.
+  checkRefunds.sort((a, b) => String(a.date || '').localeCompare(String(b.date || '')));
+  for (const ck of checkRefunds) {
+    const candidates = [...byNum.values()]
+      .filter((g) => g.settled && !g.refundedByCheck && Math.abs(g.credit - ck.amount) < 0.005)
+      .filter((g) => !ck.date || !g.creditDate || g.creditDate <= ck.date)
+      .sort((a, b) => String(a.creditDate || '').localeCompare(String(b.creditDate || '')));
+    if (candidates.length > 0) {
+      candidates[0].refundedByCheck = true;
+      candidates[0].settled = false;
+    }
   }
   return [...byNum.values()];
 }
@@ -280,5 +318,6 @@ module.exports = {
   runLedgerAudit,
   netLedgerByTransaction,
   classifyLedgerStatus,
-  listCustomerUuidsForTenant
+  listCustomerUuidsForTenant,
+  parseDimeMoney
 };

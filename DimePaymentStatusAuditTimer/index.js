@@ -1,5 +1,6 @@
 const { runAudit, listTenantIdsForDimeAudit } = require('../shared/dimePaymentStatusAudit');
 const { runLedgerAudit } = require('../shared/dimeLedgerAudit');
+const { runScheduleAudit } = require('../shared/dimeScheduleAudit');
 const { recordIntegrationErrorOnce } = require('../shared/integrationErrors');
 
 /**
@@ -17,6 +18,7 @@ const { recordIntegrationErrorOnce } = require('../shared/integrationErrors');
  * - DIME_STATUS_AUDIT_TIMER_DISABLED — set to "true" to no-op (e.g. local)
  * - DIME_LEDGER_AUDIT_DISABLED — set to "true" to skip the DIME → DB ledger pass
  * - DIME_LEDGER_AUDIT_DAYS_BACK (default 35) — ledger window per customer (returns land up to ~6 days after settle)
+ * - DIME_SCHEDULE_AUDIT_DISABLED — set to "true" to skip the recurring-schedule reconciliation pass
  */
 module.exports = async function (context, myTimer) {
   if (process.env.DIME_STATUS_AUDIT_TIMER_DISABLED === 'true' || process.env.DIME_STATUS_AUDIT_TIMER_DISABLED === '1') {
@@ -49,6 +51,9 @@ module.exports = async function (context, myTimer) {
     92,
     Math.max(7, parseInt(process.env.DIME_LEDGER_AUDIT_DAYS_BACK || '35', 10) || 35)
   );
+  const scheduleAuditEnabled = !(
+    process.env.DIME_SCHEDULE_AUDIT_DISABLED === 'true' || process.env.DIME_SCHEDULE_AUDIT_DISABLED === '1'
+  );
 
   const summary = {
     tenantsProcessed: 0,
@@ -60,6 +65,9 @@ module.exports = async function (context, myTimer) {
     ledgerClawbacksFound: 0,
     ledgerClawbacksFixed: 0,
     ledgerMissingRows: 0,
+    scheduleOrphans: 0,
+    scheduleAmountMismatches: 0,
+    scheduleMultipleActive: 0,
     tenantResults: []
   };
 
@@ -136,6 +144,63 @@ module.exports = async function (context, myTimer) {
         } catch (ledgerErr) {
           tenantResult.ledgerError = ledgerErr.message;
           context.log.error(`DimeLedgerAudit tenant ${tenantId} failed:`, ledgerErr);
+        }
+      }
+
+      if (scheduleAuditEnabled) {
+        try {
+          const sr = await runScheduleAudit({ tenantId });
+          summary.scheduleOrphans += sr.orphans.length;
+          summary.scheduleAmountMismatches += sr.amountMismatches.length;
+          summary.scheduleMultipleActive += sr.multipleActive.length;
+          tenantResult.schedules = {
+            customersChecked: sr.customersChecked,
+            customerLookupFailures: sr.customerLookupFailures,
+            activeSchedulesSeen: sr.activeSchedulesSeen,
+            orphans: sr.orphans,
+            amountMismatches: sr.amountMismatches,
+            multipleActive: sr.multipleActive
+          };
+          // Orphans charge customers money our system can't see — critical.
+          for (const o of sr.orphans) {
+            context.log.warn(`DimeScheduleAudit tenant ${tenantId}: ORPHAN active DIME schedule:`, JSON.stringify(o));
+            await recordIntegrationErrorOnce({
+              category: 'billing',
+              source: 'DimeScheduleAudit',
+              severity: 'error',
+              priority: 'critical',
+              tenantId,
+              message: `Active DIME schedule #${o.scheduleId} ($${Number(o.dimeAmount).toFixed(2)}/mo, next run ${o.nextRunDate || 'unknown'}) has NO row in our DB — ${o.name || o.customerUuid}. It will keep charging the customer invisibly; needs manual review/cancel.`,
+              detail: o
+            });
+          }
+          for (const mm of sr.amountMismatches) {
+            context.log.warn(`DimeScheduleAudit tenant ${tenantId}: amount mismatch:`, JSON.stringify(mm));
+            await recordIntegrationErrorOnce({
+              category: 'billing',
+              source: 'DimeScheduleAudit',
+              severity: 'warning',
+              priority: 'high',
+              tenantId,
+              message: `DIME schedule #${mm.scheduleId} will charge $${Number(mm.dimeAmount).toFixed(2)} but our DB expects $${Number(mm.dbAmount).toFixed(2)} — ${mm.name || mm.customerUuid} (next run ${mm.nextRunDate || 'unknown'}). Wrong amount will be pulled; needs manual fix.`,
+              detail: mm
+            });
+          }
+          for (const ma of sr.multipleActive) {
+            context.log.warn(`DimeScheduleAudit tenant ${tenantId}: multiple active schedules:`, JSON.stringify(ma));
+            await recordIntegrationErrorOnce({
+              category: 'billing',
+              source: 'DimeScheduleAudit',
+              severity: 'error',
+              priority: 'critical',
+              tenantId,
+              message: `Customer ${ma.customerUuid} has ${ma.scheduleIds.length} ACTIVE DIME schedules (${ma.scheduleIds.join(', ')} — $${ma.amounts.join(', $')}). Double-charge in progress; needs manual review.`,
+              detail: ma
+            });
+          }
+        } catch (scheduleErr) {
+          tenantResult.scheduleAuditError = scheduleErr.message;
+          context.log.error(`DimeScheduleAudit tenant ${tenantId} failed:`, scheduleErr);
         }
       }
 

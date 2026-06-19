@@ -23,6 +23,27 @@ describe('classifyLedgerStatus', () => {
     // REJECTED_FEE contains both REJECT and FEE — must classify as fee
     expect(classifyLedgerStatus('ACH_PAYMENT_CREDIT_REJECTED_FEE')).toBe('fee');
   });
+
+  it('pending wins over credit: in-flight ACH credit is NOT settled money (Willey #794 false alert)', () => {
+    expect(classifyLedgerStatus('ACH_PAYMENT_CREDIT_PENDING')).toBe('pending');
+  });
+});
+
+describe('netLedgerByTransaction pending handling', () => {
+  it('an in-flight ACH credit (CREDIT_PENDING) is neither settled nor clawed back', () => {
+    const out = netLedgerByTransaction([
+      {
+        transaction_number: '794',
+        transaction_status: 'ACH_PAYMENT_CREDIT_PENDING',
+        amount: '712.9200',
+        transaction_date: '2026-06-11T09:00:20Z',
+        description: 'Annette Willey (MW15990781)'
+      }
+    ]);
+    expect(out[0].settled).toBe(false);
+    expect(out[0].clawedBack).toBe(false);
+    expect(out[0].credit).toBe(0);
+  });
 });
 
 describe('netLedgerByTransaction', () => {
@@ -96,13 +117,45 @@ describe('netLedgerByTransaction', () => {
     expect(byNum['765'].settled).toBe(true);
   });
 
-  it('skips lines without a transaction number (CK_DEBIT refund checks)', () => {
+  it('nets an un-numbered CK_DEBIT refund check against the earliest matching settled credit (B56D2227 pattern)', () => {
+    // Customer double-charged $445 (#451 on 5/6, #469 on 5/12), refunded $445 by check 5/13.
+    // The check offsets the EARLIEST credit (#451); #469 stays settled.
     const out = netLedgerByTransaction([
-      { transaction_number: '', transaction_status: 'CK_DEBIT', amount: '445.00' },
-      line('469', 'ACH_PAYMENT_CREDIT', '445.00')
+      { transaction_number: '', transaction_status: 'CK_DEBIT', amount: '445.0000', transaction_date: '2026-05-13T12:00:00Z' },
+      line('469', 'ACH_PAYMENT_CREDIT', '445.0000', '2026-05-12T09:00:00Z'),
+      line('451', 'ACH_PAYMENT_CREDIT', '445.0000', '2026-05-06T09:00:00Z')
+    ]);
+    const byNum = Object.fromEntries(out.map((g) => [g.transactionNumber, g]));
+    expect(byNum['451'].settled).toBe(false);
+    expect(byNum['451'].refundedByCheck).toBe(true);
+    expect(byNum['469'].settled).toBe(true);
+    expect(byNum['469'].refundedByCheck).toBe(false);
+  });
+
+  it('a settled credit fully refunded by check is not "settled missing money" (Barry #462 pattern)', () => {
+    // Barry paid $799 on 5/9, re-billed $823 twice on 6/2, DIME mailed her a $799 check 6/8.
+    const out = netLedgerByTransaction([
+      { transaction_number: '', transaction_status: 'CK_DEBIT', amount: '799.0000', transaction_date: '2026-06-08T12:00:00Z' },
+      line('707', 'ACH_PAYMENT_CREDIT', '823.0000', '2026-06-02T09:00:00Z'),
+      line('706', 'ACH_PAYMENT_CREDIT', '823.0000', '2026-06-02T09:00:00Z'),
+      line('462', 'ACH_PAYMENT_CREDIT', '799.0000', '2026-05-09T09:00:00Z')
+    ]);
+    const byNum = Object.fromEntries(out.map((g) => [g.transactionNumber, g]));
+    expect(byNum['462'].settled).toBe(false);
+    expect(byNum['462'].refundedByCheck).toBe(true);
+    expect(byNum['462'].clawedBack).toBe(false);
+    expect(byNum['706'].settled).toBe(true);
+    expect(byNum['707'].settled).toBe(true);
+  });
+
+  it('a CK_DEBIT with no matching credit amount offsets nothing', () => {
+    const out = netLedgerByTransaction([
+      { transaction_number: '', transaction_status: 'CK_DEBIT', amount: '100.00', transaction_date: '2026-05-13T12:00:00Z' },
+      line('469', 'ACH_PAYMENT_CREDIT', '445.00', '2026-05-12T09:00:00Z')
     ]);
     expect(out).toHaveLength(1);
-    expect(out[0].transactionNumber).toBe('469');
+    expect(out[0].settled).toBe(true);
+    expect(out[0].refundedByCheck).toBe(false);
   });
 
   it('handles empty/missing input', () => {

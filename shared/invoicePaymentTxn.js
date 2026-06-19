@@ -5,12 +5,16 @@
  */
 const { isSuccessfulPaymentRecordStatus } = require('./payment-status');
 
-function recalcStatusFromAmounts(totalAmount, paidAmount, creditAmount) {
+function recalcStatusFromAmounts(totalAmount, paidAmount, creditAmount, currentStatus) {
   const total = Number(totalAmount) || 0;
   const paid = Number(paidAmount) || 0;
   const credit = Number(creditAmount) || 0;
   const covered = paid + credit;
   if (covered >= total - 0.005) return 'Paid';
+  // Preserve Overdue set by the nightly due-date sweep: amount-driven recalcs
+  // must not flip a past-due invoice back to Unpaid/Partial (the sweep's reset
+  // pass handles due dates moving into the future).
+  if (String(currentStatus || '') === 'Overdue') return 'Overdue';
   if (covered > 0.005) return 'Partial';
   return 'Unpaid';
 }
@@ -27,7 +31,7 @@ async function unfulfillInvoiceInTxn(transaction, sql, invoiceId, refundAmount) 
     .request()
     .input('invoiceId', sql.UniqueIdentifier, invoiceId)
     .query(
-      `SELECT TotalAmount, PaidAmount, CreditAmount FROM oe.Invoices WHERE InvoiceId = @invoiceId`
+      `SELECT TotalAmount, PaidAmount, CreditAmount, Status FROM oe.Invoices WHERE InvoiceId = @invoiceId`
     );
 
   if (!inv.recordset.length) return { applied: false, reason: 'invoice_not_found' };
@@ -36,7 +40,7 @@ async function unfulfillInvoiceInTxn(transaction, sql, invoiceId, refundAmount) 
   const prevPaid = parseFloat(inv.recordset[0].PaidAmount) || 0;
   const credit = parseFloat(inv.recordset[0].CreditAmount) || 0;
   const newPaid = Math.max(0, prevPaid - amt);
-  const newStatus = recalcStatusFromAmounts(total, newPaid, credit);
+  const newStatus = recalcStatusFromAmounts(total, newPaid, credit, inv.recordset[0].Status);
 
   await transaction
     .request()
@@ -101,7 +105,7 @@ async function syncInvoiceAfterPaymentStatusChangeInTxn(transaction, sql, params
   const prevPaid = parseFloat(inv.PaidAmount || 0) || 0;
   const credit = parseFloat(inv.CreditAmount || 0) || 0;
   const newPaid = Math.min(total, prevPaid + amt);
-  const newInvStatus = recalcStatusFromAmounts(total, newPaid, credit);
+  const newInvStatus = recalcStatusFromAmounts(total, newPaid, credit, inv.Status);
 
   await transaction
     .request()

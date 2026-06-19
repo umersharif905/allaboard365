@@ -176,7 +176,8 @@ async function resolveTenantIdFromWebhookPayload(pool, webhookData) {
           FROM oe.MemberPaymentMethods mpm
           INNER JOIN oe.Members mem ON mem.MemberId = mpm.MemberId
           INNER JOIN oe.Users u ON u.UserId = mem.UserId
-          WHERE mpm.ProcessorCustomerId = @cu AND mpm.Status = N'Active'
+          WHERE mpm.ProcessorCustomerId = @cu
+          ORDER BY CASE WHEN mpm.Status = N'Active' THEN 0 ELSE 1 END
         `);
       if (m.recordset.length > 0) return m.recordset[0].TenantId;
     } catch (_) { /* ignore */ }
@@ -993,7 +994,7 @@ async function syncInvoiceStatusAfterRecurringPaymentFailure(pool, sqlLib, invoi
     return { applied: false, reason: 'already_covered' };
   }
 
-  const newStatus = recalcStatusFromAmounts(total, paid, credit);
+  const newStatus = recalcStatusFromAmounts(total, paid, credit, currentStatus);
   await pool
     .request()
     .input('invoiceId', sqlLib.UniqueIdentifier, invoiceId)
@@ -2079,14 +2080,40 @@ async function handleCreditCardRefund(pool, data, webhookEventId, logger) {
 
   logger.info(`Credit Card Refund: Transaction ${transactionId}, Amount: $${amount}`);
 
-  // Find original payment (including pricing fields)
+  // Idempotency: refunds initiated from our app insert their own Refund row before
+  // DIME's confirmation webhook arrives. The app stores the parent's info_id as the
+  // refund row's ProcessorTransactionId, so match on either id.
+  const existingRefund = await pool.request()
+    .input('refundTxn', sql.NVarChar(255), String(transactionId || ''))
+    .input('parentInfoId', sql.NVarChar(255), String(originalTransactionId || ''))
+    .query(`
+      SELECT TOP 1 PaymentId
+      FROM oe.Payments
+      WHERE TransactionType = 'Refund'
+        AND (
+          ProcessorTransactionId = @refundTxn
+          OR (@parentInfoId <> N'' AND ProcessorTransactionId = @parentInfoId)
+        )
+    `);
+  if (existingRefund.recordset.length > 0) {
+    logger.info(`Credit card refund ${transactionId} already recorded (PaymentId ${existingRefund.recordset[0].PaymentId}) — skipping duplicate insert`);
+    return;
+  }
+
+  // Find original payment (including pricing fields). DIME sends parent_transaction_info_id,
+  // which is the original's INFO id — our ProcessorTransactionId holds the transaction NUMBER,
+  // so check both columns (same pattern as the ACH return lookup).
   const originalPayment = await pool.request()
     .input('processorTransactionId', sql.NVarChar(255), originalTransactionId)
     .query(`
-      SELECT PaymentId, GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees
-      FROM oe.Payments 
-      WHERE ProcessorTransactionId = @processorTransactionId 
-        AND TransactionType = 'Payment'
+      SELECT TOP 1 PaymentId, GroupId, TenantId, NetRate, Commission, OverrideRate, SystemFees
+      FROM oe.Payments
+      WHERE TransactionType = 'Payment'
+        AND (
+          ProcessorTransactionId = @processorTransactionId
+          OR LTRIM(RTRIM(ISNULL(CAST(ProcessorTransactionInfoId AS NVARCHAR(255)), N''))) = LTRIM(RTRIM(@processorTransactionId))
+        )
+      ORDER BY CreatedDate DESC
     `);
 
   if (originalPayment.recordset.length === 0) {
@@ -2973,9 +3000,8 @@ async function resolveIndividualRecurringContext(pool, scheduleId, logger) {
       .query(`
         SELECT TOP 1 irs.HouseholdId, irs.TenantId
         FROM oe.IndividualRecurringSchedules irs
-        WHERE irs.IsActive = 1
-          AND LTRIM(RTRIM(CAST(irs.DimeScheduleId AS NVARCHAR(255)))) = LTRIM(RTRIM(@scheduleId))
-        ORDER BY irs.ModifiedDate DESC, irs.CreatedDate DESC
+        WHERE LTRIM(RTRIM(CAST(irs.DimeScheduleId AS NVARCHAR(255)))) = LTRIM(RTRIM(@scheduleId))
+        ORDER BY irs.IsActive DESC, irs.ModifiedDate DESC, irs.CreatedDate DESC
       `);
 
     if (irsResult.recordset.length > 0) {
@@ -3072,9 +3098,9 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
           INNER JOIN oe.Members m ON m.HouseholdId = irs.HouseholdId AND m.RelationshipType = N'P'
           INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
             AND mpm.ProcessorCustomerId = @customerUuid
-            AND mpm.Status = N'Active'
-          WHERE irs.IsActive = 1
-          ORDER BY irs.ModifiedDate DESC, irs.CreatedDate DESC
+          ORDER BY irs.IsActive DESC,
+            CASE WHEN mpm.Status = N'Active' THEN 0 ELSE 1 END,
+            irs.ModifiedDate DESC, irs.CreatedDate DESC
         `);
       if (indSched.recordset.length > 0) {
         scheduleId = String(indSched.recordset[0].DimeScheduleId).trim();
@@ -3097,9 +3123,9 @@ async function handleRecurringPaymentSuccess(pool, data, webhookEventId, logger)
           INNER JOIN oe.Members m ON m.HouseholdId = p.HouseholdId AND m.RelationshipType = N'P'
           INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
             AND mpm.ProcessorCustomerId = @customerUuid
-            AND mpm.Status = N'Active'
           WHERE p.RecurringScheduleId IS NOT NULL AND LTRIM(RTRIM(CAST(p.RecurringScheduleId AS NVARCHAR(255)))) <> N''
-          ORDER BY p.ModifiedDate DESC, p.PaymentDate DESC
+          ORDER BY CASE WHEN mpm.Status = N'Active' THEN 0 ELSE 1 END,
+            p.ModifiedDate DESC, p.PaymentDate DESC
         `);
       if (paySched.recordset.length > 0) {
         scheduleId = String(paySched.recordset[0].RecurringScheduleId).trim();
@@ -3323,9 +3349,9 @@ async function handleRecurringPaymentFailed(pool, data, webhookEventId, logger) 
           INNER JOIN oe.Members m ON m.HouseholdId = irs.HouseholdId AND m.RelationshipType = N'P'
           INNER JOIN oe.MemberPaymentMethods mpm ON mpm.MemberId = m.MemberId
             AND mpm.ProcessorCustomerId = @customerUuid
-            AND mpm.Status = N'Active'
-          WHERE irs.IsActive = 1
-          ORDER BY irs.ModifiedDate DESC, irs.CreatedDate DESC
+          ORDER BY irs.IsActive DESC,
+            CASE WHEN mpm.Status = N'Active' THEN 0 ELSE 1 END,
+            irs.ModifiedDate DESC, irs.CreatedDate DESC
         `);
       if (indSched.recordset.length > 0) {
         scheduleId = String(indSched.recordset[0].DimeScheduleId).trim();
@@ -3491,3 +3517,4 @@ module.exports.findOriginalPaymentForBounce = findOriginalPaymentForBounce;
 module.exports.processWebhookEventByType = processWebhookEventByType;
 module.exports.replayStoredPaymentWebhook = replayStoredPaymentWebhook;
 module.exports.createConsoleReplayLogger = createConsoleReplayLogger;
+module.exports.handleCreditCardRefund = handleCreditCardRefund;
