@@ -1,0 +1,37 @@
+---
+description: Testing strategy — when to write Cypress (E2E), Jest (backend), and Vitest (frontend unit) tests, and how to run them
+globs: backend/**/__tests__/**,frontend/src/**/__tests__/**,frontend/cypress/**/*.cy.ts,**/*.test.js,**/*.test.ts,**/*.test.tsx
+alwaysApply: false
+---
+
+# Testing Strategy
+
+Pick the layer by what you're testing:
+
+- **Functionality / user flows** → Cypress E2E (`frontend/cypress/e2e/`). Required for functionality-related features; **not** needed for purely visual/styling changes.
+- **Utilities & services** → unit tests (Jest on the backend, Vitest on the frontend).
+- **Frontend components with logic** → Vitest (jsdom).
+- Visual regression is handled separately from these.
+
+> In YOLO mode, proactively create Cypress tests for any functionality being implemented.
+
+## Commands
+
+**Backend (from `backend/`)**
+- All: `npx jest`
+- Single: `npx jest <test-file-path>`
+
+**Frontend unit (from `frontend/`)**
+- All: `npx vitest run`
+- Single: `npx vitest run <test-file>`
+
+**E2E (from `frontend/`)**
+- Headless: `npx cypress run`
+- Single spec: `npx cypress run --spec "cypress/e2e/<spec-file>"`
+- Interactive: `npx cypress open`
+
+## Conventions
+
+- Backend tests live in `routes/__tests__/` and `services/__tests__/`; DB and axios are mocked.
+- Cypress enrollment specs are stub-driven (no live DB). DIME sandbox fixtures are canonical in `backend/test-fixtures/dime-test-cards.js`, mirrored in `frontend/cypress/fixtures/enrollment/`.
+- See `docs/enrollments/testing.md` for the full multi-layer enrollment suite.

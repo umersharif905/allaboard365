@@ -1,0 +1,42 @@
+{
+  "tenant": "MightyWELL Health",
+  "results": [
+    {
+      "id": "cc.approved.visa",
+      "kind": "cc",
+      "label": "Valid Visa — should vault",
+      "expect": "success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 360,
+            "type": "cc",
+            "token": "VOUDYV5MYEVIMEOUSC3L1111",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "1111",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "Visa",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:25",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    }
+  ]
+}

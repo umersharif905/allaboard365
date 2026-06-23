@@ -1,0 +1,2226 @@
+# Script Name..: openapi.yaml
+# Date Created.: 02/12/2026
+# Copyright....: Enrollment123.com, 2016-present
+# Author.......: Austin
+# Description..: OpenAPI 3.0 specification for the Member Search API (user.getall)
+#
+# Revision History:
+# 02/12/2026 - austin: CDEV-4071: Initial creation of Member Search API documentation.
+
+openapi: 3.0.1
+info:
+  title: "Member Search API"
+  description: >
+    The Member Search API (`user.getall`) allows you to search and retrieve member data
+    in real time from the e123 enrollment system. The API returns XML and supports extensive
+    filtering across users, dependents, products, transactions, payments, leads, and more.
+
+
+    **Date Fields:** Date filter parameters accept either a valid date string (e.g., `01/15/2024`)
+    or a date keyword such as `today`, `tomorrow`, `yesterday`, `lastweek`, `nextweek`, `thisweek`,
+    `lastmonth`, `nextmonth`, `thismonth`, `lastyear`, `nextyear`, `thisyear`, `last{N}days`
+    (e.g., `last30days`), or `next{N}days` (e.g., `next7days`).
+
+
+    **Response Data:** The returned user fields depend on which standard questions are configured
+    for the client. Optional sections (dependents, products, transactions, beneficiaries) are
+    controlled by return flag parameters.
+
+
+    **Pagination:** Results are limited to 1000 users per request. Use the `NEXT_USER` parameter
+    with the `userid` value of the last user returned to retrieve the next page.
+
+
+    **Authentication:** Every request requires valid `CORPID`, `USERNAME`, and `PASSWORD`
+    parameters. If authentication fails, the API returns an empty (blank) response body with
+    no XML content.
+  version: "1"
+servers:
+  - url: https://www.enrollment123.com
+    description: Production
+
+tags:
+  - name: Member Search
+    description: Search and retrieve member data with extensive filtering options.
+
+paths:
+  /api/user.getall/:
+    post:
+      tags:
+        - Member Search
+      summary: Search members
+      description: >
+        Search for members using a wide range of filter parameters via POST.
+        Results are returned as XML wrapped in a `<method request="user.getall">` root element.
+        Up to 1000 users are returned per request; use `NEXT_USER` for pagination.
+      operationId: userGetAll
+      requestBody:
+        required: true
+        content:
+          application/x-www-form-urlencoded:
+            schema:
+              $ref: '#/components/schemas/SearchRequest'
+      responses:
+        "200":
+          description: >
+            XML response wrapped in `<method request="user.getall">`. Always contains a
+            `<users>` collection with a `total` attribute. When no members match, the response
+            contains `<users total="0"/>`. Optional sections (dependents, products, transactions,
+            beneficiaries) are included when their corresponding return flags are set to `1`.
+
+
+            **Note:** If authentication fails (invalid CORPID, USERNAME, or PASSWORD), the API
+            returns a blank (empty) response body.
+          content:
+            application/xml:
+              schema:
+                $ref: '#/components/schemas/MethodResponse'
+              examples:
+                success:
+                  $ref: '#/components/examples/SuccessResponse'
+                successWithAllSections:
+                  $ref: '#/components/examples/SuccessWithAllSections'
+                noMatchingMembers:
+                  $ref: '#/components/examples/NoMatchingMembersResponse'
+
+components:
+
+  # ============================================================
+  # SCHEMAS
+  # ============================================================
+  schemas:
+
+    # --- Request Schema (for POST) ---
+    SearchRequest:
+      type: object
+      required:
+        - CORPID
+        - USERNAME
+        - PASSWORD
+      properties:
+        # --- Authentication ---
+        CORPID:
+          type: integer
+          description: Your assigned corp ID.
+        USERNAME:
+          type: string
+          description: Valid and active username for a user in system.
+        PASSWORD:
+          type: string
+          description: Password for the username.
+        # --- Return Flags ---
+        RETURN_PRODUCTS:
+          type: integer
+          enum: [0, 1]
+          default: 0
+          description: Send `1` to include `<products>` XML structure.
+        RETURN_DEPENDENTS:
+          type: integer
+          enum: [0, 1]
+          default: 0
+          description: Send `1` to include `<dependents>` XML structure.
+        RETURN_BENEFICIARIES:
+          type: integer
+          enum: [0, 1]
+          default: 0
+          description: Send `1` to include `<beneficiaries>` XML structure.
+        RETURN_TRANSACTIONS:
+          type: integer
+          enum: [0, 1]
+          default: 0
+          description: Send `1` to include `<transactions>` XML structure.
+        RETURN_USERCUSTOMQUESTIONS:
+          type: integer
+          enum: [0, 1]
+          default: 0
+          description: Send `1` to include user custom questions data.
+        RETURN_USERPRODUCTCUSTOMQUESTIONS:
+          type: integer
+          enum: [0, 1]
+          default: 0
+          description: Send `1` to include user product custom questions data.
+        NEXT_USER:
+          type: integer
+          description: User ID of the last user returned for pagination (next 1000 users).
+        # --- Broker/Agent Filters ---
+        BROKERID:
+          type: integer
+          description: Search on agent of member.
+        SHOW_TREE:
+          type: integer
+          enum: [1]
+          description: Send `1` to search on broker tree.
+        ASSIGNED_BROKERID:
+          type: integer
+          description: Search on assigned broker.
+        ASSIGNED_SHOW_TREE:
+          type: integer
+          enum: [1]
+          description: Send `1` to search on assigned broker tree.
+        ASSIGNED_STATUS:
+          type: integer
+          description: Search on blank or not blank assigned broker IDs.
+        ENROLLERID:
+          type: integer
+          description: Search on selling agent ID.
+        # --- User Filters ---
+        USER_ID:
+          type: integer
+          description: Search on member system ID.
+        MEMBERID:
+          type: string
+          description: Search on member ID value. Supports comma-separated lists.
+        USER_USERNAME:
+          type: string
+          description: Search by username.
+        USER_FIRSTNAME:
+          type: string
+          description: Search on first name.
+        USER_FIRSTNAME_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` to search NULL/empty first names.
+        USER_LASTNAME:
+          type: string
+          description: Search on last name.
+        USER_LASTNAME_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` to search NULL/empty last names.
+        USER_EMAIL:
+          type: string
+          description: Search on email, email2, email3.
+        USER_PHONE1:
+          type: string
+          description: Search on phone 1.
+        USER_PHONE2:
+          type: string
+          description: Search on phone 2.
+        USER_PHONE3:
+          type: string
+          description: Search on phone 3.
+        USER_CITY:
+          type: string
+          description: Search on city.
+        USER_STATE:
+          type: string
+          description: Search on state.
+        USER_COUNTRY:
+          type: string
+          description: Search on country.
+        USER_COMPANY:
+          type: string
+          description: Search on company.
+        USER_POSITION:
+          type: string
+          description: Search on position.
+        USER_GENDER:
+          type: string
+          description: Search on gender.
+        USER_SOURCE:
+          type: string
+          description: Search source.
+        USER_SOURCE_DETAIL:
+          type: string
+          description: Search source detail.
+        USER_TRACK_FLAG:
+          type: string
+          description: Search track flag.
+        USER_STATUS:
+          type: string
+          description: Determine user status filter.
+        USER_IS_LEAD:
+          type: integer
+          enum: [0, 1]
+          description: "`1` for prospects, `0` for non-prospects."
+        USER_INVOICED:
+          type: integer
+          enum: [0, 1]
+          description: "`1` for invoiced, `0` for non-invoiced."
+        USER_ATTENDED:
+          type: integer
+          enum: [1]
+          description: Send `1` to search attended users.
+        USER_PAYMENTS_MISSED:
+          type: integer
+          description: Number of payment cycles missed.
+        EMAIL_OPT_OUT:
+          type: integer
+          enum: [0, 1]
+          description: "`1` for opted-out, `0` for opted-in."
+        USER_SSN_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` to search NULL/empty SSN values.
+        # --- User Date Filters ---
+        USER_AGE_FROM:
+          type: integer
+          description: Beginning age range.
+        USER_AGE_TO:
+          type: integer
+          description: Ending age range.
+        USER_DOB_FROM:
+          type: string
+          description: Date or date keyword for beginning DOB.
+        USER_DOB_TO:
+          type: string
+          description: Date or date keyword for ending DOB.
+        USER_DOB_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` to search NULL/empty DOB.
+        USER_DOB_DAY:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Day of DOB (1-31).
+        USER_DOB_MONTH:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Month of DOB (1-12).
+        USER_DOB_YEAR:
+          type: integer
+          description: Year of DOB. Must be 4-digit year.
+        USER_DOB_OPTIONS:
+          type: string
+          enum: [blank, invalid]
+          description: '"blank" for empty DOB or "invalid" for invalid dates.'
+        USER_CREATED_FROM:
+          type: string
+          description: Date or date keyword for beginning created date.
+        USER_CREATED_TO:
+          type: string
+          description: Date or date keyword for ending created date.
+        USER_CREATED_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` to search NULL/empty created.
+        USER_CHANGED_FROM:
+          type: string
+          format: date-time
+          description: Date/time for changed record filter. Does NOT support keywords.
+        USER_HIRED_FROM:
+          type: string
+          description: Date or date keyword for beginning hire date.
+        USER_HIRED_TO:
+          type: string
+          description: Date or date keyword for ending hire date.
+        USER_HIRED_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` to search NULL/empty hire date.
+        # --- Product Filters ---
+        PRODUCT:
+          type: integer
+          description: Default product ID to search.
+        PRODUCT_NOT:
+          type: integer
+          enum: [1]
+          description: Send `1` to exclude selected product IDs.
+        PRODUCT_SEARCH_TYPE:
+          type: string
+          enum: [ALL, ANY]
+          description: Search ALL or ANY of selected product IDs.
+        PRODUCT_CATEGORY:
+          type: string
+          description: Product category value.
+        PRODUCT_BROKERID:
+          type: integer
+          description: Product agent ID.
+        PRODUCT_SHOW_TREE:
+          type: integer
+          enum: [1]
+          description: Send `1` to search on product broker tree.
+        PRODUCT_STATUS:
+          type: integer
+          description: Search blank/not blank product broker IDs.
+        POLICYNUMBER:
+          type: string
+          description: Policy number.
+        PRODUCT_PAID:
+          type: integer
+          enum: [0, 1]
+          description: "`1` for paid, `0` for unpaid."
+        PRODUCT_ONHOLD:
+          type: integer
+          enum: [1]
+          description: Send `1` for products on hold.
+        PRODUCT_SUSPENDED:
+          type: integer
+          enum: [1]
+          description: Send `1` for suspended products.
+        PRODUCT_HOLD_SEARCH_TYPE:
+          type: string
+          enum: [INCLUDE, EXCLUDE]
+          default: INCLUDE
+          description: INCLUDE or EXCLUDE hold/suspend status types.
+        PRODUCT_HOLD_REASON:
+          type: string
+          description: Hold reason value.
+        PRODUCT_HOLD_REASON_TYPE:
+          type: string
+          enum: [NOT]
+          description: Send "NOT" to exclude hold reasons.
+        PRODUCT_CANCEL_REASON:
+          type: string
+          description: Cancel reason value.
+        BENEFIT_ID:
+          type: integer
+          description: Benefit ID to search.
+        UP_ID:
+          type: integer
+          description: Member product record ID.
+        # --- Product Date Filters ---
+        PRODUCT_CREATED_FROM:
+          type: string
+          description: Date/keyword for beginning product created.
+        PRODUCT_CREATED_TO:
+          type: string
+          description: Date/keyword for ending product created.
+        PRODUCT_CREATED_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty product created.
+        PRODUCT_EFFECTIVE_FROM:
+          type: string
+          description: Date/keyword for beginning effective date.
+        PRODUCT_EFFECTIVE_TO:
+          type: string
+          description: Date/keyword for ending effective date.
+        PRODUCT_EFFECTIVE_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty effective date.
+        PRODUCT_EFFECTIVE_DAY:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Effective day of month (1-31).
+        PRODUCT_ACTIVE_FROM:
+          type: string
+          description: Date/keyword for beginning active date.
+        PRODUCT_ACTIVE_TO:
+          type: string
+          description: Date/keyword for ending active date.
+        PRODUCT_BILLING_FROM:
+          type: string
+          description: Date/keyword for beginning first billing date.
+        PRODUCT_BILLING_TO:
+          type: string
+          description: Date/keyword for ending first billing date.
+        PRODUCT_BILLING_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty first billing date.
+        PRODUCT_RECURBILLING_FROM:
+          type: string
+          description: Date/keyword for beginning next billing date.
+        PRODUCT_RECURBILLING_TO:
+          type: string
+          description: Date/keyword for ending next billing date.
+        PRODUCT_RECURBILLING_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty next billing date.
+        PRODUCT_RECURRING_DAY:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Day of next billing date (1-31).
+        PRODUCT_CANCEL_FROM:
+          type: string
+          description: Date/keyword for beginning cancel date.
+        PRODUCT_CANCEL_TO:
+          type: string
+          description: Date/keyword for ending cancel date.
+        PRODUCT_CANCEL_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty cancel date.
+        PRODUCT_CANCEL_SET_FROM:
+          type: string
+          description: Date/keyword for beginning cancel set date.
+        PRODUCT_CANCEL_SET_TO:
+          type: string
+          description: Date/keyword for ending cancel set date.
+        PRODUCT_FULFILLMENT_FROM:
+          type: string
+          description: Date/keyword for beginning fulfillment date.
+        PRODUCT_FULFILLMENT_TO:
+          type: string
+          description: Date/keyword for ending fulfillment date.
+        PRODUCT_FULFILLMENT_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty fulfillment date.
+        PRODUCT_SHIPPING_FROM:
+          type: string
+          description: Date/keyword for beginning shipping date.
+        PRODUCT_SHIPPING_TO:
+          type: string
+          description: Date/keyword for ending shipping date.
+        PRODUCT_SHIPPING_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty shipping date.
+        PRODUCT_TRANSFER_FROM:
+          type: string
+          description: Date/keyword for beginning transfer date.
+        PRODUCT_TRANSFER_TO:
+          type: string
+          description: Date/keyword for ending transfer date.
+        PRODUCT_TRANSFER_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty transfer date.
+        PRODUCT_RENEWAL_FROM:
+          type: string
+          description: Date/keyword for beginning renewal date.
+        PRODUCT_RENEWAL_TO:
+          type: string
+          description: Date/keyword for ending renewal date.
+        PRODUCT_RENEWAL_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty renewal date.
+        PRODUCT_AMOUNT_FROM:
+          type: number
+          format: double
+          description: Beginning product fee amount.
+        PRODUCT_AMOUNT_TO:
+          type: number
+          format: double
+          description: Ending product fee amount.
+        # --- Dependent Filters ---
+        DEPENDENT_FIRSTNAME:
+          type: string
+          description: Search dependent first name.
+        DEPENDENT_FIRSTNAME_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty dependent first name.
+        DEPENDENT_LASTNAME:
+          type: string
+          description: Search dependent last name.
+        DEPENDENT_LASTNAME_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty dependent last name.
+        DEPENDENT_CITY:
+          type: string
+          description: Dependent city.
+        DEPENDENT_STATE:
+          type: string
+          description: Dependent state.
+        DEPENDENT_ZIPCODE:
+          type: string
+          description: Dependent zip code.
+        DEPENDENT_EMAIL:
+          type: string
+          description: Dependent email.
+        DEPENDENT_PHONE1:
+          type: string
+          description: Dependent phone 1.
+        DEPENDENT_PHONE2:
+          type: string
+          description: Dependent phone 2.
+        DEPENDENT_PHONE3:
+          type: string
+          description: Dependent phone 3.
+        DEPENDENT_GENDER:
+          type: string
+          description: Dependent gender.
+        DEPENDENT_RELATIONSHIP:
+          type: string
+          description: Dependent relationship.
+        DEPENDENT_RELATIONSHIP_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty dependent relationship.
+        DEPENDENT_AGE_FROM:
+          type: integer
+          description: Beginning dependent age.
+        DEPENDENT_AGE_TO:
+          type: integer
+          description: Ending dependent age.
+        DEPENDENT_DOB_FROM:
+          type: string
+          description: Date/keyword for beginning dependent DOB.
+        DEPENDENT_DOB_TO:
+          type: string
+          description: Date/keyword for ending dependent DOB.
+        DEPENDENT_DOB_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty dependent DOB.
+        DEPENDENT_DOB_DAY:
+          type: integer
+          minimum: 1
+          maximum: 31
+          description: Day of dependent DOB (1-31).
+        DEPENDENT_DOB_MONTH:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: Month of dependent DOB (1-12).
+        DEPENDENT_DOB_YEAR:
+          type: integer
+          description: Year of dependent DOB. Must be 4-digit year.
+        DEPENDENT_DOB_OPTIONS:
+          type: string
+          enum: [blank, invalid]
+          description: '"blank" for empty or "invalid" for invalid dependent DOB.'
+        # --- Payment Filters ---
+        PAYMENT_TYPE:
+          type: string
+          description: Payment type.
+        PAYMENT_TYPE_DEFAULT:
+          type: integer
+          enum: [1]
+          description: Send `1` for only default payment type.
+        PAYMENT_BLANK:
+          type: integer
+          enum: [1]
+          description: Search users with/without payment methods.
+        PAYMENT_FIRSTNAME:
+          type: string
+          description: Payment first name.
+        PAYMENT_LASTNAME:
+          type: string
+          description: Payment last name.
+        PAYMENT_NUMBER_FROM:
+          type: integer
+          description: Beginning last payment number.
+        PAYMENT_NUMBER_TO:
+          type: integer
+          description: Ending last payment number.
+        PAYMENT_AMOUNT_FROM:
+          type: number
+          format: double
+          description: Beginning payment amount.
+        PAYMENT_AMOUNT_TO:
+          type: number
+          format: double
+          description: Ending payment amount.
+        PAYMENT_ACH_NUMBER:
+          type: string
+          description: ACH account number.
+        PAYMENT_CC_TYPE:
+          type: string
+          description: Credit card type.
+        PAYMENT_CC_LAST4:
+          type: integer
+          description: Last 4 digits of credit card.
+        PAYMENT_CC_EXPM:
+          type: integer
+          minimum: 1
+          maximum: 12
+          description: CC expiration month (1-12).
+        PAYMENT_CC_EXPY:
+          type: integer
+          description: CC expiration year. Must be 4-digit year.
+        PAYMENT_PERIOD_ID:
+          type: integer
+          description: Billing period ID.
+        # --- Lead/Interaction Filters ---
+        LEAD_STATUS:
+          type: string
+          description: Lead status.
+        LEAD_STATUS_TYPE:
+          type: string
+          enum: [NOT]
+          description: Send "NOT" to exclude status.
+        LEAD_SALES_STAGE:
+          type: string
+          description: Lead sales stage.
+        LEAD_NUMCALLS:
+          type: integer
+          description: Number of calls.
+        LEAD_CALL_STATUS:
+          type: string
+          description: Lead call status.
+        LEAD_RANKING:
+          type: integer
+          minimum: 0
+          maximum: 100
+          description: Lead ranking (0-100).
+        BEST_CALL_TIME:
+          type: string
+          description: Best time to call.
+        USER_INTERACTION_FROM:
+          type: string
+          description: Date/keyword for beginning interaction date.
+        USER_INTERACTION_TO:
+          type: string
+          description: Date/keyword for ending interaction date.
+        USER_INTERACTION_TYPE:
+          type: string
+          description: Call type.
+        USER_INTERACTION_RESULT:
+          type: string
+          description: Interaction result.
+        USER_INTERACTION_REFERENCE_FROM:
+          type: string
+          description: Date/keyword for beginning interaction reference date.
+        USER_INTERACTION_REFERENCE_TO:
+          type: string
+          description: Date/keyword for ending interaction reference date.
+        USER_INTERACTION_REFERENCE_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty interaction reference date.
+        USER_NEXTSTEP_FROM:
+          type: string
+          description: Date/keyword for beginning next step date.
+        USER_NEXTSTEP_TO:
+          type: string
+          description: Date/keyword for ending next step date.
+        USER_NEXTSTEP_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty next step date.
+        USER_ESTIMATED_CLOSE_FROM:
+          type: string
+          description: Date/keyword for beginning estimated close date.
+        USER_ESTIMATED_CLOSE_TO:
+          type: string
+          description: Date/keyword for ending estimated close date.
+        USER_ESTIMATED_CLOSE_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty estimated close date.
+        # --- Other Filters ---
+        HOLD_START_CREATED_FROM:
+          type: string
+          description: Date/keyword for beginning Hold Created date.
+        HOLD_START_CREATED_TO:
+          type: string
+          description: Date/keyword for ending Hold Created date.
+        HOLD_START_CREATED_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty Hold Created date.
+        HOLD_END_CREATED_FROM:
+          type: string
+          description: Date/keyword for beginning Hold Return date.
+        HOLD_END_CREATED_TO:
+          type: string
+          description: Date/keyword for ending Hold Return date.
+        HOLD_END_CREATED_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty Hold Return date.
+        NOTE_CREATED_FROM:
+          type: string
+          description: Date/keyword for beginning note created.
+        NOTE_CREATED_TO:
+          type: string
+          description: Date/keyword for ending note created.
+        USER_NOTE_TYPE:
+          type: string
+          description: Note type.
+        DOCUMENT_TYPE:
+          type: string
+          description: Document type.
+        TRANSACTION_CREATED_FROM:
+          type: string
+          description: Date/keyword for beginning transaction date.
+        TRANSACTION_CREATED_TO:
+          type: string
+          description: Date/keyword for ending transaction date.
+        TRANSACTION_CREATED_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty transaction date.
+        USER_REFUND_REQUESTED:
+          type: integer
+          enum: [1]
+          description: Send `1` to search Refund Requested.
+        USER_REFUND_PROVIDED:
+          type: integer
+          enum: [1]
+          description: Send `1` to search Refund Provided.
+        USER_REFUND_REQUEST_FROM:
+          type: string
+          description: Date/keyword for beginning Refund Request date.
+        USER_REFUND_REQUEST_TO:
+          type: string
+          description: Date/keyword for ending Refund Request date.
+        USER_REFUND_REQUEST_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty Refund Request date.
+        USER_REFUND_PROVIDED_FROM:
+          type: string
+          description: Date/keyword for beginning Refund Provided date.
+        USER_REFUND_PROVIDED_TO:
+          type: string
+          description: Date/keyword for ending Refund Provided date.
+        USER_REFUND_PROVIDED_BLANK:
+          type: integer
+          enum: [1]
+          description: Send `1` for NULL/empty Refund Provided date.
+
+    # --- Method Response Wrapper ---
+    MethodResponse:
+      type: object
+      xml:
+        name: method
+      description: >
+        Root response element. The `request` attribute identifies the API method
+        (e.g., `request="user.getall"`). Contains `<users>` by default, plus optional
+        `<dependents>`, `<beneficiaries>`, `<products>`, and `<transactions>` collections
+        depending on return flags sent with the request.
+      properties:
+        users:
+          $ref: '#/components/schemas/UsersCollection'
+        dependents:
+          $ref: '#/components/schemas/DependentsCollection'
+        beneficiaries:
+          $ref: '#/components/schemas/BeneficiariesCollection'
+        products:
+          $ref: '#/components/schemas/ProductsCollection'
+        transactions:
+          $ref: '#/components/schemas/TransactionsCollection'
+
+    # --- Collection Wrappers ---
+    UsersCollection:
+      type: object
+      xml:
+        name: users
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of user records returned.
+        user:
+          type: array
+          xml:
+            name: user
+          items:
+            $ref: '#/components/schemas/User'
+
+    DependentsCollection:
+      type: object
+      xml:
+        name: dependents
+      description: Included when RETURN_DEPENDENTS=1.
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of dependent records returned.
+        dependent:
+          type: array
+          xml:
+            name: dependent
+          items:
+            $ref: '#/components/schemas/Dependent'
+
+    BeneficiariesCollection:
+      type: object
+      xml:
+        name: beneficiaries
+      description: Included when RETURN_BENEFICIARIES=1.
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of beneficiary records returned.
+        beneficiary:
+          type: array
+          xml:
+            name: beneficiary
+          items:
+            $ref: '#/components/schemas/Beneficiary'
+
+    ProductsCollection:
+      type: object
+      xml:
+        name: products
+      description: Included when RETURN_PRODUCTS=1.
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of product records returned.
+        product:
+          type: array
+          xml:
+            name: product
+          items:
+            $ref: '#/components/schemas/Product'
+
+    TransactionsCollection:
+      type: object
+      xml:
+        name: transactions
+      description: Included when RETURN_TRANSACTIONS=1.
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of transaction records returned.
+        transaction:
+          type: array
+          xml:
+            name: transaction
+          items:
+            $ref: '#/components/schemas/Transaction'
+
+    # --- Entity Schemas ---
+    User:
+      type: object
+      xml:
+        name: user
+      description: >
+        Base demographic information for a member. All other related member records
+        (dependents, products, transactions) are linked via the userid foreign key.
+        Fields returned depend on standard questions configured for the client.
+      properties:
+        userid:
+          type: integer
+          description: System member ID (Primary Key).
+        memberid:
+          type: string
+          description: External member ID value.
+        username:
+          type: string
+          description: Member username.
+        firstname:
+          type: string
+          description: First name.
+        lastname:
+          type: string
+          description: Last name.
+        email:
+          type: string
+          format: email
+          description: Primary email address.
+        email2:
+          type: string
+          description: Secondary email address. May be empty.
+          nullable: true
+        email3:
+          type: string
+          description: Tertiary email address. May be empty.
+          nullable: true
+        phone1:
+          type: string
+          description: Primary phone number.
+        phone2:
+          type: string
+          description: Secondary phone number. May be empty.
+          nullable: true
+        phone3:
+          type: string
+          description: Tertiary phone number. May be empty.
+          nullable: true
+        fax1:
+          type: string
+          description: Fax number. May be empty.
+          nullable: true
+        address:
+          type: string
+          description: Primary address line 1.
+        address2:
+          type: string
+          description: Primary address line 2. May be empty.
+          nullable: true
+        city:
+          type: string
+          description: City.
+        state:
+          type: string
+          description: Two-letter state code.
+        zip:
+          type: string
+          description: ZIP code.
+        country:
+          type: string
+          description: Country code (e.g., "US").
+        company:
+          type: string
+          description: Company name. May be empty.
+          nullable: true
+        brokerid:
+          type: integer
+          description: Agent/broker ID associated with this member.
+        sellingagentid:
+          type: integer
+          description: Selling agent ID.
+        created:
+          type: string
+          format: date-time
+          description: Record creation timestamp.
+        password:
+          type: string
+          description: Member password (decrypted).
+        ipaddress:
+          type: string
+          description: IP address recorded at creation.
+        bemailoptout:
+          type: integer
+          enum: [0, 1]
+          description: Email opt-out flag. 1 = opted out, 0 = opted in.
+        bemployee:
+          type: integer
+          enum: [0, 1]
+          description: Employee flag. 1 = Yes, 0 = No.
+        internalid:
+          type: string
+          description: Internal ID. May be empty.
+          nullable: true
+        internationalstate:
+          type: string
+          description: International state. May be empty.
+          nullable: true
+        invoicedeliverymethod:
+          type: string
+          description: Invoice delivery method. May be empty.
+          nullable: true
+        mailpolicyto:
+          type: string
+          description: Mail policy to value. May be empty.
+          nullable: true
+        occupation:
+          type: string
+          description: Occupation. May be empty.
+          nullable: true
+        otheraddress:
+          type: string
+          description: Alternate address line 1. May be empty.
+          nullable: true
+        otheraddress2:
+          type: string
+          description: Alternate address line 2. May be empty.
+          nullable: true
+        othercity:
+          type: string
+          description: Alternate city. May be empty.
+          nullable: true
+        othercountry:
+          type: string
+          description: Alternate country. May be empty.
+          nullable: true
+        otherinternationalstate:
+          type: string
+          description: Alternate international state. May be empty.
+          nullable: true
+        otherstate:
+          type: string
+          description: Alternate state. May be empty.
+          nullable: true
+        otherzipcode:
+          type: string
+          description: Alternate ZIP code. May be empty.
+          nullable: true
+        pin:
+          type: string
+          description: PIN value. May be empty.
+          nullable: true
+        usercreated:
+          type: string
+          description: User who created this record. May be empty.
+          nullable: true
+        userupdated:
+          type: string
+          description: User who last updated this record. May be empty.
+          nullable: true
+        department:
+          type: string
+          description: Department. May be empty.
+          nullable: true
+        division:
+          type: string
+          description: Division. May be empty.
+          nullable: true
+        dtchargeback:
+          type: string
+          description: Chargeback date. May be empty.
+          nullable: true
+        dtpriorityscheduling:
+          type: string
+          description: Priority scheduling date. May be empty.
+          nullable: true
+        dtrefundprovided:
+          type: string
+          description: Refund provided date. May be empty.
+          nullable: true
+        dtrefundrequest:
+          type: string
+          description: Refund request date. May be empty.
+          nullable: true
+        dtsuspended:
+          type: string
+          description: Suspended date. May be empty.
+          nullable: true
+        dtupdated:
+          type: string
+          description: Last updated date. May be empty.
+          nullable: true
+        comma:
+          type: string
+          description: Custom field. May be empty.
+          nullable: true
+        beech:
+          type: string
+          description: Custom field. May be empty.
+          nullable: true
+        mcq1:
+          type: string
+          description: Custom question field. May be empty.
+          nullable: true
+
+    Dependent:
+      type: object
+      xml:
+        name: dependent
+      description: >
+        Structure for each dependent attached to a member.
+        Primary Key: depid. Foreign Key: userid.
+      properties:
+        depid:
+          type: integer
+          description: Dependent record ID (Primary Key).
+        userid:
+          type: integer
+          description: Member ID this dependent belongs to (Foreign Key).
+        firstname:
+          type: string
+          description: First name.
+        lastname:
+          type: string
+          description: Last name.
+        middlename:
+          type: string
+          description: Middle name. May be empty.
+          nullable: true
+        dob:
+          type: string
+          format: date-time
+          description: Date of birth.
+        gender:
+          type: string
+          description: Gender (e.g., "M", "F").
+        relationship:
+          type: string
+          description: Relationship to the member (e.g., "Spouse", "Child").
+        address:
+          type: string
+          description: Address. May be empty.
+          nullable: true
+        city:
+          type: string
+          description: City. May be empty.
+          nullable: true
+        state:
+          type: string
+          description: State. May be empty.
+          nullable: true
+        zip:
+          type: string
+          description: ZIP code. May be empty.
+          nullable: true
+        country:
+          type: string
+          description: Country code.
+        email:
+          type: string
+          description: Email. May be empty.
+          nullable: true
+        phone1:
+          type: string
+          description: Phone number part 1. May be empty.
+          nullable: true
+        phone12:
+          type: string
+          description: Phone number part 2. May be empty.
+          nullable: true
+        phone13:
+          type: string
+          description: Phone number part 3. May be empty.
+          nullable: true
+        phone1ext:
+          type: string
+          description: Phone extension. May be empty.
+          nullable: true
+        phone1type:
+          type: string
+          description: Phone type. May be empty.
+          nullable: true
+        phone2:
+          type: string
+          description: Secondary phone part 1. May be empty.
+          nullable: true
+        phone22:
+          type: string
+          description: Secondary phone part 2. May be empty.
+          nullable: true
+        phone23:
+          type: string
+          description: Secondary phone part 3. May be empty.
+          nullable: true
+        phone2ext:
+          type: string
+          description: Secondary phone extension. May be empty.
+          nullable: true
+        phone2type:
+          type: string
+          description: Secondary phone type. May be empty.
+          nullable: true
+        ssn:
+          type: string
+          description: Social Security Number. May be empty.
+          nullable: true
+        salutation:
+          type: string
+          description: Salutation. May be empty.
+          nullable: true
+        suffix:
+          type: string
+          description: Name suffix. May be empty.
+          nullable: true
+        company:
+          type: string
+          description: Company. May be empty.
+          nullable: true
+        credentials:
+          type: string
+          description: Credentials. May be empty.
+          nullable: true
+        dlnumber:
+          type: string
+          description: Driver license number. May be empty.
+          nullable: true
+        filenumber:
+          type: string
+          description: File number. May be empty.
+          nullable: true
+        fax2:
+          type: string
+          description: Fax number. May be empty.
+          nullable: true
+        fax3:
+          type: string
+          description: Fax number. May be empty.
+          nullable: true
+        internationalstate:
+          type: string
+          description: International state. May be empty.
+          nullable: true
+        bstudent:
+          type: integer
+          enum: [0, 1]
+          description: Student flag. 1 = Yes, 0 = No.
+        dtcreated:
+          type: string
+          format: date-time
+          description: Record creation timestamp.
+        uuid:
+          type: string
+          description: Unique identifier (UUID).
+
+    Beneficiary:
+      type: object
+      xml:
+        name: beneficiary
+      description: >
+        Structure for a beneficiary attached to a member.
+        Returned when RETURN_BENEFICIARIES=1.
+
+    Product:
+      type: object
+      xml:
+        name: product
+      description: >
+        Structure for each product assigned to a user.
+        Primary Key: upid. Foreign Keys: userid (member), pdid (system product).
+      properties:
+        upid:
+          type: integer
+          description: Member product record ID (Primary Key).
+        userid:
+          type: integer
+          description: Member ID this product belongs to (Foreign Key).
+        pdid:
+          type: integer
+          description: System product ID (Foreign Key).
+        label:
+          type: string
+          description: Product label/name.
+        policynumber:
+          type: string
+          description: Policy number. May be empty.
+          nullable: true
+        qty:
+          type: integer
+          description: Quantity.
+        battended:
+          type: integer
+          enum: [0, 1]
+          description: Attended flag. 1 = Yes, 0 = No.
+        bhold:
+          type: integer
+          enum: [0, 1]
+          description: On hold flag. 1 = Yes, 0 = No.
+        bpaid:
+          type: integer
+          enum: [0, 1]
+          description: Paid flag. 1 = Yes, 0 = No.
+        breship:
+          type: integer
+          enum: [0, 1]
+          description: Re-ship flag. 1 = Yes, 0 = No.
+        agentid:
+          type: string
+          description: Agent ID for this product. May be empty.
+          nullable: true
+        enrollerid:
+          type: string
+          description: Enroller ID. May be empty.
+          nullable: true
+        holdtype:
+          type: string
+          description: Hold type (e.g., "hold", "suspend"). May be empty.
+          nullable: true
+        holdreason:
+          type: string
+          description: Hold reason. May be empty.
+          nullable: true
+        holdamount:
+          type: string
+          description: Hold amount. May be empty.
+          nullable: true
+        reasonforcancel:
+          type: string
+          description: Cancellation reason. May be empty.
+          nullable: true
+        lastpayment:
+          type: integer
+          description: Last payment number.
+        dtbilling:
+          type: string
+          format: date-time
+          description: First billing date.
+          nullable: true
+        dtcancelled:
+          type: string
+          format: date-time
+          description: Cancellation date. Empty if not cancelled.
+          nullable: true
+        dtcreated:
+          type: string
+          format: date-time
+          description: Record creation timestamp.
+        dteffective:
+          type: string
+          format: date-time
+          description: Effective date.
+          nullable: true
+        dtfulfillment:
+          type: string
+          format: date-time
+          description: Fulfillment date. May be empty.
+          nullable: true
+        dtholdcreated:
+          type: string
+          format: date-time
+          description: Hold created date. May be empty.
+          nullable: true
+        dtholdreturn:
+          type: string
+          format: date-time
+          description: Hold return date. May be empty.
+          nullable: true
+        dtrecurring:
+          type: string
+          format: date-time
+          description: Next recurring billing date.
+          nullable: true
+        dtrenewal:
+          type: string
+          format: date-time
+          description: Renewal date. May be empty.
+          nullable: true
+        dtshippingdate:
+          type: string
+          format: date-time
+          description: Shipping date. May be empty.
+          nullable: true
+        dttransfer:
+          type: string
+          format: date-time
+          description: Transfer date. May be empty.
+          nullable: true
+        shippingfirstname:
+          type: string
+          nullable: true
+        shippinglastname:
+          type: string
+          nullable: true
+        shippingaddress:
+          type: string
+          nullable: true
+        shippingaddress2:
+          type: string
+          nullable: true
+        shippingcity:
+          type: string
+          nullable: true
+        shippingstate:
+          type: string
+          nullable: true
+        shippingzipcode:
+          type: string
+          nullable: true
+        shippingcountry:
+          type: string
+          nullable: true
+        shippingphone11:
+          type: string
+          nullable: true
+        shippingphone12:
+          type: string
+          nullable: true
+        shippingphone13:
+          type: string
+          nullable: true
+        shippingphone1ext:
+          type: string
+          nullable: true
+        shippingsalutation:
+          type: string
+          nullable: true
+        shippingmessage:
+          type: string
+          nullable: true
+        shippingtrackingcarrier:
+          type: string
+          nullable: true
+        shippingtrackingcode:
+          type: string
+          nullable: true
+        shippinguseprimary:
+          type: integer
+          enum: [0, 1]
+          description: Use primary address for shipping. 1 = Yes, 0 = No.
+        productfees:
+          $ref: '#/components/schemas/ProductFeesCollection'
+
+    ProductFeesCollection:
+      type: object
+      xml:
+        name: productfees
+      description: >
+        Collection of fees assigned to a product. Primary Key: upfid.
+        Foreign Keys: upid (member product), ppid (agent product pricing, deprecated),
+        benefitid (benefit level), periodid (billing period).
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of product fee records.
+        productfee:
+          type: array
+          xml:
+            name: productfee
+          items:
+            $ref: '#/components/schemas/ProductFee'
+
+    ProductFee:
+      type: object
+      xml:
+        name: productfee
+      description: >
+        A price (or fee) assigned to a product under a user.
+        Primary Key: upfid.
+      properties:
+        upfid:
+          type: integer
+          description: Product fee record ID (Primary Key).
+        upid:
+          type: integer
+          description: Member product ID (Foreign Key).
+        pdid:
+          type: integer
+          description: System product ID (Foreign Key).
+        ppid:
+          type: integer
+          description: Agent product pricing record ID (Foreign Key, deprecated).
+        benefitid:
+          type: integer
+          description: Benefit level ID (Foreign Key).
+          nullable: true
+        periodid:
+          type: integer
+          description: Billing period ID - monthly, weekly, yearly (Foreign Key).
+        amount:
+          type: number
+          format: double
+          description: Fee amount.
+        currency:
+          type: string
+          description: Currency code (e.g., "USD").
+        type:
+          type: string
+          description: Fee type (e.g., "Association", "Product", "Enrollment").
+        commissionableamount:
+          type: string
+          description: Commissionable amount. May be empty.
+          nullable: true
+
+    Transaction:
+      type: object
+      xml:
+        name: transaction
+      description: >
+        Structure for an overall transaction for a member.
+        Primary Key: transid. Foreign Keys: userid, invoiceid, parentid, paymentid, processorid.
+      properties:
+        transid:
+          type: integer
+          description: Transaction ID (Primary Key).
+        userid:
+          type: integer
+          description: Member ID (Foreign Key).
+        invoiceid:
+          type: string
+          description: Invoice ID if assigned (Foreign Key). May be empty.
+          nullable: true
+        parentid:
+          type: string
+          description: Parent transaction ID for refunds/chargebacks (Foreign Key). May be empty.
+          nullable: true
+        paymentid:
+          type: string
+          description: Member payment record ID (Foreign Key). May be empty.
+          nullable: true
+        processorid:
+          type: integer
+          description: Payment processor ID (Foreign Key).
+        opmid:
+          type: integer
+          description: Operational payment method ID.
+        brokerid:
+          type: string
+          description: Broker ID. May be empty.
+          nullable: true
+        transdate:
+          type: string
+          format: date-time
+          description: Transaction date.
+        transamount:
+          type: number
+          format: double
+          description: Transaction amount.
+        transactiontype:
+          type: integer
+          description: Transaction type code.
+        transactiondescription:
+          type: string
+          description: Transaction description. May be empty.
+          nullable: true
+        gatewaytransactiontype:
+          type: string
+          description: Gateway transaction type (e.g., "SALE").
+        paytype:
+          type: string
+          description: Payment type (e.g., "CC", "ACH").
+        bauthorized:
+          type: integer
+          enum: [0, 1]
+          description: Authorized flag. 1 = Yes, 0 = No.
+        bcompleted:
+          type: integer
+          enum: [0, 1]
+          description: Completed flag. 1 = Yes, 0 = No.
+        bsettled:
+          type: integer
+          enum: [0, 1]
+          description: Settled flag. 1 = Yes, 0 = No.
+        brefund:
+          type: integer
+          enum: [0, 1]
+          description: Refund flag. 1 = Yes, 0 = No.
+        brefunded:
+          type: integer
+          enum: [0, 1]
+          description: Has been refunded flag. 1 = Yes, 0 = No.
+        bchargeback:
+          type: integer
+          enum: [0, 1]
+          description: Chargeback flag. 1 = Yes, 0 = No.
+        bchargedback:
+          type: integer
+          enum: [0, 1]
+          description: Has been charged back flag. 1 = Yes, 0 = No.
+        bdeleted:
+          type: integer
+          enum: [0, 1]
+          description: Deleted flag. 1 = Yes, 0 = No.
+        authcode:
+          type: string
+          description: Authorization code. May be empty.
+          nullable: true
+        responsestring:
+          type: string
+          description: Gateway response string. May be empty.
+          nullable: true
+        fullgatewayresponse:
+          type: string
+          description: Full gateway response message.
+        displaygatewayresponse:
+          type: string
+          description: Display-friendly gateway response.
+        uniquecode:
+          type: string
+          description: Unique transaction code.
+        usernamesubmitted:
+          type: string
+          description: Username that submitted the transaction.
+        chargebackreason:
+          type: string
+          description: Chargeback reason. May be empty.
+          nullable: true
+        brokerprocessorid:
+          type: string
+          description: Broker processor ID. May be empty.
+          nullable: true
+        dtsettled:
+          type: string
+          description: Settlement date. May be empty.
+          nullable: true
+        transactiondetails:
+          $ref: '#/components/schemas/TransactionDetailsCollection'
+        transactionpayments:
+          $ref: '#/components/schemas/TransactionPaymentsCollection'
+
+    TransactionDetailsCollection:
+      type: object
+      xml:
+        name: transactiondetails
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of detail records.
+        transactiondetail:
+          type: array
+          xml:
+            name: transactiondetail
+          items:
+            $ref: '#/components/schemas/TransactionDetail'
+
+    TransactionDetail:
+      type: object
+      xml:
+        name: transactiondetail
+      description: >
+        A product included in a transaction.
+        Primary Key: tdid.
+        Foreign Keys: transid (transaction), upid (member product), pdid (system product),
+        benefitid (benefit level), periodid (billing period).
+      properties:
+        tdid:
+          type: integer
+          description: Transaction detail ID (Primary Key).
+        transid:
+          type: integer
+          description: Transaction ID (Foreign Key).
+        upid:
+          type: integer
+          description: Member product ID (Foreign Key).
+        pdid:
+          type: integer
+          description: System product ID (Foreign Key).
+        periodid:
+          type: integer
+          description: Billing period ID (Foreign Key).
+        benefitid:
+          type: string
+          description: Benefit ID (Foreign Key). May be empty.
+          nullable: true
+        paymentnumber:
+          type: integer
+          description: Payment number in sequence.
+        dtpaidthroughstart:
+          type: string
+          format: date-time
+          description: Paid-through start date.
+        dtpaidthroughend:
+          type: string
+          format: date-time
+          description: Paid-through end date.
+        transactionfees:
+          $ref: '#/components/schemas/TransactionFeesCollection'
+
+    TransactionFeesCollection:
+      type: object
+      xml:
+        name: transactionfees
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of transaction fee records.
+        transactionfee:
+          type: array
+          xml:
+            name: transactionfee
+          items:
+            $ref: '#/components/schemas/TransactionFee'
+
+    TransactionFee:
+      type: object
+      xml:
+        name: transactionfee
+      description: >
+        A fee within a product for a transaction.
+        Primary Key: tdfid.
+        Foreign Keys: tdid (transaction detail), upfid (member product fee),
+        ppid (agent pricing, deprecated), benefitid (benefit level).
+      properties:
+        tdfid:
+          type: integer
+          description: Transaction fee ID (Primary Key).
+        tdid:
+          type: integer
+          description: Transaction detail ID (Foreign Key).
+        upfid:
+          type: integer
+          description: Member product fee ID (Foreign Key).
+        ppid:
+          type: integer
+          description: Agent product pricing record ID (Foreign Key, deprecated).
+        benefitid:
+          type: string
+          description: Benefit ID (Foreign Key). May be empty.
+          nullable: true
+        amount:
+          type: number
+          format: double
+          description: Fee amount.
+        currency:
+          type: string
+          description: Currency code (e.g., "USD").
+        type:
+          type: string
+          description: Fee type (e.g., "Association", "Product").
+        commissionableamount:
+          type: string
+          description: Commissionable amount. May be empty.
+          nullable: true
+
+    TransactionPaymentsCollection:
+      type: object
+      xml:
+        name: transactionpayments
+      properties:
+        total:
+          type: integer
+          xml:
+            attribute: true
+          description: Total count of payment records.
+        transactionpayment:
+          type: array
+          xml:
+            name: transactionpayment
+          items:
+            $ref: '#/components/schemas/TransactionPayment'
+
+    TransactionPayment:
+      type: object
+      xml:
+        name: transactionpayment
+      description: >
+        Payment information used for a transaction.
+        Primary Key: tpid. Foreign Key: transid (transaction).
+      properties:
+        tpid:
+          type: integer
+          description: Transaction payment ID (Primary Key).
+        transid:
+          type: integer
+          description: Transaction ID (Foreign Key).
+        paytype:
+          type: string
+          description: Payment type (e.g., "CC", "ACH").
+        cctype:
+          type: string
+          description: Credit card type (e.g., "Visa", "Mastercard").
+        ccnum:
+          type: string
+          description: Credit card number.
+        cclast4:
+          type: string
+          description: Last 4 digits of credit card.
+        cclast5:
+          type: string
+          description: Last 5 digits of credit card. May be empty.
+          nullable: true
+        ccexpm:
+          type: integer
+          description: Credit card expiration month.
+        ccexpy:
+          type: integer
+          description: Credit card expiration year.
+        cccvv2:
+          type: string
+          description: CVV2 value.
+        firstname:
+          type: string
+          description: Cardholder first name.
+        lastname:
+          type: string
+          description: Cardholder last name.
+        address:
+          type: string
+          description: Billing address.
+        city:
+          type: string
+          description: Billing city.
+        state:
+          type: string
+          description: Billing state.
+        zip:
+          type: string
+          description: Billing ZIP code.
+        country:
+          type: string
+          description: Country code.
+        countryname:
+          type: string
+          description: Country name. May be empty.
+          nullable: true
+        countryabbreviation:
+          type: string
+          description: Country abbreviation. May be empty.
+          nullable: true
+        email:
+          type: string
+          description: Email. May be empty.
+          nullable: true
+        telephone:
+          type: string
+          description: Phone number. May be empty.
+          nullable: true
+        uuid:
+          type: string
+          description: Unique identifier (UUID).
+        paymentid:
+          type: string
+          description: Payment record ID. May be empty.
+          nullable: true
+        transactionid:
+          type: string
+          description: Transaction ID reference. May be empty.
+          nullable: true
+        name:
+          type: string
+          description: Name on payment. May be empty.
+          nullable: true
+        companyname:
+          type: string
+          description: Company name. May be empty.
+          nullable: true
+        phonenumbers:
+          type: string
+          description: Phone numbers. May be empty.
+          nullable: true
+        cardtype:
+          type: string
+          description: Card type. May be empty.
+          nullable: true
+        bankname:
+          type: string
+          description: Bank name. May be empty.
+          nullable: true
+        binerror:
+          type: string
+          description: BIN error info. May be empty.
+          nullable: true
+        bbinvalidated:
+          type: integer
+          enum: [0, 1]
+          description: BIN validated flag. 1 = Yes, 0 = No.
+        paymentmethod:
+          type: string
+          description: Payment method. May be empty.
+          nullable: true
+        ckaba:
+          type: string
+          description: Check ABA routing number. May be empty.
+          nullable: true
+        ckacc:
+          type: string
+          description: Check account number. May be empty.
+          nullable: true
+        ckaccounttype:
+          type: string
+          description: Check account type. May be empty.
+          nullable: true
+        ckbankname:
+          type: string
+          description: Check bank name. May be empty.
+          nullable: true
+        ckchecknumber:
+          type: string
+          description: Check number. May be empty.
+          nullable: true
+        ckchecktype:
+          type: string
+          description: Check type. May be empty.
+          nullable: true
+        ckdldob:
+          type: string
+          description: Check DL date of birth. May be empty.
+          nullable: true
+        ckdlnumber:
+          type: string
+          description: Check DL number. May be empty.
+          nullable: true
+        ckdlstate:
+          type: string
+          description: Check DL state. May be empty.
+          nullable: true
+        ckip:
+          type: string
+          description: Check IP. May be empty.
+          nullable: true
+        ckmemo:
+          type: string
+          description: Check memo. May be empty.
+          nullable: true
+        cksign:
+          type: string
+          description: Check signature. May be empty.
+          nullable: true
+        ckssn:
+          type: string
+          description: Check SSN. May be empty.
+          nullable: true
+
+  # ============================================================
+  # EXAMPLES
+  # ============================================================
+  examples:
+    SuccessResponse:
+      summary: Successful search with user results only
+      value: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <method request="user.getall">
+          <users total="1">
+            <user>
+              <address>123 Road</address>
+              <address2/>
+              <beech/>
+              <bemailoptout>0</bemailoptout>
+              <bemployee>0</bemployee>
+              <brokerid>21478</brokerid>
+              <city>Aliso Viejo</city>
+              <comma/>
+              <company/>
+              <country>US</country>
+              <created>2007-02-06 14:06:19.0</created>
+              <department/>
+              <division/>
+              <dtchargeback/>
+              <dtpriorityscheduling/>
+              <dtrefundprovided/>
+              <dtrefundrequest/>
+              <dtsuspended/>
+              <dtupdated/>
+              <email>info@enrollment123.com</email>
+              <email2/>
+              <email3/>
+              <fax1/>
+              <firstname>Steve</firstname>
+              <internalid/>
+              <internationalstate/>
+              <invoicedeliverymethod/>
+              <ipaddress>68.4.186.29</ipaddress>
+              <lastname>Jaeger</lastname>
+              <mailpolicyto/>
+              <mcq1/>
+              <memberid>655077998</memberid>
+              <occupation/>
+              <otheraddress/>
+              <otheraddress2/>
+              <othercity/>
+              <othercountry/>
+              <otherinternationalstate/>
+              <otherstate/>
+              <otherzipcode/>
+              <phone1>9495551212</phone1>
+              <phone2/>
+              <phone3/>
+              <pin/>
+              <sellingagentid>21478</sellingagentid>
+              <state>CA</state>
+              <usercreated/>
+              <userid>156522</userid>
+              <username>aefgasdfgadfgasdfg</username>
+              <userupdated/>
+              <zip>10019</zip>
+            </user>
+          </users>
+        </method>
+
+    SuccessWithAllSections:
+      summary: Full response with users, dependents, products, and transactions
+      value: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <method request="user.getall">
+          <users total="1">
+            <user>
+              <address>123 Road</address>
+              <address2/>
+              <bemailoptout>0</bemailoptout>
+              <bemployee>0</bemployee>
+              <brokerid>21478</brokerid>
+              <city>Aliso Viejo</city>
+              <company/>
+              <country>US</country>
+              <created>2007-02-06 14:06:19.0</created>
+              <email>info@enrollment123.com</email>
+              <email2/>
+              <email3/>
+              <fax1/>
+              <firstname>Steve</firstname>
+              <ipaddress>68.4.186.29</ipaddress>
+              <lastname>Jaeger</lastname>
+              <memberid>655077998</memberid>
+              <phone1>9495551212</phone1>
+              <phone2/>
+              <phone3/>
+              <sellingagentid>21478</sellingagentid>
+              <state>CA</state>
+              <userid>1027469</userid>
+              <username>aefgasdfgadfgasdfg</username>
+              <zip>10019</zip>
+            </user>
+          </users>
+          <dependents total="1">
+            <dependent>
+              <address/>
+              <bstudent>0</bstudent>
+              <city/>
+              <company/>
+              <country>US</country>
+              <credentials/>
+              <depid>567167</depid>
+              <dlnumber/>
+              <dob>1969-04-03 00:00:00.0</dob>
+              <dtcreated>2011-11-10 11:11:12.66</dtcreated>
+              <email/>
+              <fax2/>
+              <fax3/>
+              <filenumber/>
+              <firstname>Brad</firstname>
+              <gender>M</gender>
+              <internationalstate/>
+              <lastname>Kelly</lastname>
+              <middlename/>
+              <phone1/>
+              <phone12/>
+              <phone13/>
+              <phone1ext/>
+              <phone1type/>
+              <phone2/>
+              <phone22/>
+              <phone23/>
+              <phone2ext/>
+              <phone2type/>
+              <relationship>Spouse</relationship>
+              <salutation/>
+              <ssn/>
+              <state/>
+              <suffix/>
+              <userid>1027469</userid>
+              <uuid>8EE55A75-B384-4E7C-67419903D4AC633C</uuid>
+              <zip/>
+            </dependent>
+          </dependents>
+          <products total="1">
+            <product>
+              <agentid/>
+              <battended>0</battended>
+              <bhold>1</bhold>
+              <bpaid>1</bpaid>
+              <breship>0</breship>
+              <dtbilling>2011-11-10 00:00:00.0</dtbilling>
+              <dtcancelled/>
+              <dtcreated>2011-11-10 11:11:14.0</dtcreated>
+              <dteffective>2011-09-09 00:00:00.0</dteffective>
+              <dtfulfillment/>
+              <dtholdcreated>2011-12-08 00:00:00.0</dtholdcreated>
+              <dtholdreturn/>
+              <dtrecurring>2011-12-08 00:00:00.0</dtrecurring>
+              <dtrenewal/>
+              <dtshippingdate/>
+              <dttransfer/>
+              <enrollerid/>
+              <holdamount/>
+              <holdreason>Transaction Declined</holdreason>
+              <holdtype>hold</holdtype>
+              <label>Plan 1000</label>
+              <lastpayment>2</lastpayment>
+              <pdid>1</pdid>
+              <policynumber>aaa-123456</policynumber>
+              <qty>1</qty>
+              <reasonforcancel/>
+              <shippingaddress/>
+              <shippingaddress2/>
+              <shippingcity/>
+              <shippingcountry/>
+              <shippingfirstname/>
+              <shippinglastname/>
+              <shippingmessage/>
+              <shippingphone11/>
+              <shippingphone12/>
+              <shippingphone13/>
+              <shippingphone1ext/>
+              <shippingsalutation/>
+              <shippingstate/>
+              <shippingtrackingcarrier/>
+              <shippingtrackingcode/>
+              <shippinguseprimary>0</shippinguseprimary>
+              <shippingzipcode/>
+              <upid>1118267</upid>
+              <userid>1027469</userid>
+              <productfees total="1">
+                <productfee>
+                  <upid>1</upid>
+                  <pdid>1</pdid>
+                </productfee>
+              </productfees>
+            </product>
+          </products>
+          <transactions total="1">
+            <transaction>
+              <userdef1/>
+              <transid>2570243</transid>
+              <invoiceid/>
+              <bauthorized>1</bauthorized>
+              <paymentid/>
+              <responsestring/>
+              <transamount>40.00</transamount>
+              <gatewaytransactiontype>SALE</gatewaytransactiontype>
+              <brefund>0</brefund>
+              <parentid/>
+              <uniquecode>8EE577109777BD1A71B3539FED5D3CB3</uniquecode>
+              <brokerprocessorid/>
+              <bdeleted>0</bdeleted>
+              <fullgatewayresponse>Information saved</fullgatewayresponse>
+              <usernamesubmitted>Gateway</usernamesubmitted>
+              <chargebackreason/>
+              <paytype>CC</paytype>
+              <bcompleted>1</bcompleted>
+              <brokerid/>
+              <authcode/>
+              <dtsettled/>
+              <transdate>2011-11-10 11:12:42.0</transdate>
+              <transactiontype>1</transactiontype>
+              <bsettled>0</bsettled>
+              <processorid>175</processorid>
+              <bchargedback>0</bchargedback>
+              <brefunded>0</brefunded>
+              <bchargeback>0</bchargeback>
+              <opmid>175</opmid>
+              <userid>1027469</userid>
+              <displaygatewayresponse>Information saved</displaygatewayresponse>
+              <transactiondescription/>
+              <transactiondetails total="1">
+                <transactiondetail>
+                  <upid>1118267</upid>
+                  <transid>2570243</transid>
+                  <dtpaidthroughend>2011-10-08 00:00:00.0</dtpaidthroughend>
+                  <pdid>1</pdid>
+                  <tdid>3809848</tdid>
+                  <periodid>1</periodid>
+                  <dtpaidthroughstart>2011-09-09 00:00:00.0</dtpaidthroughstart>
+                  <paymentnumber>1</paymentnumber>
+                  <benefitid/>
+                  <transactionfees total="1">
+                    <transactionfee>
+                      <upfid>19097003</upfid>
+                      <type>Association</type>
+                      <tdid>3809848</tdid>
+                      <commissionableamount/>
+                      <amount>40.00</amount>
+                      <ppid>4739109</ppid>
+                      <currency>USD</currency>
+                      <tdfid>3822379</tdfid>
+                      <benefitid/>
+                    </transactionfee>
+                  </transactionfees>
+                </transactiondetail>
+              </transactiondetails>
+              <transactionpayments total="1">
+                <transactionpayment>
+                  <cctype>Visa</cctype>
+                  <telephone/>
+                  <countryabbreviation/>
+                  <ckchecknumber/>
+                  <cclast4>9355</cclast4>
+                  <cclast5/>
+                  <ccexpm>7</ccexpm>
+                  <address>3536 cedar plaza ln</address>
+                  <ckchecktype/>
+                  <ckbankname/>
+                  <ckip/>
+                  <country>USA</country>
+                  <uuid>8EE57500-F2F7-67D3-28621973D76713D1</uuid>
+                  <ccexpy>2014</ccexpy>
+                  <binerror/>
+                  <bankname/>
+                  <companyname/>
+                  <ckdlstate/>
+                  <paymentid/>
+                  <ckdldob/>
+                  <ckaba/>
+                  <phonenumbers/>
+                  <bbinvalidated>0</bbinvalidated>
+                  <email/>
+                  <cardtype/>
+                  <zip>75209</zip>
+                  <transactionid/>
+                  <city>dallas</city>
+                  <tpid>2505101</tpid>
+                  <name/>
+                  <ckacc/>
+                  <ckdlnumber/>
+                  <paytype>CC</paytype>
+                  <lastname>richards-kelly</lastname>
+                  <ckssn/>
+                  <ckaccounttype/>
+                  <firstname>suzi</firstname>
+                  <ckmemo/>
+                  <transid>2570243</transid>
+                  <cksign/>
+                  <countryname/>
+                  <paymentmethod/>
+                  <state>TX</state>
+                </transactionpayment>
+              </transactionpayments>
+            </transaction>
+          </transactions>
+        </method>
+
+    NoMatchingMembersResponse:
+      summary: No matching members found
+      value: |
+        <?xml version="1.0" encoding="UTF-8"?>
+        <method request="user.getall">
+          <users total="0"/>
+        </method>

@@ -1,0 +1,458 @@
+{
+  "tenant": "MightyWELL Health",
+  "results": [
+    {
+      "id": "cc.approved.visa",
+      "kind": "cc",
+      "label": "Valid Visa — should vault",
+      "expect": "success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 361,
+            "type": "cc",
+            "token": "VOUDYV5MYEVIMEOUSC3L1111",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "1111",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "Visa",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:31",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "cc.approved.mc",
+      "kind": "cc",
+      "label": "Valid Mastercard — should vault",
+      "expect": "success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 362,
+            "type": "cc",
+            "token": "7HS2T9P17J17QAHXTHA15454",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "5454",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "MasterCard",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:32",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "cc.approved.amex",
+      "kind": "cc",
+      "label": "Valid Amex — should vault",
+      "expect": "success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 363,
+            "type": "cc",
+            "token": "4GLVIL0ZPH1SA8BWGZRB1009",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "1009",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "Amex",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:33",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "cc.invalid.number",
+      "kind": "cc",
+      "label": "Invalid card number (Luhn fail)",
+      "expect": "validation",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 364,
+            "type": "cc",
+            "token": "",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "1112",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "Visa",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:34",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "cc.expired",
+      "kind": "cc",
+      "label": "Expired card (past date)",
+      "expect": "validation",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 365,
+            "type": "cc",
+            "token": "VOUDYV5MYEVIMEOUSC3L1111",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "1111",
+            "cc_expiration_date": "01/2020",
+            "cc_brand": "Visa",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:34",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "cc.bad.cvv.length",
+      "kind": "cc",
+      "label": "Wrong CVV length for Visa (should still vault since DIME often ignores for card-on-file)",
+      "expect": "validation",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 366,
+            "type": "cc",
+            "token": "VOUDYV5MYEVIMEOUSC3L1111",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "1111",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "Visa",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:35",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "cc.decline.do-not-honor",
+      "kind": "cc",
+      "label": "HPS test card that returns 05 Do Not Honor on auth (vaulting may still succeed)",
+      "expect": "decline-or-success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 367,
+            "type": "cc",
+            "token": "UWLI6HNLSMPYWJQW1P7E2220",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "2220",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "Visa",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:36",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "cc.decline.insufficient-funds",
+      "kind": "cc",
+      "label": "HPS test card that returns 51 Insufficient Funds on auth",
+      "expect": "decline-or-success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 368,
+            "type": "cc",
+            "token": "HMQEVXZ9WC5TRRO1QQXU2246",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "2246",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "Visa",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:37",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "cc.decline.lost",
+      "kind": "cc",
+      "label": "HPS test card that returns 41 Lost Card",
+      "expect": "decline-or-success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 369,
+            "type": "cc",
+            "token": "WHYN1RGX2QDBCBZ3OOTN2253",
+            "first_name": "Probe",
+            "last_name": "Test",
+            "cc_name_on_card": "Probe Test",
+            "cc_last_four": "2253",
+            "cc_expiration_date": "12/2030",
+            "cc_brand": "Visa",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:37",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "ach.valid",
+      "kind": "ach",
+      "label": "Valid ACH (should tokenize)",
+      "expect": "success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "ach"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 370,
+            "type": "ach",
+            "first_name": null,
+            "last_name": null,
+            "ach_bank_account_name": "Jane Doe",
+            "ach_routing_number": "021000021",
+            "ach_account_number": "123456789",
+            "ach_ownership_type": "Personal",
+            "ach_account_type": "Checking",
+            "ach_bank_name": "Probe Test Bank",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:38",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "ach.invalid.routing",
+      "kind": "ach",
+      "label": "Invalid routing number (not ABA-valid)",
+      "expect": "validation",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "ach"
+      },
+      "response": {
+        "status": 200,
+        "body": {
+          "data": {
+            "id": 371,
+            "type": "ach",
+            "first_name": null,
+            "last_name": null,
+            "ach_bank_account_name": "Jane Doe",
+            "ach_routing_number": "000000000",
+            "ach_account_number": "123456789",
+            "ach_ownership_type": "Personal",
+            "ach_account_type": "Checking",
+            "ach_bank_name": "Probe Test Bank",
+            "status": "New",
+            "status_date": "2026-04-21 11:05:38",
+            "enabled": true,
+            "default": true,
+            "addr1": "123 Main St",
+            "addr2": null,
+            "addr3": null,
+            "city": "Austin",
+            "state": "TX",
+            "zip": "78701"
+          }
+        }
+      },
+      "classify": "success"
+    },
+    {
+      "id": "ach.invalid.routing.format",
+      "kind": "ach",
+      "label": "Routing number wrong length",
+      "expect": "validation",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "ach"
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "errors": {
+            "data.ach_routing_number": [
+              "The data.ach routing number field must be 9 digits."
+            ]
+          }
+        },
+        "axiosMessage": "Request failed with status code 400"
+      },
+      "classify": "validation"
+    },
+    {
+      "id": "ach.missing.name",
+      "kind": "ach",
+      "label": "Missing name on account",
+      "expect": "validation",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "ach"
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "errors": {
+            "data.ach_bank_account_name": [
+              "The data.ach bank account name field is required when data.type is ach."
+            ]
+          }
+        },
+        "axiosMessage": "Request failed with status code 400"
+      },
+      "classify": "validation"
+    }
+  ]
+}

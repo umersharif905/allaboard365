@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Verify Your Email - {{tenantName}}</title>
+    <style>
+        body, table, td, p, a, li, blockquote {
+            -webkit-text-size-adjust: 100%;
+            -ms-text-size-adjust: 100%;
+        }
+        table, td {
+            mso-table-lspace: 0pt;
+            mso-table-rspace: 0pt;
+        }
+        img {
+            -ms-interpolation-mode: bicubic;
+            border: 0;
+            height: auto;
+            line-height: 100%;
+            outline: none;
+            text-decoration: none;
+        }
+        body {
+            height: 100% !important;
+            margin: 0 !important;
+            padding: 0 !important;
+            width: 100% !important;
+            background-color: #f4f4f4;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        .email-container {
+            max-width: 600px;
+            margin: 0 auto;
+            background-color: #ffffff;
+        }
+        .header {
+            padding: 30px 30px 20px 30px;
+            text-align: center;
+            background-color: #ffffff;
+        }
+        .tenant-name {
+            color: #1f8dbf;
+            font-size: 28px;
+            font-weight: 600;
+            margin: 0;
+        }
+        .content {
+            padding: 30px;
+            line-height: 1.6;
+            color: #333333;
+        }
+        .greeting {
+            font-size: 20px;
+            color: #333333;
+            margin-bottom: 12px;
+            font-weight: 600;
+            text-align: center;
+        }
+        .main-message {
+            font-size: 16px;
+            margin-bottom: 28px;
+            color: #555555;
+            text-align: center;
+        }
+        .code-card {
+            background-color: #f8f9fa;
+            border-radius: 12px;
+            padding: 28px 20px;
+            text-align: center;
+            margin: 0 0 28px 0;
+        }
+        .code-label {
+            margin: 0 0 10px 0;
+            font-size: 13px;
+            color: #666666;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+        .code-value {
+            margin: 0;
+            font-size: 36px;
+            font-weight: 700;
+            color: #1f8dbf;
+            letter-spacing: 8px;
+            font-family: 'Courier New', Courier, monospace;
+        }
+        .expiry-note {
+            margin: 14px 0 0 0;
+            font-size: 13px;
+            color: #888888;
+        }
+        .setup-steps {
+            background-color: #f8f9fa;
+            border-radius: 12px;
+            padding: 28px;
+            margin: 0 0 28px 0;
+        }
+        .setup-steps h3 {
+            margin: 0 0 22px 0;
+            color: #1f8dbf;
+            font-size: 20px;
+            text-align: center;
+            font-weight: 600;
+        }
+        .steps-list {
+            list-style: none;
+            padding: 0;
+            margin: 0;
+        }
+        .steps-list li {
+            background-color: #ffffff;
+            border-radius: 8px;
+            padding: 18px 18px 18px 60px;
+            margin-bottom: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            position: relative;
+        }
+        .steps-list li:last-child {
+            margin-bottom: 0;
+        }
+        .step-icon {
+            position: absolute;
+            left: 18px;
+            top: 50%;
+            transform: translateY(-50%);
+            width: 30px;
+            height: 30px;
+            background-color: #1f8dbf;
+            border-radius: 50%;
+            line-height: 30px;
+            text-align: center;
+            color: #ffffff;
+            font-weight: 600;
+            font-size: 14px;
+        }
+        .step-content h4 {
+            margin: 0 0 4px 0;
+            color: #1f8dbf;
+            font-size: 15px;
+            font-weight: 600;
+        }
+        .step-content p {
+            margin: 0;
+            color: #666666;
+            font-size: 14px;
+            line-height: 1.4;
+        }
+        .footer {
+            background-color: #f8f9fa;
+            padding: 24px 30px;
+            text-align: center;
+            border-top: 1px solid #e9ecef;
+        }
+        .footer p {
+            margin: 0 0 6px 0;
+            font-size: 13px;
+            color: #666666;
+        }
+        .footer .tenant-name {
+            color: #1f8dbf;
+            font-weight: 600;
+            font-size: 13px;
+        }
+        @media only screen and (max-width: 600px) {
+            .email-container {
+                width: 100% !important;
+            }
+            .header, .content, .footer {
+                padding: 20px !important;
+            }
+            .tenant-name {
+                font-size: 22px !important;
+            }
+            .code-value {
+                font-size: 28px !important;
+                letter-spacing: 6px !important;
+            }
+            .steps-list li {
+                padding-left: 50px !important;
+            }
+            .step-icon {
+                left: 14px !important;
+                width: 26px !important;
+                height: 26px !important;
+                line-height: 26px !important;
+                font-size: 12px !important;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="email-container">
+        <div class="header">
+            <div class="tenant-name" style="color:#1f8dbf;font-size:28px;font-weight:600;margin:0;font-family:'Segoe UI',Tahoma,Geneva,Verdana,sans-serif;">{{tenantName}}</div>
+        </div>
+
+        <div class="content">
+            <div class="greeting">Verify Your Email Address</div>
+            <p class="main-message">
+                You've been asked to confirm this email address for your <strong>{{tenantName}}</strong> account. Use the code below to finish verifying your email.
+            </p>
+
+            <div class="code-card">
+                <p class="code-label">Your Verification Code</p>
+                <p class="code-value">{{verificationCode}}</p>
+                <p class="expiry-note">This code expires in 10 minutes.</p>
+            </div>
+
+            <div class="setup-steps">
+                <h3>Finish Verifying Your Email</h3>
+                <ul class="steps-list">
+                    <li>
+                        <div class="step-icon">1</div>
+                        <div class="step-content">
+                            <h4>Return to {{tenantName}}</h4>
+                            <p>Open the verification screen on your enrollment or member portal.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="step-icon">2</div>
+                        <div class="step-content">
+                            <h4>Enter the Code Above</h4>
+                            <p>Type the 6-character code into the verification field.</p>
+                        </div>
+                    </li>
+                    <li>
+                        <div class="step-icon">3</div>
+                        <div class="step-content">
+                            <h4>You're Verified</h4>
+                            <p>We'll use this address for important notices about your enrollment.</p>
+                        </div>
+                    </li>
+                </ul>
+            </div>
+
+            <p style="font-size:14px;color:#888888;text-align:center;margin:0;">
+                If you didn't request this code, you can safely ignore this email — {{tenantName}} will never ask you to share it.
+            </p>
+        </div>
+
+        <div class="footer">
+            <p>This email was sent by <span class="tenant-name">{{tenantName}}</span> via AllAboard365</p>
+            <p>If you have questions, please contact our support team.</p>
+        </div>
+    </div>
+</body>
+</html>

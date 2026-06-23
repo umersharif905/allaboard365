@@ -1,0 +1,47 @@
+---
+description: Backend API conventions — tenant isolation, auth/roles, response shape, and route/service structure for the Express API
+globs: backend/**/*.js,shared/**/*.js
+alwaysApply: false
+---
+
+# Backend API Conventions
+
+Express.js REST API (Node 22, Azure SQL via `mssql`). Entry point: `backend/app.js`. Routes in `routes/`, business logic in `services/`.
+
+## Tenant isolation (hard security requirement)
+
+- **Every database query MUST filter by `TenantId`.** All `oe.*` tables are row-level tenant-scoped.
+- Use `buildTenantWhereClause()` to build the filter — do not hand-roll `TenantId = ...` inconsistently.
+- **Never bypass `middleware/requireTenantAccess.js`** on any route. There are no exceptions for "internal" or "admin" routes.
+- Treat a query without a tenant filter as a security bug, not a style nit.
+
+## Auth & roles
+
+- JWTs are validated in `middleware/auth.js` (also handles API-key auth and role extraction).
+- Enforce access with `userType` checks. Role hierarchy: `SysAdmin > TenantAdmin > Agent > GroupAdmin > Member`, plus `VendorAdmin` and others.
+- Never trust a `TenantId`/role from the request body — derive it from the authenticated token.
+
+## API response format
+
+All endpoints return this shape consistently:
+
+```js
+{ success: boolean, data?: any, message?: string }
+```
+
+- Success: `{ success: true, data }`.
+- Failure: `{ success: false, message }` with an appropriate HTTP status.
+- Don't return bare arrays/objects or ad-hoc error shapes.
+
+## Structure & conventions
+
+- **Routes** (`routes/`): kebab-case files, thin — validate input, call a service, format the response. RESTful endpoints under `/api/*`.
+- **Services** (`services/`): business logic (commissions, NACHA, enrollment, payments). Keep SQL and domain logic here, not in routes.
+- DB connection pool lives in `config/database.js` — reuse it; don't open new connections.
+- Use parameterized queries (`request.input(...)`) — never string-concatenate user input into SQL.
+- `shared/` utilities are bundled into the backend at deploy time via `backend/deploy.sh`.
+
+## Tests
+
+- Run with `npx jest` from `backend/`. DB and axios are mocked in unit tests.
+- Add/extend tests in `routes/__tests__/` and `services/__tests__/` when touching that logic.

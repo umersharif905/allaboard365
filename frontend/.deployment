@@ -1,0 +1,8 @@
+[config]
+# Deployment configuration for Azure App Service Frontend
+# When using CLI deployment (npm run deploy), Azure builds server-side
+SCM_DO_BUILD_DURING_DEPLOYMENT = true
+
+# Use .deployignore file to exclude files
+SCM_USE_DEPLOYIGNORE = true
+

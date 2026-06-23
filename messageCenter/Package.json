@@ -1,0 +1,21 @@
+{
+  "name": "allaboard365-message-center",
+  "version": "1.0.0",
+  "description": "Message Center Azure Functions",
+  "scripts": {
+    "start": "func start",
+    "deploy": "func azure functionapp publish allaboard-messagecenter",
+    "deploy:staging": "func azure functionapp publish allaboard-messagecenter-staging"
+  },
+  "dependencies": {
+    "@azure/functions": "^4.0.0",
+    "@sendgrid/mail": "^7.7.0",
+    "twilio": "^4.19.0",
+    "expo-server-sdk": "^3.7.0",
+    "jsonwebtoken": "^9.0.2",
+    "mssql": "^10.0.1"
+  },
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.x"
+  }
+}

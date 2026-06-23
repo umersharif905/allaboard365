@@ -1,0 +1,13 @@
+{
+  "type": "service_account",
+  "project_id": "mightywell-49659",
+  "private_key_id": "52072a47b56727a6fc44cc5f2537ea45cc310704",
+  "private_key": "-----BEGIN PRIVATE KEY-----\nMIIEvQIBADANBgkqhkiG9w0BAQEFAASCBKcwggSjAgEAAoIBAQDXiZJasSQqBuQ5\nJ6t/Vfs1s2X66V+OX5Ro6VC2mtX2b0SNJ2c6TTnoUcCidMI6MPhATpJp26h3d6K9\n/3a+Epl3i+PTaI5rpTpJHC0ioFMmNSPLCBjmYSPCbyiaPrpenKYVzPkAOtEX1fkH\n0chsakPIOMhyuj0Ev/wa772KKhUzSVvgpaTCvbDg7qEKMvHgjwwaima2tuJP02Od\n6Ui+vqKDA+EGxlNoUrELKFFWnAbUGlGm8wCZP1gK5aZEnCPVunU59YJoFJIXlH+6\n+48pjFfgUh8NKueNK/AjjFc4KIt365rtWNbW3CXgtc+OqpzyrXsMB7y50UhieXbg\n39yg0lSFAgMBAAECggEAKKp3J49WgGtuce4vKEZDsF0Zt56Cfe1Apg6nQNyz09wo\nde1iR5i8fT23d69J2grVO+TXMQvVnDzBQtHJSJFfzTNil8eZX2v8NEERrv/K0GGk\nUDFF6WmYgp3QblG5fhJWL7TNoiJ2wuWHJ9eH1hSylztHboX+7z99xGNJQqEwAM3U\nkWFzF4b8IED9dV8Gnh8r0lJUpln/KQ3gL7NGXTO1K09ja6SzHbtyEUuFs5dMEOlx\n6F0XZTQIFLnYtf+gL4ZDTAIkYGwyS2prDs3yKKhwyk7D5ZA+NtlnH60wdIxylPfy\no7T4LFktGWjpiBFpvuUmrQVHfg0esv9GUHpcqWMHgQKBgQD+XJDUxH4z4FV/RplW\njrFD9+2uzz/zCRgkz2HJZg+qcW/F/oqV+D6FEE9MOZxg/V4LFD/hcmk4zw66588T\nLmhJosUAV7ZkjL7Vt2KwtkPynwm+KDrub/YaVl/oXKi5lvkd96NBUFTOs2C+sfEL\n3ZhGdq6DA5yCyY3aj9ca3T10pQKBgQDY7PxvPudcOT2mDXXfXpUs6P2shhUJlups\ngiTn095PepiqfJsVxWhLbxtgBTsdmtRQ+GAFvgalNjWrs7/KTLZ2UzCVOUl663GN\navMN+SkaZWDYjeWFuyUwpa9xU5pWpGttC778anKGLs1QRxniO+zHuGaRkitQw7cZ\njsdvJCD6YQKBgBkoaqLAtILJA2vNPclT37CLSxTpJrgRBDRP1qom0BHZmmaI4Igo\nv3ZFwLIXWKI3LSAHZrITsNiPkjNmThLlmib+VGHOSxny2cUlmDtGK75JgJswO3Pt\n2veL53yB/aYtioIuRhVlrp2rHDyAOQklZ7RAdM48gzRkXwVpCKt9imCJAoGAMxiX\nWWjavFlrUQrIogW4Y6y53AJ1QB4BN+/r24OHUPdSsI3LRfSK3YHdU9/HjfCjZDMt\nAw1AqXe8aqZbXb52GCb+QZgN29tLkwEHIVp4ORR6HGhIERkE6JGOYsZLi28NMtFa\nekBkm4C4sdkdmrF804p29oEUnOCM54M/LMm4zuECgYEAkK5hn7gFOjZrJp9QzrBo\np1cRtj4HjoD3UQDu+w4YDRh0yzsnrwNcDKOoXj9WmpIIbteLSYHsCVVkrzKiP1g2\nDxxbhvVbtu5KMfi+UxzrxXwJQ4YXAmlDp9uH4aDoXemBcMaXU1lTHS/k2i2c5g2P\no4rngrhdbH7as6CgJ2jnbE8=\n-----END PRIVATE KEY-----\n",
+  "client_email": "wallet-pass-issuer@mightywell-49659.iam.gserviceaccount.com",
+  "client_id": "106602362069872689062",
+  "auth_uri": "https://accounts.google.com/o/oauth2/auth",
+  "token_uri": "https://oauth2.googleapis.com/token",
+  "auth_provider_x509_cert_url": "https://www.googleapis.com/oauth2/v1/certs",
+  "client_x509_cert_url": "https://www.googleapis.com/robot/v1/metadata/x509/wallet-pass-issuer%40mightywell-49659.iam.gserviceaccount.com",
+  "universe_domain": "googleapis.com"
+}

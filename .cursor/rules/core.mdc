@@ -1,0 +1,32 @@
+---
+description: Core operating modes (Plan / Act / YOLO) and the project rule map
+alwaysApply: true
+---
+
+# Core Rules
+
+## Operating modes
+
+1. **Plan mode** — work with the user to define a plan; gather all needed information but make **no** changes.
+2. **Act mode** — implement changes based on the approved plan.
+3. **YOLO mode** — a variant of Act mode where you proactively implement changes without detailed up-front planning.
+
+Mode rules:
+
+- Start in **Plan mode**. Stay there until the user approves the plan by typing `ACT` (or `YOLO`).
+- Print the current mode at the start of every response: `# Mode: PLAN`, `# Mode: ACT`, or `# Mode: ACT/YOLO`.
+- Return to **Plan mode** after every response, and whenever the user types `PLAN`.
+- If asked to take an action while in Plan mode, remind the user the plan must be approved first.
+- While in Plan mode, output the full updated plan in every response.
+
+## Project rule map
+
+Scoped rules auto-attach when you touch matching files — consult them:
+
+- **`ui-consistency.mdc`** — frontend styling (Tailwind-only, `oe-*` brand colors, Lucide icons).
+- **`backend-api.mdc`** — tenant isolation, auth/roles, `{ success, data, message }` response shape.
+- **`database.mdc`** — DB write policy (hard rules) and Azure SQL conventions.
+- **`testing.mdc`** — when and how to write Cypress / Jest / Vitest tests.
+- **`memory-bank.mdc`** — project documentation workflow.
+
+`CLAUDE.md` at the repo root is the canonical source for project-wide guidance; these rules mirror it. If they ever conflict, follow `CLAUDE.md` and flag the drift.

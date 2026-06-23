@@ -1,0 +1,54 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Logo Test - AllAboard365</title>
+    <style>
+        body { font-family: Arial, sans-serif; padding: 20px; background: #f5f5f5; }
+        .test-container { background: white; padding: 20px; border-radius: 8px; margin: 10px 0; }
+        .logo { max-width: 200px; height: auto; border: 1px dashed #ccc; padding: 10px; }
+        .error { color: red; font-weight: bold; }
+        .success { color: green; font-weight: bold; }
+    </style>
+</head>
+<body>
+    <h1>AllAboard365 Logo Test Page</h1>
+    
+    <div class="test-container">
+        <h3>Test 1: Primary Logo (transparent)</h3>
+        <img src="/images/branding/allaboard365/allaboard365-logo-primary-transparent.png" alt="AllAboard365 Logo" class="logo" 
+             onload="document.getElementById('test1-result').innerHTML = '✅ SUCCESS: SVG logo loaded!'; document.getElementById('test1-result').className = 'success';"
+             onerror="document.getElementById('test1-result').innerHTML = '❌ ERROR: SVG logo failed to load'; document.getElementById('test1-result').className = 'error';">
+        <div id="test1-result">Loading...</div>
+    </div>
+    
+    <div class="test-container">
+        <h3>Test 2: PNG Logo (if exists)</h3>
+        <img src="/images/branding/allaboard365/allaboard365-logo-transparent.png" alt="AllAboard365 Transparent" class="logo"
+             onload="document.getElementById('test2-result').innerHTML = '✅ SUCCESS: PNG logo loaded!'; document.getElementById('test2-result').className = 'success';"
+             onerror="document.getElementById('test2-result').innerHTML = '❌ INFO: PNG logo not found (this is OK if you haven\\'t placed it yet)'; document.getElementById('test2-result').className = 'error';">
+        <div id="test2-result">Loading...</div>
+    </div>
+    
+    <div class="test-container">
+        <h3>Test 3: Direct File Access</h3>
+        <p>Try accessing these URLs directly in your browser:</p>
+        <ul>
+            <li><a href="/images/branding/allaboard365/allaboard365-logo-primary-transparent.png" target="_blank">Primary (transparent)</a></li>
+            <li><a href="/images/branding/allaboard365/allaboard365-logo-primary.png" target="_blank">Primary (white bg, swap back)</a></li>
+            <li><a href="/images/branding/allaboard365/allaboard365-logo-transparent.png" target="_blank">Icon / transparent (no text)</a></li>
+        </ul>
+    </div>
+    
+    <div class="test-container">
+        <h3>Debugging Info</h3>
+        <p><strong>Current URL:</strong> <span id="current-url"></span></p>
+        <p><strong>Base URL:</strong> <span id="base-url"></span></p>
+        <script>
+            document.getElementById('current-url').textContent = window.location.href;
+            document.getElementById('base-url').textContent = window.location.origin;
+        </script>
+    </div>
+</body>
+</html>

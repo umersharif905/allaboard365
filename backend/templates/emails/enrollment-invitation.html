@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Complete Your Benefits Enrollment</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f4f4f4;">
+    <tr>
+        <td align="center" style="padding:20px 0;">
+            <table cellpadding="0" cellspacing="0" border="0" width="600" style="background-color:#ffffff;border-radius:8px;">
+                <!-- Header -->
+                <tr>
+                    <td style="padding:30px 40px;text-align:center;border-bottom:1px solid #e9ecef;">
+                        <!-- Logo temporarily commented out - will be added back later
+                        {{#logoUrl}}
+                        <img src="{{logoUrl}}" alt="{{tenantName}}" width="200" height="50" style="display:block;max-width:200px;height:50px;width:auto;margin:0 auto;border:0;">
+                        {{/logoUrl}}
+                        {{^logoUrl}}
+                        -->
+                        <h1 style="margin:0;font-size:24px;font-weight:600;color:#1f8dbf;font-family:Arial,Helvetica,sans-serif;">{{tenantName}}</h1>
+                        <!--
+                        {{/logoUrl}}
+                        -->
+                    </td>
+                </tr>
+                <!-- Content -->
+                <tr>
+                    <td style="padding:40px 40px 30px 40px;">
+                        <h2 style="margin:0 0 20px 0;font-size:20px;font-weight:600;color:#333333;font-family:Arial,Helvetica,sans-serif;">Hello {{memberFirstName}},</h2>
+                        <p style="margin:0 0 30px 0;font-size:16px;line-height:24px;color:#555555;font-family:Arial,Helvetica,sans-serif;">You have been invited to complete your benefits enrollment{{#groupName}} for <strong>{{groupName}}</strong>{{/groupName}}.</p>
+                        
+                        <!-- Button -->
+                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:30px 0;">
+                            <tr>
+                                <td align="center">
+                                    <a href="{{enrollmentUrl}}" style="display:inline-block;background-color:#1f8dbf;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:4px;font-size:16px;font-weight:600;font-family:Arial,Helvetica,sans-serif;">Begin Enrollment</a>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <!-- Next Steps -->
+                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f8f9fa;border-radius:6px;margin:30px 0;">
+                            <tr>
+                                <td style="padding:25px;">
+                                    <h3 style="margin:0 0 15px 0;font-size:18px;font-weight:600;color:#333333;font-family:Arial,Helvetica,sans-serif;">Next Steps</h3>
+                                    <p style="margin:0 0 10px 0;font-size:15px;color:#555555;font-family:Arial,Helvetica,sans-serif;"><strong>1. Review available benefits</strong> and coverage options</p>
+                                    <p style="margin:0 0 10px 0;font-size:15px;color:#555555;font-family:Arial,Helvetica,sans-serif;"><strong>2. Make your selections</strong> based on your needs</p>
+                                    <p style="margin:0;font-size:15px;color:#555555;font-family:Arial,Helvetica,sans-serif;"><strong>3. Submit your enrollment</strong> to complete the process</p>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        {{#expirationMessage}}
+                        <!-- Expiration Notice -->
+                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:20px 0;">
+                            <tr>
+                                <td style="padding:15px;background-color:#fff3cd;border:1px solid #ffeaa7;border-radius:6px;">
+                                    <p style="margin:0;font-size:14px;color:#856404;font-family:Arial,Helvetica,sans-serif;text-align:center;"><strong>⏰ Important:</strong> {{expirationMessage}}</p>
+                                </td>
+                            </tr>
+                        </table>
+                        {{/expirationMessage}}
+                        
+                        <p style="margin:30px 0 0 0;font-size:15px;color:#666666;font-family:Arial,Helvetica,sans-serif;">If you have any questions about your benefits or need assistance with enrollment, please contact your benefits administrator or HR department.</p>
+                        <p style="margin:20px 0 0 0;font-size:15px;color:#555555;font-family:Arial,Helvetica,sans-serif;">Best regards,<br><strong>{{tenantName}} Benefits Team</strong></p>
+                    </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                    <td style="padding:25px 40px;background-color:#f8f9fa;border-top:1px solid #e9ecef;text-align:center;">
+                        <p style="margin:0 0 8px 0;font-size:13px;color:#666666;font-family:Arial,Helvetica,sans-serif;">This email was sent by <strong>{{tenantName}}</strong> via OpenEnroll</p>
+                        <p style="margin:0;font-size:13px;color:#666666;font-family:Arial,Helvetica,sans-serif;">If you have questions, please contact support.</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

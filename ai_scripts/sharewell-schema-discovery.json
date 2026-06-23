@@ -1,0 +1,28 @@
+{
+  "discoveredAt": "2026-05-22",
+  "database": "ShareWELLPartners",
+  "shareRequestsColumns": 29,
+  "foreignKeys": [
+    { "parent_table": "notes", "ref_table": "share_requests", "fk_name": "FK_Notes_ShareRequests" }
+  ],
+  "relatedTables": [
+    "share_requests",
+    "notes",
+    "providers",
+    "provider_bills",
+    "provider_bill_ledger",
+    "share_request_provider",
+    "share_request_provider_medical_records",
+    "member_notes",
+    "note_comments",
+    "v_bills_on_share_request",
+    "v_share_request_providers"
+  ],
+  "notesColumns": [
+    "id", "member_id_key", "share_request_id_key", "created_by", "created_date",
+    "note_text", "likes_count", "dislikes_count", "note_type"
+  ],
+  "tierA": ["share_requests", "providers", "share_request_provider", "notes"],
+  "tierB": ["provider_bills", "provider_bill_ledger"],
+  "tierC": ["provider_bills.file_name document metadata only — blob path TBD"]
+}

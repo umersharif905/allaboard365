@@ -1,0 +1,79 @@
+{
+  "_comment": "Test scenarios for DIME sandbox. Card numbers come from DP_Test_Card_Information.csv. ACH from the same file. Note: DP cards all vault successfully — real declines only surface at charge time. The HMS (Heartland Gift/Loyalty) amount triggers live in the charge-mode catalog documented in docs/billing/dime-payments.md, not here, since this probe only exercises /api/payment-method/create.",
+  "creditCardScenarios": [
+    {
+      "id": "cc.dp.visa",
+      "label": "DP test Visa — should vault",
+      "card": { "number": "4012002000060016", "expiryMonth": 12, "expiryYear": 2030, "cvv": "123" },
+      "expect": "success"
+    },
+    {
+      "id": "cc.dp.mastercard.2series",
+      "label": "DP test MasterCard (2-series BIN) — should vault",
+      "card": { "number": "2223000010005780", "expiryMonth": 12, "expiryYear": 2030, "cvv": "900" },
+      "expect": "success"
+    },
+    {
+      "id": "cc.dp.mastercard.5series",
+      "label": "DP test MasterCard (5-series BIN) — should vault",
+      "card": { "number": "5473500000000014", "expiryMonth": 12, "expiryYear": 2030, "cvv": "123" },
+      "expect": "success"
+    },
+    {
+      "id": "cc.dp.discover",
+      "label": "DP test Discover — should vault",
+      "card": { "number": "6011000990156527", "expiryMonth": 12, "expiryYear": 2030, "cvv": "123" },
+      "expect": "success"
+    },
+    {
+      "id": "cc.dp.amex",
+      "label": "DP test Amex — should vault",
+      "card": { "number": "372700699251018", "expiryMonth": 12, "expiryYear": 2030, "cvv": "1234" },
+      "expect": "success"
+    },
+    {
+      "id": "cc.dp.jcb",
+      "label": "DP test JCB — may reject if brand unsupported by our mapper",
+      "card": { "number": "3566007770007321", "expiryMonth": 12, "expiryYear": 2030, "cvv": "123" },
+      "expect": "success-or-brand-reject"
+    },
+    {
+      "id": "cc.invalid.luhn",
+      "label": "Luhn-fail PAN — sandbox accepts, client-side should block before getting here",
+      "card": { "number": "4012002000060017", "expiryMonth": 12, "expiryYear": 2030, "cvv": "123" },
+      "expect": "success-but-should-block-client-side"
+    },
+    {
+      "id": "cc.expired",
+      "label": "Expired card — sandbox accepts (decline happens at charge)",
+      "card": { "number": "4012002000060016", "expiryMonth": 1, "expiryYear": 2020, "cvv": "123" },
+      "expect": "success-at-vault"
+    }
+  ],
+  "bankAccountScenarios": [
+    {
+      "id": "ach.dp.valid",
+      "label": "DP test ACH — should tokenize",
+      "bank": { "accountType": "Checking", "routingNumber": "122000030", "accountNumber": "1357902468", "nameOnAccount": "Jane Doe" },
+      "expect": "success"
+    },
+    {
+      "id": "ach.invalid.routing.format",
+      "label": "Routing number wrong length — real validation 400",
+      "bank": { "accountType": "Checking", "routingNumber": "12345", "accountNumber": "1357902468", "nameOnAccount": "Jane Doe" },
+      "expect": "validation"
+    },
+    {
+      "id": "ach.missing.name",
+      "label": "Missing name on account — real validation 400",
+      "bank": { "accountType": "Checking", "routingNumber": "122000030", "accountNumber": "1357902468", "nameOnAccount": "" },
+      "expect": "validation"
+    },
+    {
+      "id": "ach.invalid.routing.aba",
+      "label": "Routing number right length, bad ABA checksum — sandbox accepts anyway",
+      "bank": { "accountType": "Checking", "routingNumber": "000000000", "accountNumber": "1357902468", "nameOnAccount": "Jane Doe" },
+      "expect": "success-at-vault"
+    }
+  ]
+}

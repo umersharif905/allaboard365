@@ -1,0 +1,9 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "VENDOR_EXPORT_ENDPOINT_URL": "https://YOUR-BACKEND.azurewebsites.net/api/scheduled-jobs/vendor-exports",
+    "SCHEDULED_JOB_API_KEY": ""
+  }
+}

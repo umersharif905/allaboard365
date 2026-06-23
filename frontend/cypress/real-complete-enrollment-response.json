@@ -1,0 +1,330 @@
+{
+  "status": 500,
+  "response": {
+    "success": false,
+    "message": "Assignment to constant variable.",
+    "error": {
+      "message": "Assignment to constant variable.",
+      "name": "TypeError"
+    }
+  },
+  "requestBody": {
+    "memberId": "",
+    "memberInfo": {
+      "firstName": "Samson",
+      "lastName": "Mightwell",
+      "phone": "5558675309",
+      "ssn": "123456789",
+      "hasSpouse": false,
+      "childrenCount": 0,
+      "tobaccoUse": "N",
+      "dateOfBirth": "1990-06-15",
+      "gender": "Male",
+      "address": "123 Main Street",
+      "city": "Austin",
+      "state": "TX",
+      "zip": "78701",
+      "email": "taylor.morgan@example.com",
+      "height": 70,
+      "weight": 170
+    },
+    "memberTier": "EE",
+    "selectedProducts": [
+      "1D5DA922-31E6-401D-8346-D3340FDC4294",
+      "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533"
+    ],
+    "selectedConfigs": {
+      "8941BEE7-FAD0-4027-B234-D3331603E053": "1500",
+      "1D5DA922-31E6-401D-8346-D3340FDC4294": "Default",
+      "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533": "Default"
+    },
+    "networkSelections": [],
+    "frontendPricing": [
+      {
+        "productId": "1D5DA922-31E6-401D-8346-D3340FDC4294",
+        "productName": "Bento Dental",
+        "monthlyPremium": 42.08,
+        "selectedConfig": "Default"
+      },
+      {
+        "productId": "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533",
+        "productName": "Quest Select",
+        "monthlyPremium": 13,
+        "selectedConfig": "Default"
+      }
+    ],
+    "frontendCalculatedAmount": 55.08,
+    "submitForensics": {
+      "capturedAt": "2026-06-04T01:28:14.229Z",
+      "pricingSource": "individual-pricing-builder",
+      "wizard": {
+        "currentStep": 9,
+        "currentStepName": "Confirmation",
+        "linkToken": "enroll_1776790950466_73gpur75j",
+        "linkType": "Agent-Static",
+        "templateType": "Individual",
+        "shortCode": null,
+        "groupId": null
+      },
+      "member": {
+        "memberTier": "EE",
+        "memberCriteria": {
+          "age": 35,
+          "tobaccoUse": "N",
+          "tier": "EE",
+          "householdSize": 1
+        },
+        "dateOfBirth": "1990-06-15",
+        "state": "TX",
+        "zip": "78701",
+        "gender": "Male",
+        "tobaccoUse": "N",
+        "householdMemberCount": 0,
+        "dependentsSummary": []
+      },
+      "selection": {
+        "selectedProducts": [
+          "1D5DA922-31E6-401D-8346-D3340FDC4294",
+          "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533"
+        ],
+        "selectedConfigs": {
+          "8941BEE7-FAD0-4027-B234-D3331603E053": "1500",
+          "1D5DA922-31E6-401D-8346-D3340FDC4294": "Default",
+          "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533": "Default"
+        },
+        "effectiveDate": "2026-07-01",
+        "effectiveDateForPricing": "2026-07-01"
+      },
+      "pricingFetch": {
+        "loading": false,
+        "fetching": false,
+        "isError": false,
+        "errorMessage": null,
+        "productCount": 3,
+        "productIds": [
+          "8941BEE7-FAD0-4027-B234-D3331603E053",
+          "1D5DA922-31E6-401D-8346-D3340FDC4294",
+          "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533"
+        ],
+        "productIdsNormalized": [
+          "8941bee7fad04027b234d3331603e053",
+          "1d5da92231e6401d8346d3340fdc4294",
+          "306d87f683fd40e19bc3b0d8de8ad533"
+        ],
+        "productsSummary": [
+          {
+            "productId": "8941BEE7-FAD0-4027-B234-D3331603E053",
+            "productIdNormalized": "8941bee7fad04027b234d3331603e053",
+            "isBundle": true,
+            "defaultConfig": "1500",
+            "displayPremium": 355.75,
+            "monthlyPremium": 355.75,
+            "variationCount": 3,
+            "variationKeys": [
+              "1500",
+              "2500",
+              "5000",
+              "261E5540-A9E5-4973-9D93-B068009C5AD5:Default",
+              "F165AF93-8268-448D-9DD6-F02FB338EEAE:1500",
+              "F165AF93-8268-448D-9DD6-F02FB338EEAE:2500",
+              "F165AF93-8268-448D-9DD6-F02FB338EEAE:5000",
+              "16ACE482-845A-4BC8-9A8F-489CD1D002CE:Default"
+            ]
+          },
+          {
+            "productId": "1D5DA922-31E6-401D-8346-D3340FDC4294",
+            "productIdNormalized": "1d5da92231e6401d8346d3340fdc4294",
+            "isBundle": false,
+            "defaultConfig": null,
+            "displayPremium": 42.08,
+            "monthlyPremium": 42.08,
+            "variationCount": 1,
+            "variationKeys": [
+              "Default"
+            ]
+          },
+          {
+            "productId": "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533",
+            "productIdNormalized": "306d87f683fd40e19bc3b0d8de8ad533",
+            "isBundle": false,
+            "defaultConfig": null,
+            "displayPremium": 13,
+            "monthlyPremium": 13,
+            "variationCount": 1,
+            "variationKeys": [
+              "Default"
+            ]
+          }
+        ]
+      },
+      "contributionPreview": {
+        "loading": true,
+        "error": null,
+        "hasData": false,
+        "productCount": 0,
+        "products": [],
+        "totals": null
+      },
+      "enrollmentLinkTotals": {
+        "hasData": false,
+        "payload": null
+      },
+      "uiDisplayed": {
+        "totalCosts": {
+          "employerContribution": 0,
+          "employeeContribution": 55.08,
+          "totalCost": 55.08
+        },
+        "totalSetupFees": 0,
+        "includedProcessingFeeTotal": 0,
+        "processingFee": 3.5
+      },
+      "submitDerived": {
+        "rows": [
+          {
+            "productId": "1D5DA922-31E6-401D-8346-D3340FDC4294",
+            "productName": "Bento Dental",
+            "monthlyPremium": 42.08,
+            "selectedConfig": "Default"
+          },
+          {
+            "productId": "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533",
+            "productName": "Quest Select",
+            "monthlyPremium": 13,
+            "selectedConfig": "Default"
+          }
+        ],
+        "calculatedAmount": 55.08,
+        "individualTraces": [
+          {
+            "productId": "1D5DA922-31E6-401D-8346-D3340FDC4294",
+            "selectedProductIdRaw": "1D5DA922-31E6-401D-8346-D3340FDC4294",
+            "pricingRowFound": true,
+            "pricingRowProductId": "1D5DA922-31E6-401D-8346-D3340FDC4294",
+            "pricingRowMatchedBy": "exact",
+            "pricingDataProductIds": [
+              "8941BEE7-FAD0-4027-B234-D3331603E053",
+              "1D5DA922-31E6-401D-8346-D3340FDC4294",
+              "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533"
+            ],
+            "pricingDataProductIdsNormalized": [
+              "8941bee7fad04027b234d3331603e053",
+              "1d5da92231e6401d8346d3340fdc4294",
+              "306d87f683fd40e19bc3b0d8de8ad533"
+            ],
+            "selectedConfig": "Default",
+            "sliceResolved": true,
+            "sliceMonthlyPremium": 42.08,
+            "sliceConfigValue": "Default",
+            "failureReason": null,
+            "pricingVariationKeys": [
+              "Default"
+            ],
+            "isBundle": false,
+            "productDisplayPremium": 42.08,
+            "productMonthlyPremium": 42.08
+          },
+          {
+            "productId": "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533",
+            "selectedProductIdRaw": "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533",
+            "pricingRowFound": true,
+            "pricingRowProductId": "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533",
+            "pricingRowMatchedBy": "exact",
+            "pricingDataProductIds": [
+              "8941BEE7-FAD0-4027-B234-D3331603E053",
+              "1D5DA922-31E6-401D-8346-D3340FDC4294",
+              "306D87F6-83FD-40E1-9BC3-B0D8DE8AD533"
+            ],
+            "pricingDataProductIdsNormalized": [
+              "8941bee7fad04027b234d3331603e053",
+              "1d5da92231e6401d8346d3340fdc4294",
+              "306d87f683fd40e19bc3b0d8de8ad533"
+            ],
+            "selectedConfig": "Default",
+            "sliceResolved": true,
+            "sliceMonthlyPremium": 13,
+            "sliceConfigValue": "Default",
+            "failureReason": null,
+            "pricingVariationKeys": [
+              "Default"
+            ],
+            "isBundle": false,
+            "productDisplayPremium": 13,
+            "productMonthlyPremium": 13
+          }
+        ]
+      },
+      "reproducibility": {
+        "selectionSignatureHash": "766d9f5c07c9c2ee",
+        "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36",
+        "pageUrl": "http://localhost:5273/enroll/enroll_1776790950466_73gpur75j"
+      }
+    },
+    "pricingFingerprint": null,
+    "pricingContext": {
+      "memberCriteria": {
+        "age": 35,
+        "tobaccoUse": "N",
+        "tier": "EE",
+        "householdSize": 1,
+        "jobPosition": null
+      },
+      "paymentMethodType": "Card"
+    },
+    "householdMembers": [],
+    "effectiveDate": "2026-07-01",
+    "dependents": [],
+    "acknowledgements": [],
+    "digitalSignature": "",
+    "paymentMethod": {
+      "paymentMethodType": "Card",
+      "cardholderName": "Samson Mightwell",
+      "cardNumber": "4111111111111111",
+      "expiryDate": "12/2028",
+      "cvv": "123",
+      "cardBrand": "Visa",
+      "bankName": "",
+      "accountType": "Checking",
+      "routingNumber": "",
+      "accountNumber": "",
+      "accountHolderName": "Samson Mightwell",
+      "billingAddress": "123 Main Street",
+      "billingCity": "Austin",
+      "billingState": "TX",
+      "billingZip": "78701",
+      "billingCountry": "US",
+      "email": "taylor.morgan@example.com",
+      "phone": "5558675309"
+    },
+    "skipPaymentProcessing": false,
+    "questionnaireResponses": {
+      "productId": "F165AF93-8268-448D-9DD6-F02FB338EEAE",
+      "questionnaireVersion": 1,
+      "answeredAt": "2026-06-04T01:28:14.238Z",
+      "answers": [
+        {
+          "questionId": "5dcc1b1d-e4e3-446c-88b7-de4a70cbfa61",
+          "answer": false
+        },
+        {
+          "questionId": "cb120276-8d56-40ab-81b2-13134517e866",
+          "answer": false
+        },
+        {
+          "questionId": "4c9eaa21-a590-42e5-9943-0a704ae8ff3b",
+          "answer": false
+        },
+        {
+          "questionId": "9b7eb53e-02d3-4f65-895a-d62d42155eb5",
+          "answer": false
+        }
+      ],
+      "acknowledgementAccepted": true,
+      "acknowledgedAt": "2026-06-04T01:28:14.238Z",
+      "conditionalAcknowledgementAccepted": false,
+      "conditionalAcknowledgementTriggered": false
+    },
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) HeadlessChrome/148.0.0.0 Safari/537.36"
+  }
+}

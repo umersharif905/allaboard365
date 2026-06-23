@@ -1,0 +1,17 @@
+{
+  "version": 1,
+  "hooks": {
+    "preToolUse": [
+      {
+        "command": ".cursor/hooks/pre-write-guard.sh",
+        "matcher": "Write|Edit|StrReplace"
+      }
+    ],
+    "postToolUse": [
+      {
+        "command": ".cursor/hooks/post-write-warn.sh",
+        "matcher": "Write|Edit|StrReplace"
+      }
+    ]
+  }
+}

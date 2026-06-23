@@ -1,0 +1,15 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "<storage-conn>",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "FUNCTIONS_EXTENSION_VERSION": "~4",
+    "ServiceBusConnection": "<sb-conn>",
+    "DB_USER": "...",
+    "DB_PASSWORD": "...",
+    "DB_SERVER": "...",
+    "DB_NAME": "...",
+    "ANTHROPIC_API_KEY": "...",
+    "AZURE_STORAGE_CONNECTION_STRING": "..."
+  }
+}

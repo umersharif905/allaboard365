@@ -1,0 +1,89 @@
+{
+  "agent": [
+    {
+      "UserId": "4A7CCF35-5515-4571-97A8-40572D6E0F1B",
+      "Email": "klong@cig-ok.com",
+      "AgentId": "47114B7D-72E3-4879-B531-AC879A7DB767",
+      "TenantId": "1CD92AF7-B6F2-4E48-A8F3-EC6316158826",
+      "AgentStatus": "Active"
+    }
+  ],
+  "trainingCompletions": [],
+  "moduleCompletions": [
+    {
+      "AgentTrainingLibraryModuleCompletionId": "07E0250F-041E-4953-BF96-1E26BDCCD89B",
+      "AgentId": "47114B7D-72E3-4879-B531-AC879A7DB767",
+      "PackageId": "pkg-mw-001",
+      "ModuleId": "mod-01",
+      "CompletedAt": "2026-04-16T17:03:14.443Z",
+      "CreatedDate": "2026-04-15T20:47:15.773Z",
+      "ModifiedDate": "2026-04-16T17:03:14.443Z"
+    },
+    {
+      "AgentTrainingLibraryModuleCompletionId": "043F3E1E-8830-4619-9C9C-D9480EFA9D3F",
+      "AgentId": "47114B7D-72E3-4879-B531-AC879A7DB767",
+      "PackageId": "pkg-mw-001",
+      "ModuleId": "mod-0002",
+      "CompletedAt": "2026-04-08T15:12:32.240Z",
+      "CreatedDate": "2026-04-08T15:12:32.240Z",
+      "ModifiedDate": "2026-04-08T15:12:32.240Z"
+    },
+    {
+      "AgentTrainingLibraryModuleCompletionId": "023CB4F2-0006-464A-B906-9CF1AD16B936",
+      "AgentId": "47114B7D-72E3-4879-B531-AC879A7DB767",
+      "PackageId": "pkg-mw-001",
+      "ModuleId": "mod-0001",
+      "CompletedAt": "2026-04-08T15:08:38.583Z",
+      "CreatedDate": "2026-04-08T15:08:38.583Z",
+      "ModifiedDate": "2026-04-08T15:08:38.583Z"
+    }
+  ],
+  "quizCompletions": [
+    {
+      "AgentTrainingLibraryQuizCompletionId": "A4C895CE-894D-467E-AD20-3F6DBE5BD549",
+      "AgentId": "47114B7D-72E3-4879-B531-AC879A7DB767",
+      "PackageId": "pkg-mw-001",
+      "ModuleId": "mod-01",
+      "StepId": "step-030",
+      "QuizId": "quiz-010",
+      "ScorePercent": 100,
+      "TotalQuestions": 7,
+      "CorrectAnswers": 7,
+      "AttemptCount": 1,
+      "CompletedAt": "2026-04-15T20:47:17.520Z",
+      "CreatedDate": "2026-04-15T20:47:17.520Z",
+      "ModifiedDate": "2026-04-15T20:47:17.520Z"
+    },
+    {
+      "AgentTrainingLibraryQuizCompletionId": "C42934BC-6545-4699-BDA7-6D2A48442F1A",
+      "AgentId": "47114B7D-72E3-4879-B531-AC879A7DB767",
+      "PackageId": "pkg-mw-001",
+      "ModuleId": "mod-0002",
+      "StepId": "step-010",
+      "QuizId": "quiz-004",
+      "ScorePercent": 100,
+      "TotalQuestions": 10,
+      "CorrectAnswers": 10,
+      "AttemptCount": 1,
+      "CompletedAt": "2026-04-08T15:12:34.340Z",
+      "CreatedDate": "2026-04-08T15:12:34.340Z",
+      "ModifiedDate": "2026-04-08T15:12:34.340Z"
+    },
+    {
+      "AgentTrainingLibraryQuizCompletionId": "C074639E-07EE-4484-BF7A-B6E7920B0906",
+      "AgentId": "47114B7D-72E3-4879-B531-AC879A7DB767",
+      "PackageId": "pkg-mw-001",
+      "ModuleId": "mod-0001",
+      "StepId": "step-007",
+      "QuizId": "quiz-003",
+      "ScorePercent": 100,
+      "TotalQuestions": 10,
+      "CorrectAnswers": 10,
+      "AttemptCount": 1,
+      "CompletedAt": "2026-04-08T15:08:41.373Z",
+      "CreatedDate": "2026-04-08T15:08:41.373Z",
+      "ModifiedDate": "2026-04-08T15:08:41.373Z"
+    }
+  ],
+  "certificateAwards": []
+}

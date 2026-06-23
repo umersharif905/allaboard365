@@ -1,0 +1,7 @@
+# Do not deploy local settings - Azure uses App Settings from the portal/CLI
+local.settings.json
+.git*
+.vscode
+test
+*.md
+node_modules/.cache

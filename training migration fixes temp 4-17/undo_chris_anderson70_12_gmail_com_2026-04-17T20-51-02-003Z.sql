@@ -1,0 +1,40 @@
+-- Undo script generated 2026-04-17T20:51:02.004Z
+-- DB: allaboard-prod @ allboard-prod.database.windows.net
+-- Target email: chris.anderson70+12@gmail.com
+-- AgentId: 553FE70D-1C21-4404-ACEA-621BDFDFFC2D
+SET NOCOUNT ON;
+GO
+
+-- Restore oe.TrainingCompletions (5 row(s))
+DELETE FROM oe.TrainingCompletions
+WHERE AgentId = '553FE70D-1C21-4404-ACEA-621BDFDFFC2D';
+GO
+INSERT INTO oe.TrainingCompletions ([TrainingCompletionId], [ProductId], [AgentId], [MemberId], [UserId], [AttemptNumber], [ScorePercent], [TotalQuestions], [CorrectAnswers], [CompletedAt], [CreatedDate], [ModifiedDate], [AnswersDetail])
+VALUES
+(N'09773762-C9B7-4F93-B8C9-54E9211AF1AE', N'F165AF93-8268-448D-9DD6-F02FB338EEAE', N'553FE70D-1C21-4404-ACEA-621BDFDFFC2D', NULL, N'5D2DA6A8-3D89-497D-A733-DFA1C9AF8862', 2, 100, 3, 3, CAST('2026-02-01T21:51:21.420Z' AS datetime2), CAST('2026-02-01T21:51:21.420Z' AS datetime2), CAST('2026-02-01T21:51:21.420Z' AS datetime2), NULL),
+(N'C8DA2F2B-78A2-4B29-9A90-6E8E6561CA84', N'16ACE482-845A-4BC8-9A8F-489CD1D002CE', N'553FE70D-1C21-4404-ACEA-621BDFDFFC2D', NULL, N'5D2DA6A8-3D89-497D-A733-DFA1C9AF8862', 1, 0, 2, 0, CAST('2026-02-01T21:41:35.393Z' AS datetime2), CAST('2026-02-01T21:41:35.393Z' AS datetime2), CAST('2026-02-01T21:41:35.393Z' AS datetime2), NULL),
+(N'5F852736-473D-4F46-BA06-896F95DE4A36', N'16ACE482-845A-4BC8-9A8F-489CD1D002CE', N'553FE70D-1C21-4404-ACEA-621BDFDFFC2D', NULL, N'5D2DA6A8-3D89-497D-A733-DFA1C9AF8862', 2, 50, 2, 1, CAST('2026-02-01T21:43:20.260Z' AS datetime2), CAST('2026-02-01T21:43:20.260Z' AS datetime2), CAST('2026-02-01T21:43:20.260Z' AS datetime2), NULL),
+(N'F57B844E-EC89-4481-90AD-C004D88B81B1', N'F165AF93-8268-448D-9DD6-F02FB338EEAE', N'553FE70D-1C21-4404-ACEA-621BDFDFFC2D', NULL, N'5D2DA6A8-3D89-497D-A733-DFA1C9AF8862', 1, 0, 3, 0, CAST('2026-02-01T21:51:06.140Z' AS datetime2), CAST('2026-02-01T21:51:06.140Z' AS datetime2), CAST('2026-02-01T21:51:06.140Z' AS datetime2), NULL),
+(N'3BB11700-9190-4B83-A8BB-C4E760F2117F', N'16ACE482-845A-4BC8-9A8F-489CD1D002CE', N'553FE70D-1C21-4404-ACEA-621BDFDFFC2D', NULL, N'5D2DA6A8-3D89-497D-A733-DFA1C9AF8862', 3, 0, 2, 0, CAST('2026-02-04T05:33:22.403Z' AS datetime2), CAST('2026-02-04T05:33:22.403Z' AS datetime2), CAST('2026-02-04T05:33:22.403Z' AS datetime2), NULL);
+GO
+
+-- Restore oe.AgentTrainingLibraryModuleCompletions (0 row(s))
+DELETE FROM oe.AgentTrainingLibraryModuleCompletions
+WHERE AgentId = '553FE70D-1C21-4404-ACEA-621BDFDFFC2D';
+GO
+-- No rows to restore for oe.AgentTrainingLibraryModuleCompletions
+GO
+
+-- Restore oe.AgentTrainingLibraryQuizCompletions (0 row(s))
+DELETE FROM oe.AgentTrainingLibraryQuizCompletions
+WHERE AgentId = '553FE70D-1C21-4404-ACEA-621BDFDFFC2D';
+GO
+-- No rows to restore for oe.AgentTrainingLibraryQuizCompletions
+GO
+
+-- Restore oe.AgentTrainingPackageCertificateAwards (0 row(s))
+DELETE FROM oe.AgentTrainingPackageCertificateAwards
+WHERE AgentId = '553FE70D-1C21-4404-ACEA-621BDFDFFC2D';
+GO
+-- No rows to restore for oe.AgentTrainingPackageCertificateAwards
+GO

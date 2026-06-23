@@ -1,0 +1,445 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<title>Back Office Structure — Share Requests, Cases &amp; Encounters</title>
+<link rel="preconnect" href="https://fonts.googleapis.com" />
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,500;0,9..144,600;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700;800&display=swap" rel="stylesheet" />
+<style>
+  :root{
+    --paper:#f6f2e8; --paper-2:#efe8d8; --board:#e6dfcd;
+    --ink:#23241d; --ink-soft:#62614f; --line:#d8cfb7;
+
+    --sr-deep:#0d564e; --sr-mid:#2f8a7d; --sr-soft:#e2efe9; --sr-chip:#cbe5dd; --sr-ink:#093f39;
+    --case-deep:#9c4a17; --case-mid:#c9813e; --case-soft:#f6e8d3; --case-chip:#ecd3b1; --case-ink:#763811;
+    --enc-deep:#2c3142; --enc-mid:#565d72; --enc-soft:#e8e6e4; --enc-chip:#d7d6d6; --enc-ink:#22283a;
+  }
+  *{box-sizing:border-box;margin:0;padding:0;}
+  html,body{height:100%;}
+  body{
+    font-family:'Hanken Grotesk',-apple-system,sans-serif;
+    background:var(--board);
+    color:var(--ink);
+    line-height:1.45;
+    padding:40px 22px 64px;
+    -webkit-print-color-adjust:exact;print-color-adjust:exact;
+  }
+
+  /* ---- sheet ---- */
+  .sheet{
+    max-width:1200px;margin:0 auto;position:relative;
+    background:var(--paper);
+    border:1px solid #cdc4a9;
+    border-radius:4px;
+    box-shadow:0 1px 0 #fff inset, 0 26px 60px -28px rgba(40,33,12,.55);
+    padding:46px 50px 40px;
+    overflow:hidden;
+  }
+  .sheet::before{ /* grain */
+    content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+    opacity:.035;mix-blend-mode:multiply;
+  }
+  .sheet > *{position:relative;z-index:1;}
+
+  /* ---- reveal animation ---- */
+  .reveal{opacity:0;transform:translateY(15px);animation:rise .72s cubic-bezier(.2,.7,.2,1) forwards;}
+  @keyframes rise{to{opacity:1;transform:translateY(0);}}
+
+  /* ---- header ---- */
+  .head{display:flex;justify-content:space-between;align-items:flex-end;gap:30px;
+    border-bottom:2.5px solid var(--ink);padding-bottom:20px;}
+  .eyebrow{font-size:11px;font-weight:700;letter-spacing:.26em;text-transform:uppercase;
+    color:var(--sr-deep);margin-bottom:11px;}
+  h1{font-family:'Fraunces',serif;font-weight:600;font-size:37px;line-height:1.04;
+    letter-spacing:-.012em;color:var(--ink);max-width:18ch;}
+  h1 em{font-style:italic;font-weight:500;color:var(--case-deep);}
+  .lede{margin-top:11px;font-size:13.5px;color:var(--ink-soft);max-width:54ch;}
+  .legend{display:flex;flex-direction:column;gap:7px;flex-shrink:0;padding-bottom:2px;}
+  .legend .li{display:flex;align-items:center;gap:9px;font-size:11.5px;font-weight:600;color:var(--ink-soft);}
+  .swatch{width:15px;height:15px;border-radius:4px;flex-shrink:0;border:1px solid rgba(0,0,0,.16);}
+
+  /* ---- root band ---- */
+  .root{display:flex;align-items:center;gap:18px;margin-top:24px;
+    background:var(--paper-2);border:1px solid var(--line);border-radius:10px;
+    padding:14px 20px;}
+  .root .scope{display:flex;align-items:center;gap:11px;flex-shrink:0;}
+  .tag{font-size:10.5px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;
+    padding:7px 13px;border-radius:7px;white-space:nowrap;}
+  .tag.vendor{background:var(--ink);color:var(--paper);}
+  .tag.member{background:#fff;color:var(--ink);border:1.5px solid var(--ink);}
+  .arrow{color:var(--ink-soft);font-weight:800;font-size:15px;}
+  .root p{font-size:12.5px;color:var(--ink-soft);}
+  .root p b{color:var(--ink);font-weight:700;}
+
+  /* ---- main grid ---- */
+  .grid{display:grid;grid-template-columns:1fr 96px 1fr;margin-top:14px;position:relative;}
+
+  .card{border-radius:14px;padding:22px 23px 24px;position:relative;}
+  .card.sr{background:var(--sr-soft);border:1.5px solid var(--sr-mid);}
+  .card.cs{background:var(--case-soft);border:1.5px solid var(--case-mid);}
+
+  .cardhead{display:flex;align-items:flex-start;gap:13px;}
+  .num{font-family:'Fraunces',serif;font-size:15px;font-weight:600;
+    width:34px;height:34px;flex-shrink:0;border-radius:9px;
+    display:flex;align-items:center;justify-content:center;color:#fff;}
+  .sr .num{background:var(--sr-deep);}
+  .cs .num{background:var(--case-deep);}
+  .titles h2{font-family:'Fraunces',serif;font-size:25px;font-weight:600;letter-spacing:-.01em;line-height:1;}
+  .sr .titles h2{color:var(--sr-deep);}
+  .cs .titles h2{color:var(--case-deep);}
+  .titles .what{font-size:12px;color:var(--ink-soft);margin-top:5px;max-width:42ch;}
+  .origin{display:inline-block;margin-top:9px;font-size:10px;font-weight:700;
+    letter-spacing:.05em;text-transform:uppercase;padding:4px 9px;border-radius:5px;}
+  .sr .origin{background:var(--sr-chip);color:var(--sr-ink);}
+  .cs .origin{background:var(--case-chip);color:var(--case-ink);}
+
+  .block{margin-top:18px;}
+  .label{font-size:10.5px;font-weight:800;letter-spacing:.15em;text-transform:uppercase;
+    color:var(--ink);margin-bottom:9px;display:flex;align-items:center;gap:8px;}
+  .label .hint{font-weight:600;letter-spacing:.02em;text-transform:none;font-size:10.5px;color:var(--ink-soft);}
+
+  .chips{display:flex;flex-wrap:wrap;gap:7px;}
+  .chip{font-size:11.5px;font-weight:600;padding:6px 11px;border-radius:999px;white-space:nowrap;}
+  .sr .chip{background:#fff;border:1.3px solid var(--sr-mid);color:var(--sr-ink);}
+  .cs .chip.type{background:var(--case-deep);color:#fff;font-weight:700;}
+  .cs .chip.sub{background:#fff;border:1.2px solid var(--case-mid);color:var(--case-ink);font-size:11px;}
+
+  /* case taxonomy rows */
+  .taxrow{display:flex;align-items:baseline;gap:9px;flex-wrap:wrap;padding:7px 0;}
+  .taxrow + .taxrow{border-top:1px dashed var(--case-mid);}
+
+  /* status pipeline */
+  .pipe{display:flex;flex-wrap:wrap;align-items:center;gap:5px;}
+  .step{font-size:11px;font-weight:600;padding:5px 10px;border-radius:6px;}
+  .sr .step{background:#fff;border:1.2px solid var(--sr-mid);color:var(--sr-ink);}
+  .cs .step{background:#fff;border:1.2px solid var(--case-mid);color:var(--case-ink);}
+  .seq{font-weight:800;font-size:12px;}
+  .sr .seq{color:var(--sr-mid);}
+  .cs .seq{color:var(--case-mid);}
+  .endnote{margin-top:9px;font-size:11px;color:var(--ink-soft);}
+  .endpill{display:inline-block;font-size:10.5px;font-weight:700;padding:3px 8px;border-radius:5px;
+    background:rgba(0,0,0,.06);color:var(--ink);margin:0 2px;}
+  .holds{margin-top:16px;font-size:11px;color:var(--ink-soft);border-top:1px solid rgba(0,0,0,.1);padding-top:11px;}
+  .holds b{color:var(--ink);font-weight:700;}
+
+  /* ---- divider + seal ---- */
+  .divider{position:relative;display:flex;justify-content:center;}
+  .divider::before{content:"";position:absolute;top:14px;bottom:14px;width:0;
+    border-left:2.5px dashed #b9ad8c;}
+  .seal{position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+    width:330px;background:var(--paper);border:2px solid var(--ink);border-radius:12px;
+    padding:13px 16px;text-align:center;box-shadow:0 10px 26px -14px rgba(0,0,0,.5);}
+  .seal .x{font-family:'Fraunces',serif;font-size:13px;font-weight:600;letter-spacing:.12em;
+    text-transform:uppercase;color:var(--case-deep);display:flex;align-items:center;
+    justify-content:center;gap:8px;}
+  .seal .x::before,.seal .x::after{content:"";height:1.5px;width:26px;background:var(--ink);opacity:.4;}
+  .seal p{font-size:11.5px;color:var(--ink-soft);margin-top:6px;line-height:1.4;}
+  .seal p b{color:var(--ink);font-weight:700;}
+
+  /* ---- bridge / connectors ---- */
+  .bridge{position:relative;height:92px;margin-top:6px;}
+  .bridge svg{position:absolute;inset:0;width:100%;height:100%;}
+  .marker{position:absolute;width:13px;height:13px;border-radius:50%;
+    background:var(--paper);border:2.5px solid var(--enc-deep);transform:translate(-50%,-50%);}
+  .m-left{left:25.4%;top:4px;}
+  .m-right{left:74.6%;top:4px;}
+  .m-hub{left:50%;top:88px;}
+  .tether{position:absolute;top:30px;font-size:10px;font-weight:700;letter-spacing:.04em;
+    text-transform:uppercase;color:var(--enc-ink);background:var(--enc-chip);
+    border:1px solid var(--enc-mid);padding:4px 9px;border-radius:6px;white-space:nowrap;}
+  .t-left{left:20%;}
+  .t-right{right:20%;}
+
+  /* ---- encounters ---- */
+  .enc{background:var(--enc-soft);border:1.5px solid var(--enc-mid);border-radius:14px;
+    padding:23px 26px 24px;}
+  .enc .cardhead .num{background:var(--enc-deep);}
+  .enc .titles h2{color:var(--enc-ink);}
+  .enc-origin{background:var(--enc-chip);color:var(--enc-ink);}
+  .enc-link{margin-top:16px;background:var(--enc-deep);color:var(--paper);border-radius:11px;
+    padding:15px 18px;display:flex;gap:16px;align-items:center;flex-wrap:wrap;}
+  .enc-link .big{font-family:'Fraunces',serif;font-size:15px;font-weight:500;font-style:italic;
+    line-height:1.35;flex:1;min-width:260px;}
+  .enc-link .big u{text-decoration:none;border-bottom:2px solid var(--case-mid);padding-bottom:1px;}
+  .enc-link .big s{text-decoration:none;border-bottom:2px solid var(--sr-mid);padding-bottom:1px;}
+  .pinmatrix{display:flex;gap:7px;flex-wrap:wrap;}
+  .pin{font-size:10.5px;font-weight:700;padding:5px 9px;border-radius:6px;
+    background:rgba(255,255,255,.1);color:var(--paper);border:1px solid rgba(255,255,255,.22);}
+  .enc-cols{display:grid;grid-template-columns:repeat(3,1fr) 1.15fr;gap:20px;margin-top:18px;}
+  .enc-cols .label{color:var(--enc-ink);}
+  .echip{font-size:11px;font-weight:600;padding:5px 10px;border-radius:7px;
+    background:#fff;border:1.2px solid var(--enc-mid);color:var(--enc-ink);}
+  .echip.muted{background:var(--enc-chip);border-style:dashed;color:var(--enc-mid);}
+  .estate{font-size:11px;font-weight:700;padding:5px 10px;border-radius:7px;
+    background:var(--enc-deep);color:var(--paper);}
+  .enc-cols .sub{font-size:10.5px;color:var(--enc-mid);margin-top:7px;font-style:italic;}
+
+  /* ---- footer ---- */
+  .foot{margin-top:22px;border-top:2.5px solid var(--ink);padding-top:15px;
+    display:flex;justify-content:space-between;align-items:center;gap:24px;flex-wrap:wrap;}
+  .foot .key{font-family:'Fraunces',serif;font-size:14px;font-weight:500;font-style:italic;
+    color:var(--ink);max-width:62ch;}
+  .foot .key b{font-style:normal;font-weight:600;}
+  .foot .meta{font-size:10.5px;color:var(--ink-soft);text-align:right;letter-spacing:.03em;flex-shrink:0;}
+
+  @media (max-width:880px){
+    .grid{grid-template-columns:1fr;}
+    .divider{height:90px;}
+    .divider::before{top:0;bottom:0;left:50%;width:auto;border-left:none;
+      border-top:2.5px dashed #b9ad8c;height:0;width:60%;}
+    .seal{width:88%;position:static;transform:none;margin:8px auto;}
+    .enc-cols{grid-template-columns:1fr 1fr;}
+    .bridge{display:none;}
+  }
+  @media print{
+    body{background:#fff;padding:0;}
+    .sheet{box-shadow:none;border:none;max-width:100%;padding:14mm;}
+    .reveal{opacity:1;transform:none;animation:none;}
+    @page{size:landscape;margin:8mm;}
+  }
+  @media (prefers-reduced-motion:reduce){
+    .reveal{animation:none;opacity:1;transform:none;}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <!-- ================= HEADER ================= -->
+  <header class="head reveal" style="animation-delay:0s">
+    <div>
+      <div class="eyebrow">Open-Enroll · Vendor Portal · Operations Reference</div>
+      <h1>Back Office Structure — Share Requests, Cases &amp; <em>Encounters</em></h1>
+      <p class="lede">The vendor portal tracks three separate objects. This map shows what each one
+        is, how it is categorized, the statuses it moves through, and — most importantly — how they
+        do and don't connect.</p>
+    </div>
+    <div class="legend">
+      <div class="li"><span class="swatch" style="background:var(--sr-mid)"></span>Share Request</div>
+      <div class="li"><span class="swatch" style="background:var(--case-mid)"></span>Case</div>
+      <div class="li"><span class="swatch" style="background:var(--enc-mid)"></span>Encounter</div>
+    </div>
+  </header>
+
+  <!-- ================= ROOT BAND ================= -->
+  <div class="root reveal" style="animation-delay:.12s">
+    <div class="scope">
+      <span class="tag vendor">Vendor — the organization</span>
+      <span class="arrow">&rsaquo;</span>
+      <span class="tag member">Member — the patient</span>
+    </div>
+    <p>Every object below is <b>scoped to a Vendor</b> and <b>rooted to a Member</b>.
+      One member can hold many Share Requests, many Cases, and many Encounters at the same time.</p>
+  </div>
+
+  <!-- ================= MAIN GRID ================= -->
+  <div class="grid">
+
+    <!-- ---- SHARE REQUEST ---- -->
+    <section class="card sr reveal" style="animation-delay:.2s">
+      <div class="cardhead">
+        <div class="num">01</div>
+        <div class="titles">
+          <h2>Share Request</h2>
+          <div class="what">A member's <b>medical event</b> moving through the sharing /
+            reimbursement workflow.</div>
+          <span class="origin">Starts from a member's request form</span>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="label">Type <span class="hint">— per-vendor configurable · clinical medical-event categories</span></div>
+        <div class="chips">
+          <span class="chip">Surgery — Inpatient</span>
+          <span class="chip">Surgery — Outpatient</span>
+          <span class="chip">Procedure</span>
+          <span class="chip">Treatment</span>
+          <span class="chip">Maternity</span>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="label">Workflow Status</div>
+        <div class="pipe">
+          <span class="step">New</span><span class="seq">&rarr;</span>
+          <span class="step">Acknowledged</span><span class="seq">&rarr;</span>
+          <span class="step">In Review</span><span class="seq">&rarr;</span>
+          <span class="step">Awaiting Member Info</span><span class="seq">/</span>
+          <span class="step">Awaiting Authorization</span><span class="seq">&rarr;</span>
+          <span class="step">Processing</span><span class="seq">&rarr;</span>
+          <span class="step">Completed</span>
+        </div>
+        <div class="endnote">Closed without completion:
+          <span class="endpill">Denied</span><span class="endpill">Withdrawn</span></div>
+      </div>
+
+      <div class="block">
+        <div class="label">Determination <span class="hint">— a separate outcome axis</span></div>
+        <div class="chips">
+          <span class="chip">Pending</span>
+          <span class="chip">Eligible</span>
+          <span class="chip">Not Eligible</span>
+          <span class="chip">Undetermined</span>
+        </div>
+      </div>
+
+      <div class="holds">Carries <b>financial &amp; clinical data</b> — bills, providers,
+        diagnoses, procedures, payments and documents.</div>
+    </section>
+
+    <!-- ---- DIVIDER + SEAL ---- -->
+    <div class="divider reveal" style="animation-delay:.34s">
+      <div class="seal">
+        <div class="x">Not Linked</div>
+        <p><b>Separate &amp; independent.</b> A Share Request is never linked to a Case —
+          no connection, no conversion. They are two parallel tracks.</p>
+      </div>
+    </div>
+
+    <!-- ---- CASE ---- -->
+    <section class="card cs reveal" style="animation-delay:.26s">
+      <div class="cardhead">
+        <div class="num">02</div>
+        <div class="titles">
+          <h2>Case</h2>
+          <div class="what">A <b>back-office support / work item</b> — escalations, billing
+            problems, complaints, appeals. No financial determination workflow.</div>
+          <span class="origin">Created by vendor staff — never from a member form</span>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="label">Type &amp; Subcategory <span class="hint">— per-vendor configurable</span></div>
+        <div>
+          <div class="taxrow">
+            <span class="chip type">Reimbursement</span>
+            <span class="chip sub">OON Copay</span><span class="chip sub">Preventative</span>
+            <span class="chip sub">Other</span>
+          </div>
+          <div class="taxrow">
+            <span class="chip type">Billing</span>
+            <span class="chip sub">Provider Invoice</span><span class="chip sub">Negotiation</span>
+            <span class="chip sub">Recovery</span><span class="chip sub">Claims / COB</span>
+          </div>
+          <div class="taxrow">
+            <span class="chip type">Encounter Escalation</span>
+            <span class="chip sub">Needs Follow Up</span><span class="chip sub">Issue Raised</span>
+            <span class="chip sub">Routed to Team</span>
+          </div>
+          <div class="taxrow">
+            <span class="chip type">Complaint</span>
+            <span class="chip sub">Service Quality</span><span class="chip sub">Process / Outcome</span>
+            <span class="chip sub">Privacy</span>
+          </div>
+          <div class="taxrow">
+            <span class="chip type">Appeals</span>
+            <span class="chip sub">Denied Share</span><span class="chip sub">Denied Reimbursement</span>
+            <span class="chip sub">Amount Dispute</span><span class="chip sub">2nd Level</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="block">
+        <div class="label">Status</div>
+        <div class="pipe">
+          <span class="step">Open</span><span class="seq">&rarr;</span>
+          <span class="step">In Progress</span><span class="seq">&rarr;</span>
+          <span class="step">Pending</span><span class="seq">&rarr;</span>
+          <span class="step">Closed</span>
+        </div>
+      </div>
+
+      <div class="holds">Carries <b>operational records</b> — notes, providers and documents.
+        No bills, amounts or determination.</div>
+    </section>
+  </div>
+
+  <!-- ================= BRIDGE ================= -->
+  <div class="bridge reveal" style="animation-delay:.46s" aria-hidden="true">
+    <svg viewBox="0 0 1180 92" preserveAspectRatio="none">
+      <path d="M 590 86 C 540 36, 360 56, 300 6" fill="none" stroke="#565d72"
+        stroke-width="2" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/>
+      <path d="M 590 86 C 640 36, 820 56, 880 6" fill="none" stroke="#565d72"
+        stroke-width="2" stroke-dasharray="6 5" vector-effect="non-scaling-stroke"/>
+    </svg>
+    <span class="marker m-left"></span>
+    <span class="marker m-right"></span>
+    <span class="marker m-hub"></span>
+    <span class="tether t-left">Optional pin &rarr; Share Request</span>
+    <span class="tether t-right">Optional pin &rarr; Case</span>
+  </div>
+
+  <!-- ================= ENCOUNTERS ================= -->
+  <section class="enc reveal" style="animation-delay:.54s">
+    <div class="cardhead">
+      <div class="num">03</div>
+      <div class="titles">
+        <h2>Encounter</h2>
+        <div class="what">A logged record of a <b>conversation with a member</b> — a call,
+          email, or visit. The first-class place to capture what was said.</div>
+        <span class="origin enc-origin">Logged by the care team · the connective thread</span>
+      </div>
+    </div>
+
+    <div class="enc-link">
+      <div class="big">An Encounter can be optionally pinned to a
+        <s>Share Request</s>, to a <u>Case</u>, to <em>both</em>, or to <em>neither</em>.
+        It is the only object that touches both tracks.</div>
+      <div class="pinmatrix">
+        <span class="pin">↳ Share Request only</span>
+        <span class="pin">↳ Case only</span>
+        <span class="pin">↳ Both</span>
+        <span class="pin">↳ Neither = Triage</span>
+      </div>
+    </div>
+
+    <div class="enc-cols">
+      <div>
+        <div class="label">Channel</div>
+        <div class="chips">
+          <span class="echip">Phone</span><span class="echip">Email</span>
+          <span class="echip">In-person</span><span class="echip">SMS</span>
+          <span class="echip">Video</span><span class="echip">Other</span>
+        </div>
+      </div>
+      <div>
+        <div class="label">Direction</div>
+        <div class="chips">
+          <span class="echip">Inbound</span><span class="echip">Outbound</span>
+          <span class="echip">Internal</span>
+        </div>
+      </div>
+      <div>
+        <div class="label">Source</div>
+        <div class="chips">
+          <span class="echip">Manual</span>
+          <span class="echip muted">Zoom Phone</span>
+          <span class="echip muted">Zoom Meeting</span>
+          <span class="echip muted">Imported</span>
+        </div>
+        <div class="sub">Dashed = future auto-capture</div>
+      </div>
+      <div>
+        <div class="label">State <span class="hint" style="color:var(--enc-mid)">— no status field; derived</span></div>
+        <div class="chips">
+          <span class="estate">Triage</span><span class="estate">Assigned</span>
+          <span class="estate">Follow-up due</span><span class="estate">Archived</span>
+        </div>
+        <div class="sub">An Encounter can be escalated &rarr; converted into a Case.</div>
+      </div>
+    </div>
+  </section>
+
+  <!-- ================= FOOTER ================= -->
+  <footer class="foot reveal" style="animation-delay:.62s">
+    <div class="key"><b>The takeaway:</b> Share Requests and Cases never connect to each other.
+      Encounters are the only thread that can touch both — or sit on their own in Triage.</div>
+    <div class="meta">Open-Enroll vendor portal<br/>Structure reference · May 2026</div>
+  </footer>
+
+</div>
+</body>
+</html>

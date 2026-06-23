@@ -1,0 +1,438 @@
+{
+  "id": "mod-0003",
+  "title": "ShareWELL Health Share & Pre-Existing Conditions",
+  "modulePurpose": "This section teaches agents how to clearly explain the ShareWELL health share portion of MightyWELL bundles.\nAgents should leave this section understanding:\n• how the health share works\n• how the Unshared Amount works\n• how the rolling 12-month maximum works\n• how members use any provider they choose\n• how reimbursement works\n• how quickly claims are typically paid\n• how pre-existing condition limitations work\n• how to explain the difference between major medical health share events and routine copay care\nThis section is one of the most important parts of the training because it protects against agent misrepresentation.",
+  "defaultRequired": true,
+  "attachments": [],
+  "moduleSteps": [
+    {
+      "id": "step-011",
+      "title": "Understanding the ShareWELL Health Share",
+      "subtitle": "Review Overview",
+      "copy": "Understanding the ShareWELL Health Share\n\nMightyWELL is a marketing platform that helps individuals and businesses access multiple healthcare resources.\n\nDepending on the bundle selected, MightyWELL bundles may combine everyday healthcare services with a separate health share program designed to help support members during larger medical events.\n\nThe everyday healthcare side of the bundle may include things like:\n• primary care visits\n• urgent care\n• specialist visits\n• telemedicine\n• prescriptions\n• preventive care\n\nSeparate from that, members may also participate in the ShareWELL health share community, which helps support major medical events such as:\n• hospitalizations\n• surgeries\n• emergency treatment\n• major illnesses\n\nWhen enrolling, members choose an Unshared Amount (UA). The UA is the amount the member is responsible for before eligible major medical expenses may be shared through the ShareWELL community.\n\nThe member’s rolling 12-month maximum responsibility is generally double the UA selected. Example: if the member selects a $3,000 UA, their rolling 12-month maximum is $6,000.\n\nMembers are not restricted to one provider or one network for major medical events. They may go to the provider of their choice. Members should present as self-pay and submit itemized bills and supporting documentation for reimbursement and sharing review.\n\nOnce the member’s responsibility is met and the event is eligible, additional eligible expenses may be shared according to the ShareWELL guidelines.\n\nClaims are typically processed quickly, and reimbursements are commonly issued within 3 to 10 days on average, depending on documentation and the type of event.\n\nPre-existing condition limitations apply only to major medical events handled through the health share, not to routine everyday copay care.\n\nCommon, well-managed conditions such as high blood pressure, high cholesterol, thyroid conditions, and similar maintenance issues are generally handled through the copay and prescription side of the bundle, not through the major medical pre-existing limitation.\n\nAgents should always use official MightyWELL and ShareWELL materials when explaining how this works.",
+      "attachments": []
+    },
+    {
+      "id": "step-012",
+      "title": "ShareWELL Health Share Guide",
+      "subtitle": "Review Materials",
+      "copy": "Agents should open the ShareWELL Health Share Guide and review:\n• Health Share Overview\n• How the Unshared Amount works\n• Rolling 12-month maximum explanation\n• Pre-Existing Condition Limitations\n• ShareWELL Member Guidelines\n\nAgents should understand how to explain:\n• what the health share is\n• how a member uses it\n• how reimbursement works\n• what the member should do at the provider\n• what pre-existing limitations apply to\n• what does not fall under those limitations",
+      "attachments": []
+    },
+    {
+      "id": "step-013",
+      "title": "Section 3 Open-Book Knowledge Check",
+      "subtitle": "Take Quiz",
+      "copy": "Complete the open-book quiz for this section. Use official MightyWELL and ShareWELL materials as needed.",
+      "attachments": [],
+      "sectionQuiz": {
+        "id": "quiz-005",
+        "title": "Section 3 Quiz - ShareWELL Health Share",
+        "sectionId": "step-013",
+        "estimatedDurationMinutes": 12,
+        "questions": [
+          {
+            "id": "question-023",
+            "questionNumber": 1,
+            "questionText": "True or False: Depending on the bundle selected, MightyWELL bundles may include participation in a separate health share program designed to support major medical events.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              {
+                "id": "choice-056",
+                "answerText": "True",
+                "answerTrueFalse": true,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-057",
+                "answerText": "False",
+                "answerTrueFalse": false,
+                "answerOrdinal": "B"
+              }
+            ]
+          },
+          {
+            "id": "question-024",
+            "questionNumber": 2,
+            "questionText": "Which of the following are examples of major medical events that may be supported through the ShareWELL health share?",
+            "answerText": "All of the above",
+            "answerOrdinal": "D",
+            "answerChoices": [
+              {
+                "id": "choice-058",
+                "answerText": "Hospitalizations",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-059",
+                "answerText": "Surgeries",
+                "answerTrueFalse": false,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-060",
+                "answerText": "Emergency treatment",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              },
+              {
+                "id": "choice-061",
+                "answerText": "All of the above",
+                "answerTrueFalse": true,
+                "answerOrdinal": "D"
+              }
+            ]
+          },
+          {
+            "id": "question-025",
+            "questionNumber": 3,
+            "questionText": "What is the Unshared Amount (UA)?",
+            "answerText": "The amount the member is responsible for before eligible major medical expenses may be shared",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              {
+                "id": "choice-062",
+                "answerText": "The member’s monthly contribution",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-063",
+                "answerText": "The amount the member is responsible for before eligible major medical expenses may be shared",
+                "answerTrueFalse": true,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-064",
+                "answerText": "The member’s annual premium",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              }
+            ]
+          },
+          {
+            "id": "question-026",
+            "questionNumber": 4,
+            "questionText": "If a member selects a $3,000 Unshared Amount, what is their rolling 12-month maximum responsibility?",
+            "answerText": "$6,000",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              {
+                "id": "choice-065",
+                "answerText": "$3,000",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-066",
+                "answerText": "$6,000",
+                "answerTrueFalse": true,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-067",
+                "answerText": "$9,000",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              }
+            ]
+          },
+          {
+            "id": "question-027",
+            "questionNumber": 5,
+            "questionText": "True or False: The rolling 12-month maximum responsibility is double the Unshared Amount selected.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              {
+                "id": "choice-068",
+                "answerText": "True",
+                "answerTrueFalse": true,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-069",
+                "answerText": "False",
+                "answerTrueFalse": false,
+                "answerOrdinal": "B"
+              }
+            ]
+          },
+          {
+            "id": "question-028",
+            "questionNumber": 6,
+            "questionText": "If a member experiences a major medical event, what should they generally tell the provider?",
+            "answerText": "That they are self-pay",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              {
+                "id": "choice-070",
+                "answerText": "That they are self-pay",
+                "answerTrueFalse": true,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-071",
+                "answerText": "That they are using a PPO bundle",
+                "answerTrueFalse": false,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-072",
+                "answerText": "That the provider must bill ShareWELL directly",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              }
+            ]
+          },
+          {
+            "id": "question-029",
+            "questionNumber": 7,
+            "questionText": "True or False: Members are restricted to a single network when receiving care related to major medical events under the health share.",
+            "answerText": "False",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              {
+                "id": "choice-073",
+                "answerText": "True",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-074",
+                "answerText": "False",
+                "answerTrueFalse": true,
+                "answerOrdinal": "B"
+              }
+            ]
+          },
+          {
+            "id": "question-030",
+            "questionNumber": 8,
+            "questionText": "How does the reimbursement process typically work for a major medical event?",
+            "answerText": "Member receives care, submits itemized bills and documentation, and eligible expenses are reviewed for sharing",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              {
+                "id": "choice-075",
+                "answerText": "Member receives care, submits itemized bills and documentation, and eligible expenses are reviewed for sharing",
+                "answerTrueFalse": true,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-076",
+                "answerText": "Provider must always bill ShareWELL directly",
+                "answerTrueFalse": false,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-077",
+                "answerText": "Only in-network providers are eligible",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              }
+            ]
+          },
+          {
+            "id": "question-031",
+            "questionNumber": 9,
+            "questionText": "On average, how quickly are reimbursements commonly processed once documentation is received?",
+            "answerText": "3–10 days",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              {
+                "id": "choice-078",
+                "answerText": "30–60 days",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-079",
+                "answerText": "3–10 days",
+                "answerTrueFalse": true,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-080",
+                "answerText": "6 months",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              }
+            ]
+          },
+          {
+            "id": "question-032",
+            "questionNumber": 10,
+            "questionText": "True or False: Pre-existing condition limitations apply to routine copay care such as normal doctor visits or maintenance medications.",
+            "answerText": "False",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              {
+                "id": "choice-081",
+                "answerText": "True",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-082",
+                "answerText": "False",
+                "answerTrueFalse": true,
+                "answerOrdinal": "B"
+              }
+            ]
+          },
+          {
+            "id": "question-033",
+            "questionNumber": 11,
+            "questionText": "Pre-existing condition limitations primarily apply to:",
+            "answerText": "Major medical events handled through the health share",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              {
+                "id": "choice-083",
+                "answerText": "Routine primary care visits",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-084",
+                "answerText": "Major medical events handled through the health share",
+                "answerTrueFalse": true,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-085",
+                "answerText": "Preventive care visits",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              }
+            ]
+          },
+          {
+            "id": "question-034",
+            "questionNumber": 12,
+            "questionText": "For most conditions, a condition is considered pre-existing if symptoms, treatment, or medication occurred within how many months prior to enrollment?",
+            "answerText": "24 months",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              {
+                "id": "choice-086",
+                "answerText": "12 months",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-087",
+                "answerText": "24 months",
+                "answerTrueFalse": true,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-088",
+                "answerText": "60 months",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              }
+            ]
+          },
+          {
+            "id": "question-035",
+            "questionNumber": 13,
+            "questionText": "For cancer, the pre-existing lookback period is generally:",
+            "answerText": "36 months",
+            "answerOrdinal": "C",
+            "answerChoices": [
+              {
+                "id": "choice-089",
+                "answerText": "24 months",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-090",
+                "answerText": "30 months",
+                "answerTrueFalse": false,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-091",
+                "answerText": "36 months",
+                "answerTrueFalse": true,
+                "answerOrdinal": "C"
+              }
+            ]
+          },
+          {
+            "id": "question-036",
+            "questionNumber": 14,
+            "questionText": "Which of the following conditions are typically handled through the copay side of the bundle when well managed?",
+            "answerText": "All of the above",
+            "answerOrdinal": "D",
+            "answerChoices": [
+              {
+                "id": "choice-092",
+                "answerText": "High blood pressure",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-093",
+                "answerText": "High cholesterol",
+                "answerTrueFalse": false,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-094",
+                "answerText": "Thyroid conditions",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              },
+              {
+                "id": "choice-095",
+                "answerText": "All of the above",
+                "answerTrueFalse": true,
+                "answerOrdinal": "D"
+              }
+            ]
+          },
+          {
+            "id": "question-037",
+            "questionNumber": 15,
+            "questionText": "Why is it important for agents to clearly explain the health share and pre-existing limitations before enrollment?",
+            "answerText": "All of the above",
+            "answerOrdinal": "D",
+            "answerChoices": [
+              {
+                "id": "choice-096",
+                "answerText": "So the member understands how the program works",
+                "answerTrueFalse": false,
+                "answerOrdinal": "A"
+              },
+              {
+                "id": "choice-097",
+                "answerText": "To avoid misleading the member",
+                "answerTrueFalse": false,
+                "answerOrdinal": "B"
+              },
+              {
+                "id": "choice-098",
+                "answerText": "To reduce compliance risk",
+                "answerTrueFalse": false,
+                "answerOrdinal": "C"
+              },
+              {
+                "id": "choice-099",
+                "answerText": "All of the above",
+                "answerTrueFalse": true,
+                "answerOrdinal": "D"
+              }
+            ]
+          }
+        ],
+        "quizTakes": []
+      }
+    }
+  ]
+}

@@ -1,0 +1,13 @@
+{
+  "name": "allaboard-integration-error-digest-job",
+  "version": "1.0.0",
+  "description": "Azure Functions — integration error digest (every 15 min)",
+  "scripts": {
+    "start": "func start",
+    "deploy": "bash ./create-and-deploy.sh"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.x"
+  }
+}

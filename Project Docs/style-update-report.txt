@@ -1,0 +1,23 @@
+Open-Enroll Style Update Report
+Generated: 06/20/2025 10:17:24
+
+Files Updated: 31 / 101
+Backup Location: style-update-backup-20250620-101723
+
+Color Mapping Applied:
+- Blue colors ? Open-Enroll Primary/Light/Dark
+- Green colors ? Open-Enroll Success
+- Red colors ? Open-Enroll Error  
+- Yellow colors ? Open-Enroll Warning
+- Gray colors ? Open-Enroll Neutral
+
+Component Classes Applied:
+- btn-primary: Primary action buttons
+- btn-secondary: Secondary action buttons
+- btn-danger: Destructive action buttons
+- form-input: Form input fields
+- card: Card containers
+- alert-*: Alert messages
+
+To revert changes:
+Copy-Item -Path "style-update-backup-20250620-101723/src" -Destination "src" -Recurse -Force

@@ -1,0 +1,112 @@
+{
+  "validAgentStatic": {
+    "success": true,
+    "data": {
+      "LinkId": "link-test-static-001",
+      "LinkToken": "enroll_test_agentstatic_001",
+      "LinkUrl": "http://localhost:5173/enroll/enroll_test_agentstatic_001",
+      "GroupId": null,
+      "IsActive": true,
+      "UsageCount": 0,
+      "MaxUsage": null,
+      "ExpiresAt": null,
+      "CreatedDate": "2026-04-01T00:00:00.000Z",
+      "TemplateType": "Individual",
+      "TemplateName": "Test Agent Static Link",
+      "Description": "Cypress test link",
+      "AgentId": "agent-test-001",
+      "AgentName": "Test Agent",
+      "TenantId": "tenant-test-001",
+      "TenantName": "Test Tenant",
+      "LinkType": "Agent-Static"
+    }
+  },
+  "validMarketing": {
+    "success": true,
+    "data": {
+      "LinkId": "link-test-mk-001",
+      "LinkToken": "enroll_test_marketing_001",
+      "LinkUrl": "http://localhost:5173/enroll/enroll_test_marketing_001",
+      "GroupId": null,
+      "IsActive": true,
+      "UsageCount": 0,
+      "MaxUsage": null,
+      "ExpiresAt": null,
+      "CreatedDate": "2026-04-01T00:00:00.000Z",
+      "TemplateType": "Individual",
+      "TemplateName": "Test Marketing Link",
+      "TenantId": "tenant-test-001",
+      "TenantName": "Test Tenant",
+      "LinkType": "Marketing"
+    }
+  },
+  "validGroup": {
+    "success": true,
+    "data": {
+      "LinkId": "link-test-grp-001",
+      "LinkToken": "enroll_test_group_001",
+      "LinkUrl": "http://localhost:5173/enroll/enroll_test_group_001",
+      "GroupId": "group-test-001",
+      "GroupName": "Acme Test Group",
+      "IsActive": true,
+      "UsageCount": 0,
+      "MaxUsage": null,
+      "ExpiresAt": null,
+      "CreatedDate": "2026-04-01T00:00:00.000Z",
+      "TemplateType": "Group",
+      "TemplateName": "Test Group Link",
+      "TenantId": "tenant-test-001",
+      "TenantName": "Test Tenant",
+      "LinkType": "Group"
+    }
+  },
+  "expired": {
+    "success": true,
+    "data": {
+      "LinkId": "link-test-expired",
+      "LinkToken": "enroll_test_expired",
+      "LinkUrl": "http://localhost:5173/enroll/enroll_test_expired",
+      "IsActive": true,
+      "UsageCount": 0,
+      "MaxUsage": null,
+      "ExpiresAt": "2020-01-01T00:00:00.000Z",
+      "CreatedDate": "2019-01-01T00:00:00.000Z",
+      "TemplateType": "Individual",
+      "LinkType": "Agent-Static"
+    }
+  },
+  "inactive": {
+    "success": true,
+    "data": {
+      "LinkId": "link-test-inactive",
+      "LinkToken": "enroll_test_inactive",
+      "LinkUrl": "http://localhost:5173/enroll/enroll_test_inactive",
+      "IsActive": false,
+      "UsageCount": 0,
+      "MaxUsage": null,
+      "ExpiresAt": null,
+      "CreatedDate": "2026-01-01T00:00:00.000Z",
+      "TemplateType": "Individual",
+      "LinkType": "Agent-Static"
+    }
+  },
+  "usageCapped": {
+    "success": true,
+    "data": {
+      "LinkId": "link-test-capped",
+      "LinkToken": "enroll_test_capped",
+      "LinkUrl": "http://localhost:5173/enroll/enroll_test_capped",
+      "IsActive": true,
+      "UsageCount": 5,
+      "MaxUsage": 5,
+      "ExpiresAt": null,
+      "CreatedDate": "2026-01-01T00:00:00.000Z",
+      "TemplateType": "Individual",
+      "LinkType": "Group"
+    }
+  },
+  "notFound": {
+    "success": false,
+    "message": "Enrollment link not found"
+  }
+}

@@ -1,0 +1,18 @@
+Open-Enroll is a live multi-tenant healthcare enrollment platform supporting SysAdmin, TenantAdmin, Agent, GroupAdmin, and Member roles. It includes:
+- OAuth 2.0 service (https://oauth.open-enroll.com)
+- React + TypeScript frontend (https://open-enroll.com)
+- Node.js + Express backend API (https://api.open-enroll.com)
+- Azure SQL backend with `oe` schema
+- Azure Blob Storage for file uploads
+
+Key modules:
+- Enrollment
+- Tenant and user management
+- Marketplace (Products)
+- Group and member management
+- Commissions (Phases 1–7 roadmap)
+
+Security:
+- JWT authentication with refresh rotation
+- Tenant isolation on all queries
+- Audit logging for all auth events

@@ -1,0 +1,13 @@
+{
+  "name": "allaboard-email-mailbox-job",
+  "version": "1.0.0",
+  "description": "Azure Functions — Back Office inbox: Graph subscription renewal (every 6h) + delta reconcile (every 5 min)",
+  "scripts": {
+    "start": "func start",
+    "deploy": "bash ./create-and-deploy.sh"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.x"
+  }
+}

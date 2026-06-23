@@ -1,0 +1,11 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+
+    "INTEGRATION_ERROR_DIGEST_ENDPOINT_URL": "http://localhost:3001/api/scheduled-jobs/integration-error-digest",
+    "SCHEDULED_JOB_API_KEY": ""
+
+  }
+}

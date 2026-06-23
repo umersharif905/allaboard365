@@ -1,0 +1,36 @@
+# Deployment Ignore File for Backend
+# These files/folders will be excluded from Azure deployments
+
+# Environment files (keep in git, but don't deploy)
+.env
+.env.local
+.env.production
+.env.development
+
+# Logs
+*.log
+backend-live.log
+backend-output.log
+backend.log
+
+# Test files
+tests/
+test-*.js
+coverage/
+
+# Temporary uploads (will be regenerated on server)
+uploads/ai-temp/
+
+# Development files
+.vscode
+.idea
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Backup files
+*.bak
+*.swp
+*.tmp
+

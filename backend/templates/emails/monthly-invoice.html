@@ -1,0 +1,122 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Monthly Benefits Invoice - {{groupName}}</title>
+    <!--[if mso]>
+    <noscript>
+        <xml>
+            <o:OfficeDocumentSettings>
+                <o:AllowPNG/>
+                <o:PixelsPerInch>96</o:PixelsPerInch>
+            </o:OfficeDocumentSettings>
+        </xml>
+    </noscript>
+    <![endif]-->
+</head>
+<body style="margin:0;padding:0;background-color:#f8f9fa;font-family:Arial,Helvetica,sans-serif;color:#333333;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;background-color:#f8f9fa;">
+<tr>
+<td align="center" style="padding:20px 0;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="max-width:600px;width:100%;background-color:#ffffff;border-radius:8px;box-shadow:0 2px 4px rgba(0,0,0,0.1);">
+<!-- Header -->
+<tr>
+<td style="padding:30px 30px 20px 30px;text-align:center;border-bottom:2px solid #1f8dbf;">
+<h1 style="margin:0;font-size:28px;font-weight:600;color:#1f8dbf;font-family:Arial,Helvetica,sans-serif;">Monthly Invoice</h1>
+<p style="margin:10px 0 0 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">{{billingDate}}</p>
+</td>
+</tr>
+<!-- Group Info -->
+<tr>
+<td style="padding:25px 30px;">
+<h2 style="margin:0 0 5px 0;font-size:20px;font-weight:600;color:#333333;font-family:Arial,Helvetica,sans-serif;">{{groupName}}</h2>
+<p style="margin:0;font-size:15px;color:#666666;font-family:Arial,Helvetica,sans-serif;">Attention: {{contactName}}</p>
+</td>
+</tr>
+<!-- Summary Box -->
+<tr>
+<td style="padding:0 30px 25px 30px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;background-color:#f0f7fb;border-radius:6px;border:1px solid #1f8dbf;">
+<tr>
+<td style="padding:20px;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+<tr>
+<td style="width:100%;vertical-align:top;">
+<p style="margin:0 0 5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">Premium Amount</p>
+<p style="margin:0 0 15px 0;font-size:32px;font-weight:700;color:#1f8dbf;font-family:Arial,Helvetica,sans-serif;">{{totalAmount}}</p>
+<p style="margin:0 0 3px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">{{memberCount}} members across {{householdCount}} households</p>
+{{#processingFees}}<p style="margin:0 0 3px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">Base Premium: {{basePremium}} + Processing Fees: {{processingFees}}</p>{{/processingFees}}
+<p style="margin:0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">Payment Method: {{paymentMethod}}</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+<!-- Enrollment Details Removed - Summary shown above -->
+<!-- Payment Info -->
+<tr>
+<td style="padding:0 30px 25px 30px;">
+<div style="background-color:#f8f9fa;padding:20px;border-radius:6px;border-left:4px solid #1f8dbf;">
+<table role="presentation" cellpadding="0" cellspacing="0" border="0" style="width:100%;">
+<tr>
+<td style="padding-bottom:10px;">
+<strong style="font-size:15px;color:#333333;font-family:Arial,Helvetica,sans-serif;">Payment Information</strong>
+</td>
+</tr>
+<tr>
+<td>
+<p style="margin:5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">
+<strong>Billing Date:</strong> {{billingDate}}
+</p>
+<p style="margin:5px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">
+<strong>Amount:</strong> {{totalAmount}}
+</p>
+</td>
+</tr>
+</table>
+</div>
+</td>
+</tr>
+<!-- Important Notice -->
+<tr>
+<td style="padding:0 30px 25px 30px;">
+<div style="background-color:#fff3cd;padding:15px;border-radius:6px;border:1px solid #ffc107;">
+<p style="margin:0;font-size:14px;color:#856404;font-family:Arial,Helvetica,sans-serif;">
+<strong>Important:</strong> This invoice is for your records. Your payment method on file will be automatically charged on the billing date.
+</p>
+</div>
+</td>
+</tr>
+<!-- Support Info -->
+<tr>
+<td style="padding:0 30px 30px 30px;text-align:center;">
+<p style="margin:0 0 15px 0;font-size:14px;color:#666666;font-family:Arial,Helvetica,sans-serif;">
+If you have any questions about this invoice or need to update your payment method, please contact our support team.
+</p>
+<p style="margin:0;font-size:14px;color:#555555;font-family:Arial,Helvetica,sans-serif;">
+Thank you for your continued partnership!
+</p>
+</td>
+</tr>
+<!-- Footer -->
+<tr>
+<td style="padding:20px 30px;background-color:#f8f9fa;border-top:1px solid #e9ecef;text-align:center;border-radius:0 0 8px 8px;">
+<p style="margin:0 0 5px 0;font-size:12px;color:#666666;font-family:Arial,Helvetica,sans-serif;">
+This invoice was generated by OpenEnroll Payment Manager
+</p>
+<p style="margin:0;font-size:12px;color:#999999;font-family:Arial,Helvetica,sans-serif;">
+© {{currentYear}} OpenEnroll. All rights reserved.
+</p>
+</td>
+</tr>
+</table>
+</td>
+</tr>
+</table>
+</body>
+</html>
+

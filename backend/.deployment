@@ -1,0 +1,8 @@
+[config]
+# Deployment configuration for Azure App Service Backend
+
+# Build during deployment (npm install will run on Azure)
+SCM_DO_BUILD_DURING_DEPLOYMENT = true
+
+# Use .deployignore file to exclude files
+SCM_USE_DEPLOYIGNORE = true

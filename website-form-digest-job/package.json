@@ -1,0 +1,13 @@
+{
+  "name": "allaboard-website-form-digest-job",
+  "version": "1.0.0",
+  "description": "Azure Functions — weekly website-form digest (per-tenant)",
+  "scripts": {
+    "start": "func start",
+    "deploy": "bash ./create-and-deploy.sh"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.x"
+  }
+}

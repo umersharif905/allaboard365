@@ -1,0 +1,39 @@
+---
+description: Database write policy (hard rules) and Azure SQL schema conventions. Read before writing any SQL or migration script.
+globs: sql-changes/**/*.sql,backend/scripts/migrate.js,backend/config/database.js
+alwaysApply: false
+---
+
+# Database Policy & SQL Conventions
+
+Azure SQL Server. All app tables live under the `oe.` schema.
+
+## Write policy (HARD RULES)
+
+- **Never execute `INSERT` / `UPDATE` / `DELETE` / DDL against the database** unless the user explicitly requests it in that message.
+- Before any write execution: confirm the exact operation and the affected rows with the user, and wait for explicit approval.
+- **Every data-modifying SQL script ships with a dry-run / `SELECT` preview enabled by default.** The script previews the rows it would affect before any write. Real writes run only when a flag is explicitly flipped (e.g. `@DryRun = 0`).
+- Read-only work (`SELECT`, `EXEC sp_help`, schema inspection) may run freely via `db-query.sh --prod-readonly` without confirmation.
+
+## Schema conventions
+
+- Schema prefix: `oe.` (e.g. `oe.Members`, `oe.Enrollments`).
+- Table/column naming: `snake_case`.
+- **Every table includes `TenantId`** for row-level tenant isolation — new tables must include it, and queries must filter on it.
+- Migration scripts go in `sql-changes/`, named `YYYY-MM-DD-<description>.sql`.
+- Apply migrations with `node scripts/migrate.js` (from `backend/`).
+
+## Script template (data-modifying)
+
+```sql
+DECLARE @DryRun BIT = 1;   -- 1 = preview only (default), 0 = execute writes
+
+-- 1. Preview: show exactly which rows would change
+SELECT * FROM oe.<table> WHERE <condition> AND TenantId = @TenantId;
+
+-- 2. Execute only when explicitly enabled
+IF @DryRun = 0
+BEGIN
+    -- INSERT / UPDATE / DELETE here, scoped by TenantId
+END
+```

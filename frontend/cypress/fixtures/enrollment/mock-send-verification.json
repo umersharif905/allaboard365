@@ -1,0 +1,22 @@
+{
+  "success": {
+    "success": true,
+    "message": "Verification code sent"
+  },
+  "memberAlreadyEnrolled": {
+    "success": false,
+    "message": "This person is already enrolled with this organization"
+  },
+  "memberInGroup": {
+    "success": false,
+    "message": "This person is already a member of a group with this organization"
+  },
+  "invalidEmail": {
+    "success": false,
+    "message": "Invalid email address"
+  },
+  "rateLimited": {
+    "success": false,
+    "message": "Too many requests. Please try again later."
+  }
+}

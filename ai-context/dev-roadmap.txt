@@ -1,0 +1,14 @@
+Commission UI Roadmap:
+1. ✅ Phase 1 – Backend & API deployment
+2. ✅ Phase 2 – Commission Dashboard
+3. 🔄 Phase 3 – Rules Configuration UI
+4. ⏳ Phase 4 – Payment Batch Processing
+5. ⏳ Phase 5 – Agency Hierarchy Manager
+6. ⏳ Phase 6 – Commission Statements
+7. ⏳ Phase 7 – Analytics & Reporting
+
+Other Priorities:
+- Replace all mocked data with production APIs
+- Improve mobile responsiveness
+- Complete OAuth reset password flow
+- Harden tenant isolation & error reporting

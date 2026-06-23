@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Action needed: {{groupName}} is below the minimum enrollment count</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f4f4f4;">
+    <tr>
+        <td align="center" style="padding:20px 0;">
+            <table cellpadding="0" cellspacing="0" border="0" width="600" style="background-color:#ffffff;border-radius:8px;">
+                <!-- Header -->
+                <tr>
+                    <td style="padding:30px 40px;text-align:center;border-bottom:1px solid #e9ecef;">
+                        <h1 style="margin:0;font-size:24px;font-weight:600;color:#1f8dbf;font-family:Arial,Helvetica,sans-serif;">{{tenantName}}</h1>
+                    </td>
+                </tr>
+                <!-- Content -->
+                <tr>
+                    <td style="padding:40px 40px 30px 40px;">
+                        <h2 style="margin:0 0 20px 0;font-size:20px;font-weight:600;color:#333333;font-family:Arial,Helvetica,sans-serif;">Hi {{agentFirstName}},</h2>
+
+                        <p style="margin:0 0 20px 0;font-size:16px;line-height:24px;color:#555555;font-family:Arial,Helvetica,sans-serif;">The group <strong>{{groupName}}</strong> (effective <strong>{{effectiveDate}}</strong>) currently has <strong>{{currentMemberCount}}</strong> enrolled member(s), but the vendor requires a minimum of <strong>{{requiredMinimum}}</strong>.</p>
+
+                        <p style="margin:0 0 20px 0;font-size:16px;line-height:24px;color:#555555;font-family:Arial,Helvetica,sans-serif;">You have <strong>{{daysRemaining}} days</strong> to reach the minimum. If the group does not reach {{requiredMinimum}} members by {{lockDate}}, enrollments will be paused automatically and you will need to either close the gap or convert the group to <em>List Bill</em>.</p>
+
+                        <!-- Button -->
+                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:30px 0;">
+                            <tr>
+                                <td align="center">
+                                    <a href="{{groupUrl}}" style="display:inline-block;background-color:#1f8dbf;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:4px;font-size:16px;font-weight:600;font-family:Arial,Helvetica,sans-serif;">Open group</a>
+                                </td>
+                            </tr>
+                        </table>
+                    </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                    <td style="padding:25px 40px;background-color:#f8f9fa;border-top:1px solid #e9ecef;text-align:center;">
+                        <p style="margin:0 0 8px 0;font-size:13px;color:#666666;font-family:Arial,Helvetica,sans-serif;">— {{tenantName}}</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

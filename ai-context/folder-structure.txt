@@ -1,0 +1,20 @@
+/backend/
+├── app.js
+├── config/
+├── middleware/
+├── routes/
+├── services/
+├── utils/
+└── logs/
+
+/frontend/
+├── public/
+├── src/
+│   ├── components/
+│   ├── pages/
+│   ├── services/
+│   ├── hooks/
+│   ├── contexts/
+│   ├── types/
+│   ├── utils/
+│   └── styles/

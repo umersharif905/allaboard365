@@ -1,0 +1,49 @@
+# Deployment Ignore File for Frontend
+# These files/folders will be excluded from Azure deployments
+
+# Only exclude dist - we need everything else for the build
+dist/
+node_modules/
+.vscode/
+.idea/
+
+# Development files
+
+
+# Test files
+cypress/
+tests/
+test-*
+*.test.ts
+*.test.tsx
+*.spec.ts
+*.spec.tsx
+
+# Coverage and build artifacts
+coverage/
+.vitest/
+
+# Logs
+*.log
+logs/
+
+# Environment files
+.env
+.env.local
+.env.development
+.env.production
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE files
+*.sublime-project
+*.sublime-workspace
+
+# Misc
+*.md
+README.md
+.eslintrc.json
+.eslintcache
+

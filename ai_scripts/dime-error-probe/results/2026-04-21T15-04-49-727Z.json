@@ -1,0 +1,27 @@
+{
+  "tenant": "MightyWELL Health",
+  "results": [
+    {
+      "id": "cc.approved.visa",
+      "kind": "cc",
+      "label": "Valid Visa — should vault",
+      "expect": "success",
+      "customerId": "3002f6c5-c521-419e-8ae7-9490cc71d77b",
+      "request": {
+        "kind": "cc"
+      },
+      "response": {
+        "status": 400,
+        "body": {
+          "errors": {
+            "data.cc_brand": [
+              "The data.cc brand field is required when data.type is cc."
+            ]
+          }
+        },
+        "axiosMessage": "Request failed with status code 400"
+      },
+      "classify": "validation"
+    }
+  ]
+}

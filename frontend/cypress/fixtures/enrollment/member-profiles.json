@@ -1,0 +1,33 @@
+{
+  "newMember": {
+    "firstName": "Test",
+    "lastName": "Enrollee",
+    "dateOfBirth": "1990-01-15",
+    "gender": "M",
+    "phone": "5551234567",
+    "ssn": "123456789",
+    "tobaccoUse": "No"
+  },
+  "spouse": {
+    "firstName": "Jane",
+    "lastName": "Enrollee",
+    "dateOfBirth": "1991-03-22",
+    "gender": "F",
+    "relationship": "S",
+    "email": "jane.spouse@test.example.com"
+  },
+  "childYoung": {
+    "firstName": "Kid",
+    "lastName": "Enrollee",
+    "dateOfBirth": "2015-06-10",
+    "gender": "M",
+    "relationship": "C"
+  },
+  "childOlder": {
+    "firstName": "Teen",
+    "lastName": "Enrollee",
+    "dateOfBirth": "2010-02-14",
+    "gender": "F",
+    "relationship": "C"
+  }
+}

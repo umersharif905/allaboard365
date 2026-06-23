@@ -1,0 +1,6 @@
+- All TypeScript types in camelCase and PascalCase where applicable
+- Component files: PascalCase (e.g., CommissionDashboard.tsx)
+- API routes: kebab-case files with RESTful endpoints
+- Folder names: kebab-case or camelCase (avoid spaces or underscores)
+- Database tables: snake_case, prefixed with `oe.` schema (e.g., oe.Members)
+- API response: { success: boolean, data?: any, message?: string }

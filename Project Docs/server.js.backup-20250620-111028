@@ -1,0 +1,181 @@
+﻿const express = require('express');
+const cors = require('cors');
+const helmet = require('helmet');
+const morgan = require('morgan');
+const rateLimit = require('express-rate-limit');
+const dotenv = require('dotenv');
+const sql = require('mssql');
+
+// Load environment variables
+dotenv.config();
+
+// Import middleware
+const { authenticateToken, requireRole, requireTenantAccess } = require('./middleware/auth');
+
+// Import routes
+const authRoutes = require('./routes/auth');
+const usersRoutes = require('./routes/users');
+const tenantsRoutes = require('./routes/tenants');
+const productsRoutes = require('./routes/products');
+const groupsRoutes = require('./routes/groups');
+const enrollmentsRoutes = require('./routes/enrollments');
+const reportsRoutes = require('./routes/reports');
+
+// Create Express app
+const app = express();
+const PORT = process.env.PORT || 3001;
+
+// Database configuration
+const dbConfig = {
+  user: process.env.DB_USER,
+  password: process.env.DB_PASSWORD,
+  server: process.env.DB_SERVER,
+  database: process.env.DB_NAME,
+  options: {
+    encrypt: true,
+    trustServerCertificate: false,
+    enableArithAbort: true
+  },
+  pool: {
+    max: 10,
+    min: 0,
+    idleTimeoutMillis: 30000
+  }
+};
+
+// Connect to database
+async function connectDB() {
+  try {
+    await sql.connect(dbConfig);
+    console.log('✅ Connected to Azure SQL Database');
+  } catch (err) {
+    console.error('❌ Database connection failed:', err);
+    process.exit(1);
+  }
+}
+
+// Middleware
+app.use(helmet());
+app.use(cors({
+  origin: function(origin, callback) {
+    const allowedOrigins = process.env.ALLOWED_ORIGINS 
+      ? process.env.ALLOWED_ORIGINS.split(',').map(o => o.trim())
+      : ['http://localhost:5173', 'https://open-enroll.com'];
+    
+    // Allow requests with no origin (like mobile apps or Postman)
+    if (!origin) return callback(null, true);
+    
+    if (allowedOrigins.indexOf(origin) !== -1) {
+      callback(null, true);
+    } else {
+      callback(new Error('Not allowed by CORS'));
+    }
+  },
+  credentials: true,
+  optionsSuccessStatus: 200
+}));
+
+app.use(express.json({ limit: '10mb' }));
+app.use(express.urlencoded({ extended: true, limit: '10mb' }));
+app.use(morgan('combined'));
+
+// Rate limiting
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, // 15 minutes
+  max: 100, // Limit each IP to 100 requests per windowMs
+  message: 'Too many requests from this IP, please try again later.'
+});
+
+app.use('/api/', limiter);
+
+// Health check endpoint
+app.get('/health', (req, res) => {
+  res.json({ 
+    status: 'healthy', 
+    timestamp: new Date().toISOString(),
+    environment: process.env.NODE_ENV || 'development'
+  });
+});
+
+// API Routes
+// Public routes (no authentication required)
+app.use('/api/auth', authRoutes);
+
+// Protected routes (authentication required)
+app.use('/api/users', authenticateToken, usersRoutes);
+app.use('/api/tenants', authenticateToken, tenantsRoutes);
+app.use('/api/products', authenticateToken, productsRoutes);
+app.use('/api/groups', authenticateToken, groupsRoutes);
+app.use('/api/enrollments', authenticateToken, enrollmentsRoutes);
+app.use('/api/reports', authenticateToken, requireRole(['Admin', 'TenantAdmin']), reportsRoutes);
+
+// File upload endpoints (if needed)
+app.post('/api/upload', authenticateToken, (req, res) => {
+  // Handle file uploads here
+  res.json({ message: 'Upload endpoint - implement as needed' });
+});
+
+// Error handling middleware
+app.use((err, req, res, next) => {
+  console.error(err.stack);
+  
+  // Handle specific errors
+  if (err.message === 'Not allowed by CORS') {
+    return res.status(403).json({ error: 'CORS policy violation' });
+  }
+  
+  if (err.name === 'UnauthorizedError') {
+    return res.status(401).json({ error: 'Invalid token' });
+  }
+  
+  if (err.name === 'ValidationError') {
+    return res.status(400).json({ error: err.message });
+  }
+  
+  // Generic error response
+  res.status(500).json({ 
+    error: 'Internal server error',
+    message: process.env.NODE_ENV === 'development' ? err.message : 'Something went wrong'
+  });
+});
+
+// 404 handler
+app.use((req, res) => {
+  res.status(404).json({ error: 'Route not found' });
+});
+
+// Start server
+async function startServer() {
+  try {
+    // Connect to database first
+    await connectDB();
+    
+    // Start listening
+    app.listen(PORT, () => {
+      console.log(`🚀 Server running on port ${PORT}`);
+      console.log(`📍 Environment: ${process.env.NODE_ENV || 'development'}`);
+      console.log(`🔒 Auth bypass: ${process.env.BYPASS_AUTH === 'true' ? 'ENABLED' : 'DISABLED'}`);
+    });
+  } catch (error) {
+    console.error('❌ Failed to start server:', error);
+    process.exit(1);
+  }
+}
+
+// Handle graceful shutdown
+process.on('SIGTERM', async () => {
+  console.log('SIGTERM received, closing HTTP server...');
+  await sql.close();
+  process.exit(0);
+});
+
+process.on('SIGINT', async () => {
+  console.log('SIGINT received, closing HTTP server...');
+  await sql.close();
+  process.exit(0);
+});
+
+// Start the server
+startServer();
+
+module.exports = app;

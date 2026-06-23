@@ -1,0 +1,33 @@
+# Copy to dime-webhook-replay.env (gitignored):
+#   cp backend/scripts/dime-webhook-replay.template backend/scripts/dime-webhook-replay.env
+#
+# Preview (no handler run):
+#   DIME_WEBHOOK_REPLAY_DRY_RUN=1 ./backend/scripts/run-dime-webhook-replay.sh
+#
+# Live replay webhook #1105 (Darcey ACH return) after deploying oe_payment_manager fix:
+#   WEBHOOK_EVENT_IDS=1105
+#   FORCE_REPROCESS=1
+#   DB_NAME=allaboard-prod
+#   ./backend/scripts/run-dime-webhook-replay.sh
+#
+# Or by DIME transaction_number:
+#   PROCESSOR_TXN_IDS=778
+#   EVENT_TYPES=ach_payment_return
+#   FORCE_REPROCESS=1
+#   DB_NAME=allaboard-prod
+
+# SQL target (defaults from backend/.env if omitted)
+# DB_NAME=allaboard-prod
+# DB_SERVER=allboard-prod.database.windows.net
+# DB_USER=allaboardadmin
+# DB_PASSWORD=
+
+# Pick one or both:
+WEBHOOK_EVENT_IDS=1105
+# PROCESSOR_TXN_IDS=778
+# EVENT_TYPES=ach_payment_return
+
+# Set 1 to replay even when Processed=1
+FORCE_REPROCESS=1
+
+# BACKEND_API_URL is read from backend/.env for processBounce side effects

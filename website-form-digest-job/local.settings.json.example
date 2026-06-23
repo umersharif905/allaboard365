@@ -1,0 +1,10 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+
+    "WEBSITE_FORM_DIGEST_ENDPOINT_URL": "http://localhost:3001/api/cron/website-form-digest",
+    "SCHEDULED_JOB_API_KEY": ""
+  }
+}

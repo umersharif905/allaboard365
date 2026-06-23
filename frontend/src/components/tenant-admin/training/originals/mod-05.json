@@ -1,0 +1,127 @@
+﻿{
+  "id": "mod-05",
+  "title": "Using the Portal",
+  "modulePurpose": "How to Find Answers Fast and Keep Sales Moving\n\nSection Purpose\nThis section teaches agents how to confidently use the portal to find product information, generate quotes, send enrollments, and get answers quickly.\nThe portal is designed to be simple.\nYou do not need to memorize every detail.\nYou just need to know where to go.\nAnd remember — you are never alone inside the system.\nColumbus is built directly into the website and app to help you.\nAgents should leave this section understanding:\nwhere to find plan guides\nwhere to generate quotes\nwhere to send enrollment links\nwhere to look when a customer asks a question\nhow to get comfortable using the system\nhow to use Columbus as a support resource\nThe goal of this module is simple:\nKnow where to click, and know who to ask.\nBecause confident agents close more business.",
+  "defaultRequired": true,
+  "attachments": [],
+  "moduleSteps": [
+    {
+      "id": "step-040",
+      "title": "Step 1 – Review Overview",
+      "subtitle": "Review Overview",
+      "copy": "The Portal Is Your Command Center\nThe portal is where you access everything related to MightyWELL products.\nIt is designed to be:\nsimple\norganized\neasy to navigate\nuser-friendly\nYou are encouraged to click around and explore.\nYou will not break anything.\nYou will only get faster.\n\nThe Three Most Important Resources in the Portal\nYou do not need to master everything.\nYou only need to understand three things.\n\n1) The Product Page\nThis Is Where You Learn the Plans\nThe Product Page is where you access all MightyWELL bundle information.\nEvery product has a guide.\nAnd every guide contains everything you need to understand the product.\nInside each guide, you will find:\ncoverage details\nvisit information\nprescription benefits\npreventive services\nprovider search instructions\nhealth share coordination details\npre-existing condition information\nIf you ever have a question about a plan:\nOpen the guide.\nThat is the rule.\n\nSales One-Liners\n\"Everything about the plan is inside the guide.\"\n\"If you can open the guide, you can answer the question.\"\n\"When in doubt, go to the Product Page.\"\n\n2) The Marketing Page\nThis Is Where You Do Business\nThe Marketing Page is where you generate quotes and send enrollments.\nThis is the page you will use every day.\nThis is where you:\ngenerate quotes\nbuild proposals\nsend enrollment links\nstart applications\n\nSales One-Liners\n\"Quotes happen on the Marketing Page.\"\n\"Enrollment links come from the Marketing Page.\"\n\"If you're selling, you're on the Marketing Page.\"\n\n3) Columbus — Your Built-In Assistant\nHelp Is Always Available\nColumbus is built directly into the website and the app.\nHe is there to help you.\nYou can ask Columbus questions about:\ncoverage\nbenefits\nplan details\nhow things work\nwhere to find information\nIf you are unsure about something:\nAsk Columbus.\nHe is available anytime.\n\nWhat If Columbus Doesn't Know?\nSometimes questions require human support.\nThat is normal.\nIf Columbus cannot answer the question, you will simply be directed to the right team for help.\nSo you always have support.\n\nSales One-Liners\n\"If I don't know the answer, Columbus probably does.\"\n\"You can ask Columbus questions anytime inside the portal.\"\n\"Help is always one click away.\"\n\nThe Portal Is Built to Be Easy\nYou do not need technical skills.\nYou do not need special training.\nYou just need familiarity.\nThat comes from practice.\nSo click around.\nExplore the system.\nOpen guides.\nRun quotes.\nAsk Columbus questions.\nThe more you use it, the faster you will become.\n\nThe Real Sales Message\nCustomers trust agents who sound prepared.\nPrepared agents know where to find answers.\nAnd agents who move quickly close more business.",
+      "attachments": []
+    },
+    {
+      "id": "step-041",
+      "title": "Step 2 – Instructions",
+      "subtitle": "Review Materials",
+      "copy": "Log into the portal.\nSpend a few minutes exploring.\nYou are not being tested on memory.\nYou are being tested on familiarity.\nGo to the following areas:\nThe Product Page\nThe Marketing Page\nThe Columbus assistant\nOpen at least one product guide.\nScroll through it.\nAsk Columbus at least one question.\nGet comfortable.\nThat is the goal.",
+      "attachments": []
+    },
+    {
+      "id": "step-042",
+      "title": "Step 3 – Quiz Questions",
+      "subtitle": "Take Quiz",
+      "copy": "Module 5 – Using the Portal\n1. Did you go to the Product Page and open a bundle guide?\nCorrect Answer:\n Yes\n\n2. Did you scroll through the guide and review the coverage details section?\nCorrect Answer:\n Yes\n\n3. Did you locate the section explaining prescription or pharmacy benefits?\nCorrect Answer:\n Yes\n\n4. Did you find the section explaining preventive services or routine care?\nCorrect Answer:\n Yes\n\n5. Did you locate the section referencing the health share or major health event support?\nCorrect Answer:\n Yes\n\n6. Did you go to the Marketing Page and locate the quoting tools?\nCorrect Answer:\n Yes\n\n7. Did you ask Columbus a question inside the portal or app?\nCorrect Answer:\n Yes\n\n8. True or False\nThe portal and Columbus are both available resources to help you find answers quickly.\nCorrect Answer:\n True",
+      "attachments": [],
+      "sectionQuiz": {
+        "id": "quiz-014",
+        "title": "Module 5 – Using the Portal",
+        "sectionId": "step-042",
+        "estimatedDurationMinutes": 10,
+        "quizTakes": [],
+        "questions": [
+          {
+            "id": "question-148",
+            "questionNumber": 1,
+            "questionText": "Did you go to the Product Page and open a bundle guide?",
+            "answerText": "Yes",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-393", "answerText": "Yes", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-394", "answerText": "No", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-149",
+            "questionNumber": 2,
+            "questionText": "Did you scroll through the guide and review the coverage details section?",
+            "answerText": "Yes",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-395", "answerText": "Yes", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-396", "answerText": "No", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-150",
+            "questionNumber": 3,
+            "questionText": "Did you locate the section explaining prescription or pharmacy benefits?",
+            "answerText": "Yes",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-397", "answerText": "Yes", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-398", "answerText": "No", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-151",
+            "questionNumber": 4,
+            "questionText": "Did you find the section explaining preventive services or routine care?",
+            "answerText": "Yes",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-399", "answerText": "Yes", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-400", "answerText": "No", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-152",
+            "questionNumber": 5,
+            "questionText": "Did you locate the section referencing the health share or major health event support?",
+            "answerText": "Yes",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-401", "answerText": "Yes", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-402", "answerText": "No", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-153",
+            "questionNumber": 6,
+            "questionText": "Did you go to the Marketing Page and locate the quoting tools?",
+            "answerText": "Yes",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-403", "answerText": "Yes", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-404", "answerText": "No", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-154",
+            "questionNumber": 7,
+            "questionText": "Did you ask Columbus a question inside the portal or app?",
+            "answerText": "Yes",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-405", "answerText": "Yes", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-406", "answerText": "No", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-155",
+            "questionNumber": 8,
+            "questionText": "True or False\nThe portal and Columbus are both available resources to help you find answers quickly.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-407", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-408", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

@@ -1,0 +1,28 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+
+    "OPENAI_API_KEY": "",
+
+    "AZURE_CLIENT_ID": "",
+    "AZURE_CLIENT_SECRET": "",
+    "AZURE_TENANT_ID": "",
+    "AZURE_SUBSCRIPTION_ID": "",
+    "RESOURCE_GROUP_NAME": "AllAboard365",
+
+    "DB_SERVER": "",
+    "DB_NAME": "",
+    "DB_USER": "",
+    "DB_PASSWORD": "",
+
+    "SENDGRID_API_KEY": "",
+    "DEFAULT_FROM_EMAIL": "noreply@allaboard365.com",
+    "ALERT_EMAIL": "jeremy@mightywell.us",
+
+    "BUG_REPORT_WEBHOOK_URL": "",
+    "BUG_REPORT_WEBHOOK_BEARER_TOKEN": "",
+    "AI_INSPECTOR_CURSOR_AUTOMATION_ENABLED": "true"
+  }
+}

@@ -1,0 +1,834 @@
+{
+  "openapi": "3.0.0",
+  "info": {
+    "title": "e123 Checkout Connect",
+    "description": "Checkout Connect is designed to submit data and post it to the e123 enrollment system to create a checkout instance.",
+    "version": "1"
+  },
+  "servers": [
+    {
+      "url": "https://enrollment123.com",
+      "description": "Production Server"
+    }
+  ],
+  "paths": {
+    "/auth/": {
+      "get": {
+        "tags": [
+          "JWT"
+        ],
+        "description": "This method returns a JWT token for checkout connect authentication.",
+        "responses": {
+          "200": {
+            "description": "Successful response. Returns the JWT token",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Success"
+                      }
+                    },
+                    "jwt": {
+                      "type": "string",
+                      "example": "eyJ0eXAiOiJKV1QiLCJhbGciOiJIUzI1NiJ9.eyJuYmYiOjEuNzEwOTUyNDU4RTksInBhc3N3b3JkIjoiQ2hlY2tvdXRDb25uZWN0VXNlcjEyMyEiLCJpc3MiOiIzQzU2RTcyNi01Rzg2LTlaMzAtNUYyMi1FRjc0REMwMzhDQUQiLCJ1c2VybmFtZSI6IkNoZWNrb3V0Q29ubmVjdFVzZXIiLCJleHAiOjEuNzEwOTUzMzU4RTksImlhdCI6MS43MTA5NTI0NThFOX0.5ambu3rmTQMFGp6MVDsNeySrFKBbDoWl_ctewTolnog"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Bad Request"
+                      }
+                    },
+                    "jwt": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Unauthorized"
+                      }
+                    },
+                    "jwt": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Forbidden"
+                      }
+                    },
+                    "jwt": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Not Found"
+                      }
+                    },
+                    "jwt": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Method Not Allowed"
+                      }
+                    },
+                    "jwt": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "406": {
+            "description": "Not Acceptable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Not Acceptable"
+                      }
+                    },
+                    "jwt": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Internal Server Error"
+                      }
+                    },
+                    "jwt": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "basicAuth": []
+          }
+        ]
+      }
+    },
+    "/order/checkout/connect/": {
+      "post": {
+        "tags": [
+          "Checkout Connect"
+        ],
+        "description": "This method takes the json cart schema and returns a checkout enrollment url.",
+        "requestBody": {
+          "description": "Checkout Connect Request",
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Cart"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Successful response. Returns the e123 checkout enrollment url",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": true
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Success"
+                      }
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": "https://enrollment123.com/order/checkout.cfm?token=12345678"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Bad Request",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Bad Request"
+                      }
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthorized",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Unauthorized"
+                      }
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "Forbidden",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Forbidden"
+                      }
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "Not Found",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Not Found"
+                      }
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "405": {
+            "description": "Method Not Allowed",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Method Not Allowed"
+                      }
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "406": {
+            "description": "Not Acceptable",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Not Acceptable"
+                      }
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "500": {
+            "description": "Internal Server Error",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "success": {
+                      "type": "boolean",
+                      "example": false
+                    },
+                    "messages": {
+                      "type": "array",
+                      "items": {
+                        "type": "string",
+                        "example": "Internal Server Error"
+                      }
+                    },
+                    "url": {
+                      "type": "string",
+                      "example": ""
+                    }
+                  }
+                }
+              }
+            }
+          }
+        },
+        "security": [
+          {
+            "bearerAuth": []
+          }
+        ]
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "basicAuth": {
+        "type": "http",
+        "scheme": "basic"
+      },
+      "bearerAuth": {
+        "type": "http",
+        "scheme": "bearer",
+        "bearerFormat": "JWT"
+      }
+    },
+    "schemas": {
+      "Cart": {
+        "required": [
+          "primary",
+          "products"
+        ],
+        "type": "object",
+        "description": "Checkout Cart",
+        "properties": {
+          "primary": {
+            "$ref": "#/components/schemas/Primary"
+          },
+          "dependents": {
+            "$ref": "#/components/schemas/Dependents"
+          },
+          "beneficiary": {
+            "$ref": "#/components/schemas/Beneficiary"
+          },
+          "products": {
+            "$ref": "#/components/schemas/Products"
+          }
+        }
+      },
+      "Primary": {
+        "type": "object",
+        "description": "Primary Member",
+        "required": [
+          "firstName",
+          "lastName"
+        ],
+        "properties": {
+          "firstName": {
+            "type": "string",
+            "example": "FName",
+            "description": "First Name"
+          },
+          "middlename": {
+            "type": "string",
+            "example": "M",
+            "description": "Middle Initial"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "LName",
+            "description": "Last Name"
+          },
+          "dob": {
+            "type": "string",
+            "format": "date",
+            "example": "1980-01-01",
+            "description": "Date Of Birth"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "M",
+              "F"
+            ],
+            "example": "M",
+            "description": "Gender"
+          },
+          "email1": {
+            "type": "string",
+            "example": "test@gmail.com",
+            "description": "Email 1"
+          },
+          "email2": {
+            "type": "string",
+            "example": "test@gmail.com",
+            "description": "Email 2"
+          },
+          "phone1": {
+            "type": "integer",
+            "example": "8001234567",
+            "description": "Phone 1"
+          },
+          "phone2": {
+            "type": "integer",
+            "example": "8001234567",
+            "description": "Phone 2"
+          },
+          "address1": {
+            "type": "string",
+            "example": "123 Main St",
+            "description": "Address 1"
+          },
+          "address2": {
+            "type": "string",
+            "example": "Unit B",
+            "description": "Address 2"
+          },
+          "city": {
+            "type": "string",
+            "example": "Laguna Beach",
+            "description": "City"
+          },
+          "state": {
+            "type": "string",
+            "example": "CA",
+            "description": "State"
+          },
+          "zipcode": {
+            "type": "integer",
+            "example": "92651",
+            "description": "Zipcode"
+          },
+          "ssn": {
+            "type": "integer",
+            "example": "823012345",
+            "description": "Social Security Number"
+          },
+          "customFields": {
+            "$ref": "#/components/schemas/CustomField"
+          }
+        }
+      },
+      "Dependents": {
+        "type": "array",
+        "description": "Array of Dependent Members",
+        "items": {
+          "$ref": "#/components/schemas/Dependent"
+        }
+      },
+      "Dependent": {
+        "type": "object",
+        "description": "Dependent Member",
+        "properties": {
+          "relationship": {
+            "type": "string",
+            "example": "Spouse",
+            "description": "Relationship"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "FName",
+            "description": "First Name"
+          },
+          "middlename": {
+            "type": "string",
+            "example": "M",
+            "description": "Middle Initial"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "LName",
+            "description": "Last Name"
+          },
+          "dob": {
+            "type": "string",
+            "format": "date",
+            "example": "1980-01-01",
+            "description": "Date Of Birth"
+          },
+          "gender": {
+            "type": "string",
+            "enum": [
+              "M",
+              "F"
+            ],
+            "example": "F",
+            "description": "Gender"
+          },
+          "address1": {
+            "type": "string",
+            "example": "123 Main St",
+            "description": "Address 1"
+          },
+          "address2": {
+            "type": "string",
+            "example": "Unit B",
+            "description": "Address 2"
+          },
+          "city": {
+            "type": "string",
+            "example": "Laguna Beach",
+            "description": "City"
+          },
+          "state": {
+            "type": "string",
+            "example": "CA",
+            "description": "State"
+          },
+          "zipcode": {
+            "type": "integer",
+            "example": "92651",
+            "description": "Zipcode"
+          },
+          "email": {
+            "type": "string",
+            "example": "test@gmail.com",
+            "description": "Email 1"
+          }
+        }
+      },
+      "Beneficiary": {
+        "type": "object",
+        "description": "Beneficiary",
+        "properties": {
+          "relationship": {
+            "type": "string",
+            "example": "Cousin",
+            "description": "Relationship"
+          },
+          "firstName": {
+            "type": "string",
+            "example": "FName",
+            "description": "First Name"
+          },
+          "middlename": {
+            "type": "string",
+            "example": "M",
+            "description": "Middle Initial"
+          },
+          "lastName": {
+            "type": "string",
+            "example": "LName",
+            "description": "Last Name"
+          },
+          "dob": {
+            "type": "string",
+            "format": "date",
+            "example": "1980-01-01",
+            "description": "Date Of Birth"
+          },
+          "email1": {
+            "type": "string",
+            "example": "test@gmail.com",
+            "description": "Email 1"
+          },
+          "phone1": {
+            "type": "integer",
+            "example": "8001234567",
+            "description": "Phone 1"
+          },
+          "address1": {
+            "type": "string",
+            "example": "123 Main St",
+            "description": "Address 1"
+          },
+          "address2": {
+            "type": "string",
+            "example": "Unit B",
+            "description": "Address 2"
+          },
+          "city": {
+            "type": "string",
+            "example": "Laguna Beach",
+            "description": "City"
+          },
+          "state": {
+            "type": "string",
+            "example": "CA",
+            "description": "State"
+          },
+          "zipcode": {
+            "type": "integer",
+            "example": "92651",
+            "description": "Zipcode"
+          }
+        }
+      },
+      "Products": {
+        "type": "array",
+        "description": "Array of Member Products",
+        "items": {
+          "$ref": "#/components/schemas/Product"
+        }
+      },
+      "Product": {
+        "type": "object",
+        "description": "Member Product",
+        "required": [
+          "id"
+        ],
+        "properties": {
+          "id": {
+            "type": "integer",
+            "example": "1",
+            "description": "Product ID"
+          },
+          "billingDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2024-01-01",
+            "description": "First Billing Date"
+          },
+          "effectiveDate": {
+            "type": "string",
+            "format": "date",
+            "example": "2024-01-01",
+            "description": "Active Date"
+          },
+          "pricing": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "feetype": {
+                  "type": "string",
+                  "example": "Product",
+                  "description": "Pricing Fee Type"
+                },
+                "benefitId": {
+                  "type": "integer",
+                  "example": "51",
+                  "description": "Pricing Benefit ID"
+                },
+                "period_ID": {
+                  "type": "integer",
+                  "example": "1",
+                  "description": "Pricing Period ID"
+                }
+              }
+            }
+          },
+          "customFields": {
+            "$ref": "#/components/schemas/CustomField"
+          }
+        }
+      },
+      "CustomField": {
+        "type": "object",
+        "description": "Custom Questions",
+        "properties": {
+          "code": {
+            "type": "string",
+            "example": "value",
+            "description": "Custom Question Key Value"
+          }
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,645 @@
+/* AllAboard365 theme styles */
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* CSS Custom Properties for Dynamic Theming */
+:root {
+  /* AllAboard365 corporate colors */
+  --oe-primary: #1f8dbf;
+  --oe-primary-light: #d6eef8;
+  --oe-primary-dark: #125e82;
+  --oe-neutral-light: #f7f9fa;
+  --oe-neutral-dark: #2b2b2b;
+  --oe-success: #4caf50;
+  --oe-error: #e53935;
+  --oe-warning: #ffb300;
+  
+  /* Semantic Colors */
+  --color-background: #ffffff;
+  --color-surface: #f7f9fa;
+  --color-text-primary: #2b2b2b;
+  --color-text-secondary: #6b7280;
+  --color-border: #e5e7eb;
+}
+
+/* Brand-Specific Theme Support */
+/* Brand colors are applied via CSS variables set by BrandingContext */
+/* This allows runtime brand switching without CSS rebuild */
+
+/* Brand-specific color overrides */
+/* These are set by BrandingContext, but we define defaults here for each brand */
+[data-brand="allaboard365"],
+[data-brand="open-enroll"] {
+  /* AllAboard365 default colors (already set in :root) */
+  --oe-primary: #1f8dbf;
+  --oe-primary-light: #d6eef8;
+  --oe-primary-dark: #125e82;
+}
+
+[data-brand="qenroll"] {
+  /* =========================
+     QENROLL DESIGN TOKENS
+     ========================= */
+  
+  /* Map to existing multi-branding variables */
+  /* NOTE: --oe-primary-light is used for TEXT on dark backgrounds, not backgrounds */
+  --oe-primary: #2563EB; /* CTA Blue */
+  --oe-primary-light: #E0E7FF; /* Light text color for dark backgrounds */
+  --oe-primary-dark: #1E40AF; /* CTA Blue Hover / Dark background */
+  --oe-secondary: #6366F1; /* Accent Indigo */
+  --oe-neutral-light: #F9FAFB; /* bg-main */
+  --oe-neutral-dark: #111827; /* ink-900 */
+  --oe-success: #16A34A;
+  --oe-error: #DC2626;
+  --oe-warning: #F59E0B;
+
+  /* Brand (logo only; do NOT use for general UI fills) */
+  --brand-red: #B1001C;
+
+  /* Primary actions (CTA) - mapped to --oe-primary above */
+  --cta-blue: #2563EB;
+  --cta-blue-hover: #1E40AF;
+  --cta-blue-soft: rgba(37, 99, 235, 0.10);
+  --cta-blue-ring: rgba(37, 99, 235, 0.35);
+
+  /* Accents (use lightly: icon tiles, small highlights) */
+  --accent-teal: #0F766E;
+  --accent-teal-soft: rgba(15, 118, 110, 0.10);
+
+  --accent-indigo: #6366F1;
+  --accent-indigo-soft: rgba(99, 102, 241, 0.10);
+
+  --accent-cyan: #06B6D4;
+  --accent-cyan-soft: rgba(6, 182, 212, 0.10);
+
+  /* Neutrals (light UI foundation) */
+  --ink-900: #111827;  /* headings */
+  --ink-700: #374151;  /* body */
+  --ink-500: #6B7280;  /* muted */
+  --ink-300: #D1D5DB;  /* disabled */
+
+  --bg-main: #F9FAFB;  /* page background */
+  --bg-card: #FFFFFF;  /* cards */
+  --border-subtle: #E5E7EB;
+
+  /* Dark futuristic surfaces (used selectively) */
+  --charcoal-950: #0B1220; /* deepest */
+  --charcoal-900: #0F172A; /* primary dark background */
+  --charcoal-800: #1E293B; /* elevated dark surfaces */
+  --charcoal-700: #334155; /* border/subtle lines on dark */
+
+  --text-on-dark: #F8FAFC;
+  --text-muted-on-dark: #CBD5E1;
+  --border-on-dark: #334155;
+
+  /* Semantic states */
+  --success: #16A34A;
+  --success-soft: rgba(22, 163, 74, 0.10);
+  --success-border: rgba(22, 163, 74, 0.25);
+
+  --warning: #F59E0B;
+  --warning-soft: rgba(245, 158, 11, 0.10);
+  --warning-border: rgba(245, 158, 11, 0.25);
+
+  --error: #DC2626;
+  --error-soft: rgba(220, 38, 38, 0.10);
+  --error-border: rgba(220, 38, 38, 0.25);
+
+  --info: #2563EB;
+  --info-soft: rgba(37, 99, 235, 0.10);
+  --info-border: rgba(37, 99, 235, 0.25);
+
+  /* Radius + Shadows */
+  --radius-sm: 10px;
+  --radius-md: 14px;
+  --radius-lg: 18px;
+
+  --shadow-soft: 0 10px 25px rgba(0,0,0,0.06);
+  --shadow-card: 0 20px 40px rgba(0,0,0,0.07);
+  --shadow-pop: 0 30px 60px rgba(0,0,0,0.10);
+
+  /* Motion */
+  --ease: cubic-bezier(0.2, 0.8, 0.2, 1);
+  --dur-fast: 150ms;
+  --dur: 220ms;
+
+  /* Typography helpers */
+  --font-sans: Inter, ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial, "Apple Color Emoji", "Segoe UI Emoji";
+
+  /* Chart Palette */
+  --chart-1: #2563EB; /* primary */
+  --chart-2: #06B6D4; /* cyan */
+  --chart-3: #16A34A; /* success */
+  --chart-4: #F59E0B; /* warning */
+  --chart-5: #DC2626; /* negative */
+  --chart-6: #94A3B8; /* neutral */
+}
+
+/* Tenant Custom Theme Support (overrides brand theme) */
+/* Tenant branding takes precedence over platform branding */
+[data-tenant-theme="custom"] {
+  --oe-primary: var(--tenant-primary, var(--oe-primary, #1f8dbf));
+  --oe-primary-light: var(--tenant-primary-light, var(--oe-primary-light, #d6eef8));
+  --oe-primary-dark: var(--tenant-primary-dark, var(--oe-primary-dark, #125e82));
+}
+
+/* Component Styles */
+@layer components {
+  /* Buttons */
+  .btn-primary {
+    @apply bg-oe-primary text-white px-4 py-2 rounded-md font-medium
+           hover:bg-oe-dark focus:outline-none focus:ring-2 focus:ring-oe-primary focus:ring-offset-2
+           transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-secondary {
+    @apply bg-white text-oe-primary border border-oe-primary px-4 py-2 rounded-md font-medium
+           hover:bg-oe-light focus:outline-none focus:ring-2 focus:ring-oe-primary focus:ring-offset-2
+           transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  .btn-danger {
+    @apply bg-oe-error text-white px-4 py-2 rounded-md font-medium
+           hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-oe-error focus:ring-offset-2
+           transition-all duration-200 disabled:opacity-50 disabled:cursor-not-allowed;
+  }
+  
+  /* Form Elements */
+  .form-input {
+    @apply w-full px-3 py-2 border border-gray-300 rounded-md
+           focus:outline-none focus:ring-2 focus:ring-oe-primary focus:border-transparent
+           placeholder-gray-400 transition-all duration-200;
+  }
+  
+  .form-label {
+    @apply block text-sm font-medium text-gray-700 mb-1;
+  }
+  
+  .form-select {
+    @apply form-input pr-10 appearance-none bg-white;
+  }
+  
+  /* Cards */
+  .card {
+    @apply bg-white rounded-lg shadow-soft p-6 border border-gray-100;
+  }
+  
+  .card-hover {
+    @apply card hover:shadow-medium transition-shadow duration-200;
+  }
+  
+  /* Alerts */
+  .alert {
+    @apply p-4 rounded-md border;
+  }
+  
+  .alert-success {
+    @apply bg-green-50 text-green-800 border-green-200;
+  }
+  
+  .alert-error {
+    @apply bg-red-50 text-red-800 border-red-200;
+  }
+  
+  .alert-warning {
+    @apply bg-yellow-50 text-yellow-800 border-yellow-200;
+  }
+  
+  .alert-info {
+    @apply bg-blue-50 text-blue-800 border-blue-200;
+  }
+  
+  /* Badges */
+  .badge {
+    @apply inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium;
+  }
+  
+  .badge-primary {
+    @apply bg-oe-light text-oe-dark;
+  }
+  
+  .badge-success {
+    @apply bg-green-100 text-green-800;
+  }
+  
+  .badge-warning {
+    @apply bg-yellow-100 text-yellow-800;
+  }
+  
+  .badge-error {
+    @apply bg-red-100 text-red-800;
+  }
+}
+
+/* Utility Classes */
+@layer utilities {
+  /* Backgrounds */
+  .bg-gradient-primary {
+    @apply bg-gradient-to-r from-oe-primary to-oe-dark;
+  }
+  
+  .bg-gradient-soft {
+    @apply bg-gradient-to-br from-oe-light via-white to-oe-neutral-light;
+  }
+  
+  /* Effects */
+  .hover-lift {
+    @apply transition-transform hover:-translate-y-0.5;
+  }
+  
+  .hover-glow {
+    @apply transition-shadow hover:shadow-lg;
+  }
+  
+  .focus-ring {
+    @apply focus:outline-none focus:ring-2 focus:ring-oe-primary focus:ring-offset-2;
+  }
+}
+
+/* Animations */
+@keyframes fadeIn {
+  from { opacity: 0; transform: translateY(10px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes slideIn {
+  from { opacity: 0; transform: translateX(-10px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+
+.animate-fade-in {
+  animation: fadeIn 0.3s ease-out forwards;
+}
+
+.animate-slide-in {
+  animation: slideIn 0.3s ease-out forwards;
+}
+
+/* Scrollbar Styling */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+
+::-webkit-scrollbar-track {
+  @apply bg-gray-100;
+}
+
+::-webkit-scrollbar-thumb {
+  @apply bg-gray-400 rounded-full hover:bg-gray-500;
+}
+
+/* Hide scrollbar but keep functionality */
+.scrollbar-hide {
+  -ms-overflow-style: none;  /* IE and Edge */
+  scrollbar-width: none;  /* Firefox */
+}
+
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;  /* Chrome, Safari and Opera */
+}
+
+/* =========================
+   QENROLL-SPECIFIC UTILITY CLASSES
+   Only active when [data-brand="qenroll"]
+   ========================= */
+[data-brand="qenroll"] {
+  /* Base element styles */
+  font-family: var(--font-sans);
+}
+
+[data-brand="qenroll"] a {
+  color: var(--cta-blue);
+  text-decoration: none;
+}
+[data-brand="qenroll"] a:hover {
+  text-decoration: underline;
+  color: var(--cta-blue-hover);
+}
+
+[data-brand="qenroll"] :focus-visible {
+  outline: none;
+  box-shadow: 0 0 0 3px var(--cta-blue-ring);
+  border-radius: 8px;
+}
+
+/* Layout helpers */
+[data-brand="qenroll"] .qe-container {
+  width: 100%;
+  max-width: 1320px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+[data-brand="qenroll"] .qe-section {
+  padding: 84px 0;
+}
+
+[data-brand="qenroll"] .qe-section--tight {
+  padding: 56px 0;
+}
+
+[data-brand="qenroll"] .qe-section--dark {
+  color: var(--text-on-dark);
+  background: linear-gradient(135deg, var(--charcoal-950), var(--charcoal-900) 45%, var(--charcoal-800));
+  position: relative;
+  overflow: hidden;
+}
+[data-brand="qenroll"] .qe-section--dark .qe-muted { 
+  color: var(--text-muted-on-dark); 
+}
+[data-brand="qenroll"] .qe-section--dark a { 
+  color: #93C5FD; 
+}
+[data-brand="qenroll"] .qe-section--dark a:hover { 
+  color: #BFDBFE; 
+}
+
+[data-brand="qenroll"] .qe-bg-cover {
+  background-size: cover;
+  background-repeat: no-repeat;
+  background-position: right center;
+}
+
+/* Cards */
+[data-brand="qenroll"] .qe-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: 20px;
+  box-shadow: var(--shadow-card);
+  padding: 28px;
+  transition: transform var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+[data-brand="qenroll"] .qe-card:hover {
+  transform: translateY(-3px);
+  box-shadow: var(--shadow-pop);
+}
+
+[data-brand="qenroll"] .qe-card--dark {
+  background: rgba(30, 41, 59, 0.60);
+  border: 1px solid rgba(51, 65, 85, 0.65);
+  color: var(--text-on-dark);
+  backdrop-filter: blur(8px);
+}
+
+/* Buttons */
+[data-brand="qenroll"] .qe-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  height: 52px;
+  padding: 14px 30px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition: transform var(--dur-fast) var(--ease),
+              box-shadow var(--dur) var(--ease),
+              background var(--dur) var(--ease),
+              border-color var(--dur) var(--ease),
+              color var(--dur) var(--ease);
+  user-select: none;
+  -webkit-font-smoothing: antialiased;
+}
+
+[data-brand="qenroll"] .qe-btn:active { 
+  transform: translateY(1px); 
+}
+
+[data-brand="qenroll"] .qe-btn--primary {
+  background: var(--cta-blue);
+  color: #FFFFFF;
+  box-shadow: 0 10px 20px rgba(37, 99, 235, 0.25);
+}
+[data-brand="qenroll"] .qe-btn--primary:hover {
+  background: var(--cta-blue-hover);
+  box-shadow: 0 12px 24px rgba(37, 99, 235, 0.28);
+}
+
+[data-brand="qenroll"] .qe-btn--secondary {
+  background: rgba(255, 255, 255, 0.75);
+  color: var(--ink-900);
+  border-color: var(--border-subtle);
+}
+[data-brand="qenroll"] .qe-btn--secondary:hover {
+  background: #FFFFFF;
+  box-shadow: var(--shadow-soft);
+}
+
+[data-brand="qenroll"] .qe-btn--ghost {
+  background: transparent;
+  color: var(--cta-blue);
+}
+[data-brand="qenroll"] .qe-btn--ghost:hover {
+  background: rgba(37, 99, 235, 0.06);
+}
+
+[data-brand="qenroll"] .qe-btn--destructive {
+  background: var(--error);
+  color: #FFFFFF;
+  box-shadow: 0 10px 20px rgba(220, 38, 38, 0.20);
+}
+[data-brand="qenroll"] .qe-btn--destructive:hover {
+  background: #B91C1C;
+}
+
+[data-brand="qenroll"] .qe-btn:disabled,
+[data-brand="qenroll"] .qe-btn[aria-disabled="true"] {
+  cursor: not-allowed;
+  opacity: 0.55;
+  transform: none;
+  box-shadow: none;
+}
+
+/* Badges / Pills */
+[data-brand="qenroll"] .qe-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 10px;
+  border-radius: 999px;
+  font-size: 13px;
+  font-weight: 600;
+  border: 1px solid transparent;
+  line-height: 1;
+}
+
+[data-brand="qenroll"] .qe-badge--info {
+  background: var(--info-soft);
+  color: var(--cta-blue-hover);
+  border-color: var(--info-border);
+}
+[data-brand="qenroll"] .qe-badge--success {
+  background: var(--success-soft);
+  color: #166534;
+  border-color: var(--success-border);
+}
+[data-brand="qenroll"] .qe-badge--warning {
+  background: var(--warning-soft);
+  color: #92400E;
+  border-color: var(--warning-border);
+}
+[data-brand="qenroll"] .qe-badge--error {
+  background: var(--error-soft);
+  color: #991B1B;
+  border-color: var(--error-border);
+}
+
+[data-brand="qenroll"] .qe-badge--teal {
+  background: var(--accent-teal-soft);
+  color: var(--accent-teal);
+  border-color: rgba(15,118,110,0.25);
+}
+[data-brand="qenroll"] .qe-badge--indigo {
+  background: var(--accent-indigo-soft);
+  color: var(--accent-indigo);
+  border-color: rgba(99,102,241,0.25);
+}
+[data-brand="qenroll"] .qe-badge--cyan {
+  background: var(--accent-cyan-soft);
+  color: #0E7490;
+  border-color: rgba(6,182,212,0.25);
+}
+
+/* Alerts */
+[data-brand="qenroll"] .qe-alert {
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+  padding: 14px 16px;
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  background: #FFFFFF;
+  box-shadow: var(--shadow-soft);
+}
+[data-brand="qenroll"] .qe-alert__title {
+  font-weight: 700;
+  color: var(--ink-900);
+  margin-bottom: 4px;
+}
+[data-brand="qenroll"] .qe-alert__text {
+  color: var(--ink-700);
+  line-height: 1.55;
+}
+
+[data-brand="qenroll"] .qe-alert--info {
+  background: var(--info-soft);
+  border-color: var(--info-border);
+}
+[data-brand="qenroll"] .qe-alert--success {
+  background: var(--success-soft);
+  border-color: var(--success-border);
+}
+[data-brand="qenroll"] .qe-alert--warning {
+  background: var(--warning-soft);
+  border-color: var(--warning-border);
+}
+[data-brand="qenroll"] .qe-alert--error {
+  background: var(--error-soft);
+  border-color: var(--error-border);
+}
+
+/* Forms */
+[data-brand="qenroll"] .qe-label {
+  display: block;
+  font-size: 14px;
+  color: var(--ink-500);
+  margin-bottom: 8px;
+}
+
+[data-brand="qenroll"] .qe-input,
+[data-brand="qenroll"] .qe-select,
+[data-brand="qenroll"] .qe-textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  background: #FFFFFF;
+  color: var(--ink-900);
+  border-radius: 12px;
+  padding: 12px 14px;
+  height: 50px;
+  transition: border-color var(--dur) var(--ease), box-shadow var(--dur) var(--ease);
+}
+[data-brand="qenroll"] .qe-textarea {
+  height: auto;
+  min-height: 120px;
+  padding: 12px 14px;
+  resize: vertical;
+}
+[data-brand="qenroll"] .qe-input:focus,
+[data-brand="qenroll"] .qe-select:focus,
+[data-brand="qenroll"] .qe-textarea:focus {
+  outline: none;
+  border-color: rgba(37,99,235,0.55);
+  box-shadow: 0 0 0 3px var(--cta-blue-ring);
+}
+
+[data-brand="qenroll"] .qe-help {
+  font-size: 13px;
+  color: var(--ink-500);
+  margin-top: 8px;
+}
+
+[data-brand="qenroll"] .qe-field--error .qe-input,
+[data-brand="qenroll"] .qe-field--error .qe-select,
+[data-brand="qenroll"] .qe-field--error .qe-textarea {
+  border-color: rgba(220,38,38,0.55);
+  box-shadow: 0 0 0 3px rgba(220,38,38,0.18);
+}
+
+[data-brand="qenroll"] .qe-error-text {
+  margin-top: 8px;
+  font-size: 13px;
+  color: #B91C1C;
+}
+
+/* Icon color guidance */
+[data-brand="qenroll"] .qe-icon { 
+  color: var(--ink-500); 
+}
+
+[data-brand="qenroll"] .qe-icon--active { 
+  color: var(--cta-blue); 
+}
+
+[data-brand="qenroll"] .qe-icon--success { 
+  color: var(--success); 
+}
+[data-brand="qenroll"] .qe-icon--warning { 
+  color: var(--warning); 
+}
+[data-brand="qenroll"] .qe-icon--error { 
+  color: var(--error); 
+}
+[data-brand="qenroll"] .qe-icon--info { 
+  color: var(--info); 
+}
+
+[data-brand="qenroll"] .qe-icon-tile {
+  width: 46px;
+  height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 14px;
+  border: 1px solid transparent;
+  background: rgba(37, 99, 235, 0.10);
+  color: var(--cta-blue);
+}
+[data-brand="qenroll"] .qe-icon-tile--teal {
+  background: var(--accent-teal-soft);
+  border-color: rgba(15,118,110,0.20);
+  color: var(--accent-teal);
+}
+[data-brand="qenroll"] .qe-icon-tile--indigo {
+  background: var(--accent-indigo-soft);
+  border-color: rgba(99,102,241,0.20);
+  color: var(--accent-indigo);
+}
+[data-brand="qenroll"] .qe-icon-tile--cyan {
+  background: var(--accent-cyan-soft);
+  border-color: rgba(6,182,212,0.20);
+  color: #0E7490;
+}

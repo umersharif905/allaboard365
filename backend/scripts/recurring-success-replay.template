@@ -1,0 +1,24 @@
+# Copy to recurring-success-replay.env (gitignored):
+#   cp backend/scripts/recurring-success-replay.template backend/scripts/recurring-success-replay.env
+# Fill BACKEND_INTERNAL_BASE_URL + INTERNAL_API_TOKEN, then either:
+#
+# Dry run only (looks up webhook rows; no POST):
+#   RECURRING_REPLAY_DRY_RUN=1 ./backend/scripts/run-recurring-success-replay.sh
+#
+# Apply for real via HTTP POST (needs URLs above):
+#   ./backend/scripts/run-recurring-success-replay.sh
+#
+# Apply for real via DATABASE ONLY — same ledger code as /internal/... route; omit URL/token above.
+#   RECURRING_REPLAY_DIRECT_DB=1 node backend/scripts/replay-recurring-success-webhooks.js
+#   OR set RECURRING_REPLAY_DIRECT_DB=1 in this file and run ./backend/scripts/run-recurring-success-replay.sh
+BACKEND_INTERNAL_BASE_URL=
+INTERNAL_API_TOKEN=
+
+# MightyWELL May 2026 missed books — correlate by processor txn OR fixed webhook IDs:
+PROCESSOR_TXN_IDS=371,355,356,313
+
+# Set to 1 to apply using DB creds only (no INTERNAL_API_TOKEN)
+RECURRING_REPLAY_DIRECT_DB=0
+
+# Equivalent WebhookEventIds from STEP 2 (optional — omit PROCESSOR_TXN_IDS if using this alone):
+# WEBHOOK_EVENT_IDS=429,472,473,489

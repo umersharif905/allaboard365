@@ -1,0 +1,21 @@
+Frontend base: https://open-enroll.com
+Backend API base: https://api.open-enroll.com
+OAuth base: https://oauth.open-enroll.com/auth
+
+Core routes:
+- /api/auth/**
+- /api/admin/**
+- /api/tenant-admin/**
+- /api/members
+- /api/groups
+- /api/enrollments
+- /api/accounting
+- /api/payments
+- /api/uploads
+- /api/commissions/**
+- /api/agencies (CRUD + hierarchy)
+
+OAuth Endpoints:
+- POST /register, /login, /refresh, /logout
+- GET /me
+- POST /request-reset, /reset-password

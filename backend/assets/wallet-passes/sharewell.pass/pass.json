@@ -1,0 +1,45 @@
+{
+  "formatVersion": 1,
+  "passTypeIdentifier": "pass.com.allaboard365.sharewell",
+  "teamIdentifier": "78K2X2AV9Y",
+  "organizationName": "ShareWELL Partners",
+  "description": "ShareWELL Partners ID Card",
+  "foregroundColor": "rgb(255, 255, 255)",
+  "backgroundColor": "rgb(0, 82, 136)",
+  "labelColor": "rgb(180, 210, 230)",
+  "generic": {
+    "headerFields": [
+      {
+        "key": "plan",
+        "label": "PLAN",
+        "value": ""
+      }
+    ],
+    "primaryFields": [
+      {
+        "key": "memberName",
+        "label": "MEMBER",
+        "value": ""
+      }
+    ],
+    "secondaryFields": [
+      {
+        "key": "memberId",
+        "label": "MEMBER ID",
+        "value": ""
+      },
+      {
+        "key": "effectiveDate",
+        "label": "EFFECTIVE",
+        "value": ""
+      }
+    ],
+    "backFields": [
+      {
+        "key": "backInfo",
+        "label": "ID Card Information",
+        "value": ""
+      }
+    ]
+  }
+}

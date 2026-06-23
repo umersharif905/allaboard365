@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your group type change was approved: {{groupName}}</title>
+</head>
+<body style="margin:0;padding:0;background-color:#f4f4f4;font-family:Arial,Helvetica,sans-serif;">
+<table cellpadding="0" cellspacing="0" border="0" width="100%" style="background-color:#f4f4f4;">
+    <tr>
+        <td align="center" style="padding:20px 0;">
+            <table cellpadding="0" cellspacing="0" border="0" width="600" style="background-color:#ffffff;border-radius:8px;">
+                <!-- Header -->
+                <tr>
+                    <td style="padding:30px 40px;text-align:center;border-bottom:1px solid #e9ecef;">
+                        <h1 style="margin:0;font-size:24px;font-weight:600;color:#1f8dbf;font-family:Arial,Helvetica,sans-serif;">{{tenantName}}</h1>
+                    </td>
+                </tr>
+                <!-- Content -->
+                <tr>
+                    <td style="padding:40px 40px 30px 40px;">
+                        <h2 style="margin:0 0 20px 0;font-size:20px;font-weight:600;color:#333333;font-family:Arial,Helvetica,sans-serif;">Hi {{agentFirstName}},</h2>
+
+                        <p style="margin:0 0 20px 0;font-size:16px;line-height:24px;color:#555555;font-family:Arial,Helvetica,sans-serif;">Your request to change <strong>{{groupName}}</strong> from <strong>{{currentType}}</strong> to <strong>{{requestedType}}</strong> has been {{#autoApproved}}auto-approved.{{/autoApproved}}{{^autoApproved}}approved by {{reviewerName}}.{{/autoApproved}}</p>
+
+                        <!-- Button -->
+                        <table cellpadding="0" cellspacing="0" border="0" width="100%" style="margin:30px 0;">
+                            <tr>
+                                <td align="center">
+                                    <a href="{{wizardUrl}}" style="display:inline-block;background-color:#1f8dbf;color:#ffffff;text-decoration:none;padding:15px 30px;border-radius:4px;font-size:16px;font-weight:600;font-family:Arial,Helvetica,sans-serif;">Continue to the conversion wizard</a>
+                                </td>
+                            </tr>
+                        </table>
+
+                        <p style="margin:30px 0 0 0;font-size:15px;color:#666666;font-family:Arial,Helvetica,sans-serif;">You can now pick products and resend enrollment links.</p>
+                    </td>
+                </tr>
+                <!-- Footer -->
+                <tr>
+                    <td style="padding:25px 40px;background-color:#f8f9fa;border-top:1px solid #e9ecef;text-align:center;">
+                        <p style="margin:0 0 8px 0;font-size:13px;color:#666666;font-family:Arial,Helvetica,sans-serif;">— {{tenantName}}</p>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

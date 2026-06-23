@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Template Preview - Simple</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            margin: 0;
+            padding: 20px;
+            background-color: #f5f5f5;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .header {
+            text-align: center;
+            margin-bottom: 40px;
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+
+        .header h1 {
+            color: #1f6db0;
+            margin: 0 0 10px 0;
+            font-size: 32px;
+        }
+
+        .template-links {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .template-card {
+            background: white;
+            padding: 25px;
+            border-radius: 12px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+            text-align: center;
+        }
+
+        .template-card h3 {
+            margin: 0 0 15px 0;
+            color: #333;
+        }
+
+        .template-card p {
+            color: #666;
+            margin: 0 0 20px 0;
+            font-size: 14px;
+        }
+
+        .preview-btn {
+            background: #1f6db0;
+            color: white;
+            border: none;
+            padding: 12px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-weight: 600;
+            text-decoration: none;
+            display: inline-block;
+            transition: all 0.3s ease;
+        }
+
+        .preview-btn:hover {
+            background: #155a8a;
+            transform: translateY(-2px);
+        }
+
+        .instructions {
+            background: #e7f3ff;
+            border: 1px solid #b3d9ff;
+            border-radius: 8px;
+            padding: 20px;
+            margin-bottom: 30px;
+        }
+
+        .instructions h3 {
+            margin: 0 0 15px 0;
+            color: #0066cc;
+        }
+
+        .instructions ol {
+            margin: 0;
+            padding-left: 20px;
+        }
+
+        .instructions li {
+            margin-bottom: 8px;
+            color: #0066cc;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            <h1>📧 Email Template Preview</h1>
+            <p>Simple preview system - no server required!</p>
+        </div>
+
+        <div class="instructions">
+            <h3>🚀 How to Use:</h3>
+            <ol>
+                <li>Click any template button below</li>
+                <li>It will open the template in a new tab</li>
+                <li>The template will show with sample data</li>
+                <li>You can edit the URL parameters to test different values</li>
+            </ol>
+        </div>
+
+        <div class="template-links">
+            <div class="template-card">
+                <h3>🎯 Enrollment Invitation</h3>
+                <p>Email sent when inviting someone to complete their benefits enrollment</p>
+                <button onclick="openTemplate('enrollment-invitation.html', 'tenantName=MightyWELL%20Health&memberFirstName=John&groupName=Topline%20Landscaping&enrollmentUrl=https://app.allaboard365.com/enroll/sample&logoUrl=https://oestorage.blob.core.windows.net/logos/0fee81bc-f301-4cda-a488-138e17c1d8d5.jpg')" class="preview-btn">Preview Template</button>
+            </div>
+
+            <div class="template-card">
+                <h3>🚀 Onboarding Invitation</h3>
+                <p>Email sent when inviting someone to join and set up their account</p>
+                <button onclick="openTemplate('onboarding-invitation.html', 'tenantName=MightyWELL%20Health&contactFirstName=Sarah&groupName=Topline%20Landscaping&primaryColor=%231f6db0&secondaryColor=%23424242&accentColor=%23FF6B6B&onboardingUrl=https://app.allaboard365.com/onboarding/sample&logoUrl=https://oestorage.blob.core.windows.net/logos/0fee81bc-f301-4cda-a488-138e17c1d8d5.jpg&groupDescription=A%20dedicated%20team%20focused%20on%20landscaping%20excellence')" class="preview-btn">Preview Template</button>
+            </div>
+
+            <div class="template-card">
+                <h3>👤 User Welcome</h3>
+                <p>Email sent when a new user account is created</p>
+                <button onclick="openTemplate('user-welcome.html', 'tenantName=MightyWELL%20Health&memberFirstName=Alex&userType=TenantAdmin&primaryColor=%231f6db0&secondaryColor=%23424242&accentColor=%23FF6B6B&setupUrl=https://app.allaboard365.com/setup/sample&logoUrl=https://oestorage.blob.core.windows.net/logos/0fee81bc-f301-4cda-a488-138e17c1d8d5.jpg')" class="preview-btn">Preview Template</button>
+            </div>
+        </div>
+
+        <div class="instructions">
+            <h3>🎨 Customize Templates:</h3>
+            <p>You can modify the URL parameters to test different values:</p>
+            <ul>
+                <li><strong>tenantName</strong> - Organization name</li>
+                <li><strong>primaryColor</strong> - Main brand color (hex code)</li>
+                <li><strong>secondaryColor</strong> - Secondary brand color (hex code)</li>
+                <li><strong>accentColor</strong> - Accent color (hex code)</li>
+                <li><strong>logoUrl</strong> - Logo image URL</li>
+                <li><strong>memberFirstName</strong> - Recipient's first name</li>
+                <li><strong>groupName</strong> - Group name (optional)</li>
+            </ul>
+            <p><strong>Example:</strong> Change <code>memberFirstName=John</code> to <code>memberFirstName=Jane</code> in the URL</p>
+        </div>
+    </div>
+
+    <script>
+        function openTemplate(filename, params) {
+            // Get the current directory path
+            const currentPath = window.location.pathname;
+            const currentDir = currentPath.substring(0, currentPath.lastIndexOf('/'));
+            
+            // Construct the full path to the template
+            const templatePath = currentDir + '/../' + filename + '?' + params;
+            
+            // Open in new tab
+            window.open(templatePath, '_blank');
+        }
+    </script>
+</body>
+</html>

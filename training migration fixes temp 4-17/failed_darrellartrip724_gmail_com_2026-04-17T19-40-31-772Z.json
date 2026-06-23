@@ -1,0 +1,10 @@
+{
+  "ok": false,
+  "error": "The variable name '@PackageId' has already been declared. Variable names must be unique within a query batch or stored procedure.",
+  "targetEmail": "darrellartrip724@gmail.com",
+  "baselineEmail": "agent@allaboard365.com",
+  "packageId": "pkg-mw-001",
+  "db": "allaboard-testing",
+  "server": "allboard-prod.database.windows.net",
+  "failedAt": "2026-04-17T19:40:32.657Z"
+}

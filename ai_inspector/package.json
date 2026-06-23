@@ -1,0 +1,17 @@
+{
+  "name": "allaboard-ai-inspector",
+  "version": "1.0.0",
+  "description": "Azure Functions timer — hourly AI-powered log inspector for all AllAboard365 App Services",
+  "scripts": {
+    "start": "func start",
+    "deploy": "bash ./create-and-deploy.sh"
+  },
+  "dependencies": {
+    "openai": "^4.28.0",
+    "@sendgrid/mail": "^8.1.0",
+    "mssql": "^11.0.0"
+  },
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.x"
+  }
+}

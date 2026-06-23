@@ -1,0 +1,41 @@
+{
+    "appService.zipIgnorePattern": [
+        "node_modules{,/**}",
+        ".vscode{,/**}",
+        "backend{,/**}",
+        "dist{,/**}",
+        "coverage{,/**}",
+        "test-results{,/**}",
+        "cypress{,/**}",
+        "*.log"
+    ],
+    "appService.defaultWebAppToDeploy": "",
+    "appService.deploySubpath": "frontend",
+    "MicroPython.executeButton": [
+        {
+            "text": "▶",
+            "tooltip": "Run",
+            "alignment": "left",
+            "command": "extension.executeFile",
+            "priority": 3.5
+        }
+    ],
+    "MicroPython.syncButton": [
+        {
+            "text": "$(sync)",
+            "tooltip": "sync",
+            "alignment": "left",
+            "command": "extension.execute",
+            "priority": 4
+        }
+    ],
+    "azureFunctions.deploySubpath": "messageCenter",
+    "azureFunctions.postDeployTask": "npm install (functions)",
+    "azureFunctions.projectLanguage": "JavaScript",
+    "azureFunctions.projectRuntime": "~4",
+    "debug.internalConsoleOptions": "neverOpen",
+    "azureFunctions.projectLanguageModel": 4,
+    "azureFunctions.preDeployTask": "npm prune (functions)",
+    "jest.rootPath": "backend",
+    "jest.jestCommandLine": "npm test --"
+}

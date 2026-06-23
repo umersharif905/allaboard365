@@ -1,0 +1,38 @@
+{
+  "resolvedAgentStatic": {
+    "success": true,
+    "data": {
+      "linkToken": "enroll_test_agentstatic_001",
+      "linkType": "Agent-Static",
+      "shortCode": "ag_test_agent_1"
+    }
+  },
+  "resolvedMarketing": {
+    "success": true,
+    "data": {
+      "linkToken": "enroll_test_marketing_001",
+      "linkType": "Marketing",
+      "shortCode": "mk_test_campaign"
+    }
+  },
+  "notFound": {
+    "success": false,
+    "code": "LINK_NOT_FOUND",
+    "message": "Enrollment link not found"
+  },
+  "inactive": {
+    "success": false,
+    "code": "LINK_INACTIVE",
+    "message": "Enrollment link is inactive"
+  },
+  "expired": {
+    "success": false,
+    "code": "LINK_EXPIRED",
+    "message": "Enrollment link has expired"
+  },
+  "rejectedGroup": {
+    "success": false,
+    "code": "INVALID_LINK_TYPE",
+    "message": "Short code links are only available for Agent-Static and Marketing enrollment links"
+  }
+}

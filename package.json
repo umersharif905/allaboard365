@@ -1,0 +1,26 @@
+{
+  "name": "allaboard365",
+  "version": "1.0.0",
+  "description": "OpenEnroll Application",
+  "type": "module",
+  "scripts": {
+    "test:enrollment:backend": "npm run test:enrollment --prefix backend",
+    "test:enrollment:unit": "npm run test:enrollment:unit --prefix frontend",
+    "test:enrollment:e2e": "npm run test:e2e:enrollment --prefix frontend",
+    "test:enrollment": "npm run test:enrollment:backend && npm run test:enrollment:unit",
+    "test:e2e": "cypress run",
+    "test:e2e:open": "cypress open",
+    "test:env": "node test-env-vars.cjs",
+    "test:env:remote": "node test-env-vars.cjs --remote"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "cypress": "^15.0.0",
+    "typescript": "^5.0.0"
+  },
+  "dependencies": {
+    "mssql": "^11.0.1",
+    "node-fetch": "^3.3.2",
+    "playwright": "^1.55.0"
+  }
+}

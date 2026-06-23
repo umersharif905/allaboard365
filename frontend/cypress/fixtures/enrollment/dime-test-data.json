@@ -1,0 +1,130 @@
+{
+  "_source": "docs/dime-credit-cards/DP_Test_Card_Information (1) (1).xlsx + HPS+TEST+Hardcode+Values+v04212016 (4) (1).xlsx",
+  "_note": "Mirrors backend/test-fixtures/dime-test-cards.js. Keep both in sync.",
+
+  "cards": {
+    "visa": {
+      "brand": "Visa",
+      "number": "4012002000060016",
+      "expMonth": "12",
+      "expYear": "2030",
+      "cvv": "123",
+      "address": "6860 Dallas Pkwy",
+      "zip": "75024-1234"
+    },
+    "mastercardBin2": {
+      "brand": "MasterCard",
+      "number": "2223000010005780",
+      "expMonth": "12",
+      "expYear": "2030",
+      "cvv": "900",
+      "address": "6860 Dallas Pkwy",
+      "zip": "75024"
+    },
+    "mastercard": {
+      "brand": "MasterCard",
+      "number": "5473500000000014",
+      "expMonth": "12",
+      "expYear": "2030",
+      "cvv": "123",
+      "address": "6860 Dallas Pkwy",
+      "zip": "75024"
+    },
+    "discover": {
+      "brand": "Discover",
+      "number": "6011000990156527",
+      "expMonth": "12",
+      "expYear": "2030",
+      "cvv": "123",
+      "address": "6860",
+      "zip": "75024-1234"
+    },
+    "amex": {
+      "brand": "Amex",
+      "number": "372700699251018",
+      "expMonth": "12",
+      "expYear": "2030",
+      "cvv": "1234",
+      "address": "6860",
+      "zip": "75024"
+    },
+    "jcb": {
+      "brand": "JCB",
+      "number": "3566007770007321",
+      "expMonth": "12",
+      "expYear": "2030",
+      "cvv": "123",
+      "address": "6860",
+      "zip": "75024"
+    },
+    "invalidLuhn": {
+      "brand": "Visa",
+      "number": "4012002000060000",
+      "expMonth": "12",
+      "expYear": "2030",
+      "cvv": "123",
+      "address": "6860",
+      "zip": "75024"
+    }
+  },
+
+  "ach": {
+    "accountNumber": "1357902468",
+    "routingNumber": "122000030",
+    "accountType": "Checking",
+    "bankName": "Test Bank",
+    "accountHolderName": "Test Enrollee"
+  },
+
+  "visaAmountTriggers": {
+    "call":                { "amount": 10.34, "code": "02", "text": "CALL" },
+    "termIdError":         { "amount": 10.22, "code": "03", "text": "TERM ID ERROR" },
+    "holdCallPickup":      { "amount": 10.04, "code": "44", "text": "HOLD-CALL" },
+    "doNotHonor":          { "amount": 10.25, "code": "05", "text": "DECLINE",  "comment": "Do Not Honor" },
+    "invalidTrans":        { "amount": 10.26, "code": "12", "text": "INVALID TRANS" },
+    "cardNoError":         { "amount": 10.28, "code": "14", "text": "CARD NO. ERROR" },
+    "noSuchIssuer":        { "amount": 10.18, "code": "15", "text": "NO SUCH ISSUER" },
+    "reEnter":             { "amount": 10.29, "code": "19", "text": "RE ENTER" },
+    "lostCard":            { "amount": 10.31, "code": "41", "text": "HOLD-CALL", "comment": "Pickup card - Lost" },
+    "stolenCard":          { "amount": 10.03, "code": "43", "text": "HOLD-CALL", "comment": "Pickup card - Stolen" },
+    "insufficientFunds":   { "amount": 10.08, "code": "51", "text": "DECLINE", "comment": "Insufficient Funds" },
+    "noCheckAccount":      { "amount": 10.16, "code": "52", "text": "NO CHECK ACCOUNT" },
+    "noSaveAccount":       { "amount": 10.17, "code": "53", "text": "NO SAVE ACCOUNT" },
+    "expiredCard":         { "amount": 10.32, "code": "54", "text": "EXPIRED CARD" },
+    "decline61":           { "amount": 10.09, "code": "61", "text": "DECLINE" },
+    "decline62":           { "amount": 10.10, "code": "62", "text": "DECLINE" },
+    "decline65":           { "amount": 10.11, "code": "65", "text": "DECLINE" },
+    "checkDigitErr":       { "amount": 10.05, "code": "EB", "text": "CHECK DIGIT ERR" },
+    "noReply":             { "amount": 10.33, "code": "91", "text": "NO REPLY" },
+    "servNotAllowed":      { "amount": 10.30, "code": "58", "text": "SERV NOT ALLOWED" },
+    "systemError":         { "amount": 10.21, "code": "96", "text": "SYSTEM ERROR" },
+    "cvv2Mismatch":        { "amount": 10.23, "code": "N7", "text": "CVV2 MISMATCH" },
+    "stopPayment":         { "amount": 10.35, "code": "R0", "text": "STOP PAYMENT" },
+    "stopRecurring":       { "amount": 10.20, "code": "R1", "text": "STOP RECURRING" },
+    "stopAllRecurring":    { "amount": 10.36, "code": "R3", "text": "STOP ALL RECURR" }
+  },
+
+  "mastercardExtraTriggers": {
+    "retainCard":          { "amount": 10.01, "code": "04", "text": "HOLD-CALL", "comment": "Retain Card (MC)" },
+    "cidFormatError":      { "amount": 10.06, "code": "EC", "text": "CID FORMAT ERROR" },
+    "secViolation":        { "amount": 10.19, "code": "63", "text": "SEC VIOLATION" },
+    "cardNoErrorMc":       { "amount": 10.14, "code": "14", "text": "CARD NO ERROR" }
+  },
+
+  "avsAmountTriggers": {
+    "avsB": { "amount": 91.01, "code": "00", "avs": "B" },
+    "avsC": { "amount": 91.02, "code": "00", "avs": "C" },
+    "avsD": { "amount": 91.03, "code": "00", "avs": "D" },
+    "avsI": { "amount": 91.05, "code": "00", "avs": "I" },
+    "avsM": { "amount": 91.06, "code": "00", "avs": "M" },
+    "avsP": { "amount": 91.07, "code": "00", "avs": "P" }
+  },
+
+  "billingAddress": {
+    "address": "123 Main Street",
+    "city": "Dallas",
+    "state": "TX",
+    "zip": "75024",
+    "country": "US"
+  }
+}

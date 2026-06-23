@@ -1,0 +1,18 @@
+{
+    "appService.zipIgnorePattern": [
+        "node_modules{,/**}",
+        ".vscode{,/**}",
+        "frontend{,/**}",
+        ".env*",
+        "*.log",
+        "*.tmp",
+        "*.md",
+        ".git{,/**}",
+        "logs{,/**}",
+        "coverage{,/**}",
+        "test{,/**}",
+        "tests{,/**}"
+    ],
+    "appService.defaultWebAppToDeploy": "",
+    "appService.deploySubpath": "backend"
+}

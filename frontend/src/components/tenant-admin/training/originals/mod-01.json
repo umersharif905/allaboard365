@@ -1,0 +1,120 @@
+{
+  "id": "mod-01",
+  "title": "The MightyWELL Model",
+  "modulePurpose": "Section Purpose\nThis section introduces agents to what MightyWELL is and how the platform works at a high level.\nAgents should leave this section understanding:\nwhat MightyWELL is\nwhat MightyWELL is not\nhow the platform combines multiple healthcare resources\nthe role of the health share for major medical events\nhow MightyWELL should be represented accurately\nThis section sets the foundation for the rest of the training.\nIf agents understand this section clearly, they will be much less likely to misrepresent the program.",
+  "defaultRequired": true,
+  "attachments": [],
+  "moduleSteps": [
+    {
+      "id": "step-028",
+      "title": "The MightyWELL Model",
+      "subtitle": "Step 1 — Review Overview",
+      "copy": "The MightyWELL Model\n(Updated, Simplified, Compliance-Focused Version)\n\nSection Layout\n\nStep 1 — Review Overview\n\nWhat is MightyWELL?\nMightyWELL is a healthcare marketing platform that brings together multiple healthcare resources to create healthcare bundle options for individuals and businesses.\nRather than operating as a traditional insurance carrier, MightyWELL coordinates access to different healthcare services that work together to support members.\nDepending on the bundle selected, a MightyWELL bundle may include:\npreventive healthcare services\ncopay-based care for everyday medical visits\nparticipation in a nonprofit health sharing program for major medical events\nhealthcare advocacy and support services\nprescription support resources\naccess to provider networks\nThese components work together to help members manage both routine care and larger medical needs.\n\nWhat MightyWELL Is NOT\nThis is one of the most important concepts in the entire training.\nMightyWELL is not an insurance company.\nMightyWELL does not issue insurance policies.\nMightyWELL should not be described as:\ninsurance\nmajor medical coverage\na PPO insurance plan\na government program\nInstead:\nMightyWELL is a platform that coordinates healthcare resources into structured bundle options.\nClear and accurate representation protects both the agent and the member.\n\nThe Three-Layer Healthcare Model\nMost MightyWELL bundles are built using a simple structure:\nPreventive Care\n Routine services designed to support health and early detection.\nEveryday Healthcare\n Copay-based services used for routine medical needs.\nMajor Medical Support\n Participation in a nonprofit health sharing program designed to help support members during large, unexpected medical events.\nEach layer serves a different purpose.\nAgents do not need to memorize every detail.\n They need to understand how the pieces fit together.",
+      "attachments": []
+    },
+    {
+      "id": "step-029",
+      "title": "Step 2 — Review Materials",
+      "subtitle": "Review Materials",
+      "copy": "Step 2 — Review Materials\n\nAgents should open and review the following document:\nMightyWELL Agent Overview Guide\n\nThis guide explains:\nhow MightyWELL bundles are structured\nthe role of preventive and copay services\nhow the health share supports major medical events\nhow agents should present the platform accurately\n\nAgents should keep the guide open while completing the quiz.\nThis training is open book.",
+      "attachments": []
+    },
+    {
+      "id": "step-030",
+      "title": "Step 3 — Take Quiz",
+      "subtitle": "Take Quiz",
+      "copy": "(Open Book — 7 Questions)\n\nQuiz Questions — Module 1",
+      "attachments": [],
+      "sectionQuiz": {
+        "id": "quiz-010",
+        "title": "Quiz Questions — Module 1",
+        "sectionId": "step-030",
+        "estimatedDurationMinutes": 8,
+        "quizTakes": [],
+        "questions": [
+          {
+            "id": "question-103",
+            "questionNumber": 1,
+            "questionText": "Which statement best describes MightyWELL?",
+            "answerText": "A healthcare marketing platform that coordinates multiple healthcare resources",
+            "answerOrdinal": "C",
+            "answerChoices": [
+              { "id": "choice-276", "answerText": "A traditional health insurance company", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-277", "answerText": "A government healthcare program", "answerTrueFalse": false, "answerOrdinal": "B" },
+              { "id": "choice-278", "answerText": "A healthcare marketing platform that coordinates multiple healthcare resources", "answerTrueFalse": true, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-104",
+            "questionNumber": 2,
+            "questionText": "True or False\nMightyWELL issues insurance policies.",
+            "answerText": "False",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-279", "answerText": "True", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-280", "answerText": "False", "answerTrueFalse": true, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-105",
+            "questionNumber": 3,
+            "questionText": "Which of the following may be included in a MightyWELL bundle?",
+            "answerText": "All of the above",
+            "answerOrdinal": "D",
+            "answerChoices": [
+              { "id": "choice-281", "answerText": "Preventive healthcare services", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-282", "answerText": "Copay-based routine care", "answerTrueFalse": false, "answerOrdinal": "B" },
+              { "id": "choice-283", "answerText": "Participation in a health sharing program", "answerTrueFalse": false, "answerOrdinal": "C" },
+              { "id": "choice-284", "answerText": "All of the above", "answerTrueFalse": true, "answerOrdinal": "D" }
+            ]
+          },
+          {
+            "id": "question-106",
+            "questionNumber": 4,
+            "questionText": "True or False\nThe health sharing program is designed to help support members during major medical events such as hospitalizations or surgeries.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-285", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-286", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-107",
+            "questionNumber": 5,
+            "questionText": "True or False\nMightyWELL bundles should be described as traditional major medical insurance.",
+            "answerText": "False",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-287", "answerText": "True", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-288", "answerText": "False", "answerTrueFalse": true, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-108",
+            "questionNumber": 6,
+            "questionText": "When explaining MightyWELL to a client, what should an agent rely on first?",
+            "answerText": "Official MightyWELL materials and bundle guides",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-289", "answerText": "Personal assumptions", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-290", "answerText": "Official MightyWELL materials and bundle guides", "answerTrueFalse": true, "answerOrdinal": "B" },
+              { "id": "choice-291", "answerText": "Internet searches", "answerTrueFalse": false, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-109",
+            "questionNumber": 7,
+            "questionText": "True or False\nAccurate representation of MightyWELL protects both the agent and the member.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-292", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-293", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

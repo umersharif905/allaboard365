@@ -1,0 +1,76 @@
+{
+  "agent": [
+    {
+      "UserId": "1D7C4D62-6104-492A-B2C0-7E5D2F6044EA",
+      "Email": "julie@lotuslegacypartners.com",
+      "AgentId": "57BB002E-FF54-42D0-8971-2C97F50A2220",
+      "TenantId": "1CD92AF7-B6F2-4E48-A8F3-EC6316158826",
+      "AgentStatus": "Active"
+    }
+  ],
+  "trainingCompletions": [
+    {
+      "TrainingCompletionId": "C8A1BDBE-90E8-4D6F-9F66-5C4BB6FC163D",
+      "ProductId": "F165AF93-8268-448D-9DD6-F02FB338EEAE",
+      "AgentId": "57BB002E-FF54-42D0-8971-2C97F50A2220",
+      "MemberId": null,
+      "UserId": "1D7C4D62-6104-492A-B2C0-7E5D2F6044EA",
+      "AttemptNumber": 3,
+      "ScorePercent": 100,
+      "TotalQuestions": 3,
+      "CorrectAnswers": 3,
+      "CompletedAt": "2026-02-05T16:38:31.010Z",
+      "CreatedDate": "2026-02-05T16:38:31.010Z",
+      "ModifiedDate": "2026-02-05T16:38:31.010Z",
+      "AnswersDetail": null
+    },
+    {
+      "TrainingCompletionId": "BC97C8A3-62DF-4BAA-AFE1-19D2C5AC7104",
+      "ProductId": "16ACE482-845A-4BC8-9A8F-489CD1D002CE",
+      "AgentId": "57BB002E-FF54-42D0-8971-2C97F50A2220",
+      "MemberId": null,
+      "UserId": "1D7C4D62-6104-492A-B2C0-7E5D2F6044EA",
+      "AttemptNumber": 1,
+      "ScorePercent": 100,
+      "TotalQuestions": 2,
+      "CorrectAnswers": 2,
+      "CompletedAt": "2026-02-05T16:38:14.500Z",
+      "CreatedDate": "2026-02-05T16:38:14.500Z",
+      "ModifiedDate": "2026-02-05T16:38:14.500Z",
+      "AnswersDetail": null
+    },
+    {
+      "TrainingCompletionId": "42AF133F-16F4-4AF5-88BF-600DE75DEAD5",
+      "ProductId": "F165AF93-8268-448D-9DD6-F02FB338EEAE",
+      "AgentId": "57BB002E-FF54-42D0-8971-2C97F50A2220",
+      "MemberId": null,
+      "UserId": "1D7C4D62-6104-492A-B2C0-7E5D2F6044EA",
+      "AttemptNumber": 2,
+      "ScorePercent": 100,
+      "TotalQuestions": 3,
+      "CorrectAnswers": 3,
+      "CompletedAt": "2026-02-05T16:38:01.100Z",
+      "CreatedDate": "2026-02-05T16:38:01.100Z",
+      "ModifiedDate": "2026-02-05T16:38:01.100Z",
+      "AnswersDetail": null
+    },
+    {
+      "TrainingCompletionId": "E8B5DDB3-1ADF-4F6E-B821-38CCF8347E78",
+      "ProductId": "F165AF93-8268-448D-9DD6-F02FB338EEAE",
+      "AgentId": "57BB002E-FF54-42D0-8971-2C97F50A2220",
+      "MemberId": null,
+      "UserId": "1D7C4D62-6104-492A-B2C0-7E5D2F6044EA",
+      "AttemptNumber": 1,
+      "ScorePercent": 33.33,
+      "TotalQuestions": 3,
+      "CorrectAnswers": 1,
+      "CompletedAt": "2026-02-05T16:37:33.870Z",
+      "CreatedDate": "2026-02-05T16:37:33.870Z",
+      "ModifiedDate": "2026-02-05T16:37:33.870Z",
+      "AnswersDetail": null
+    }
+  ],
+  "moduleCompletions": [],
+  "quizCompletions": [],
+  "certificateAwards": []
+}

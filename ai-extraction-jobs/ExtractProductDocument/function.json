@@ -1,0 +1,17 @@
+{
+  "bindings": [
+    {
+      "name": "message",
+      "type": "serviceBusTrigger",
+      "direction": "in",
+      "queueName": "ai-extract-queue",
+      "connection": "ServiceBusConnection"
+    }
+  ],
+  "retry": {
+    "strategy": "exponentialBackoff",
+    "maxRetryCount": 3,
+    "minimumInterval": "00:00:10",
+    "maximumInterval": "00:05:00"
+  }
+}

@@ -1,0 +1,10 @@
+{
+  "description": "paymentProcessorSettings from MightyWELL Health on allaboard-testing (applied to every tenant during post-bacpac-sanitize). referencePasswordHash from test@mightywell.us. Testing only.",
+  "capturedAt": "2026-04-14T13:55:51.202Z",
+  "sourceDatabase": "allaboard-testing",
+  "mightyWellTenantId": "1CD92AF7-B6F2-4E48-A8F3-EC6316158826",
+  "tenantName": "MightyWELL Health",
+  "paymentProcessorSettings": "{\"activeProcessor\":\"openenroll\",\"chargeFeeToMember\":true,\"processors\":{\"openenroll\":{\"enabled\":true,\"dime\":{\"sid\":\"00112\",\"environment\":\"demo\",\"apiTokenEncrypted\":\"f04bbfde10cf24705c2f34b833991f5d:35ca9195717899914dd6bd347140e3c5:a09f5ddf79c8024894356de53b44cbb665cd37f3ae322152501e08dd4c1eb58e206a3cbcdcee297ab8ab1695accb1b41\",\"webhookSecretEncrypted\":\"c0bea19fe4d18d60f8fc60d249531028:d1d4426d8e6b62f3caac1b2fa60f0158:1b4c667fcc0c1f21e15604beb534a36277cd729065949d3af250cd3613d56ce6ec00badc69d8cde2ab944c87227ea153887a3aeac9033fb6fe505885c367f08e\"},\"fees\":{\"ach\":{\"percentageFee\":0.008,\"flatFee\":0},\"creditCard\":{\"percentageFee\":0.03,\"flatFee\":0}}}}}",
+  "referenceLoginEmail": "test@mightywell.us",
+  "referencePasswordHash": "$2a$12$nJb8SnVveC503NqNDc6kCeH9bPdt3KYKwlCI6xVsit5sR.VrJfMFi"
+}

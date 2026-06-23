@@ -1,0 +1,90 @@
+---
+description: OpenEnroll Software Factory — structured feature pipeline, skills, and subagents
+alwaysApply: false
+---
+
+# Software Factory (OpenEnroll)
+
+Use the factory for net-new features, migrations, and scaffolding — not ad-hoc vibe coding.
+
+**Full docs:** [CLAUDE.md](../../CLAUDE.md) § Software Factory
+
+## When to use which skill
+
+| Situation | Say in chat |
+|-----------|-------------|
+| New feature (unknown scope) | `Run feature-factory for: …` |
+| Known requirements | `build-with-tests: …` |
+| Database migration | `db change: …` |
+| New API route | `add-api-endpoint: …` |
+| New page | `add-page: …` |
+| Run tests | `run tests` |
+| Deploy | `deploy backend` / `deploy frontend` |
+
+Skills live in `.claude/skills/` (auto-discovered by Cursor).
+
+## Platform scope (confirm before pipeline)
+
+| Scope | Build target |
+|-------|----------------|
+| **admin-web** | Admin UI + `/api/*` |
+| **member-web** | `pages/member/` + `/api/me/member/*` |
+| **member-mobile-api** | Member API + `docs/mobile/` (native app is external) |
+| **cross-platform** | Any combination |
+
+Mobile docs: [`docs/mobile/mobile-app-api-integration.md`](../../docs/mobile/mobile-app-api-integration.md). Member routes use `attachMemberHouseholdContext`, not `requireTenantAccess`.
+
+## 7-agent pipeline (feature-factory)
+
+```
+[scope] → codebase-researcher → story-writer → [APPROVE] → spec-writer → [APPROVE]
+  → backend-builder → frontend-builder (if web) → test-verifier → implementation-validator → [APPROVE PR]
+```
+
+Delegate each step to the matching subagent in `.cursor/agents/`:
+
+1. `codebase-researcher` — read-only research (+ mobile API map when in scope)
+2. `story-writer` — user story, platform scope, acceptance criteria → **stop for approval**
+3. `spec-writer` — technical brief (+ Member/Mobile API section when in scope) → **stop for approval**
+4. `backend-builder` — `backend/`, `sql-changes/`, `docs/mobile/` when API changes
+5. `frontend-builder` — `frontend/` only (skip for member-mobile-api-only)
+6. `test-verifier` — test files only
+7. `implementation-validator` — read-only validation
+
+Never skip approval gates after story and spec. Builders must not cross domains (backend vs frontend).
+
+## Cursor orchestrator (strict)
+
+When running **feature-factory** in Cursor:
+
+1. **Blocking stops** after story (step 2) and spec (step 3) — wait for explicit approval before any code.
+2. **Steps 4–5** — delegate to `backend-builder` / `frontend-builder`; orchestrator does not ship production diffs inline.
+3. **Steps 6–7 required** — `test-verifier` then `implementation-validator` before calling the feature done or opening a PR.
+4. **Final stop** after validator — wait for Jeremy’s PR approval.
+5. **Prod DB** — verifiers use mocked Jest/Vitest only; no mutating live DB/API (see `.cursor/agents/test-verifier.md`).
+
+“Proceed” after story ≠ spec approved. “Proceed” after spec ≠ skip verifiers.
+
+## Verification standard (required for “done”)
+
+Canonical checklist: [`docs/factory/verification-checklist.md`](../../docs/factory/verification-checklist.md)
+
+Before marking a factory run complete:
+
+1. Run `./ai_scripts/factory-verify-changed.sh` (catches wrong `sql` imports, `Agencies.Name`, bare `Enrollments.TenantId`, missing tests).
+2. **test-verifier** must map every acceptance criterion → test → PASS (or documented manual QA).
+3. **implementation-validator** must confirm **expected user-visible outcomes**, not only lint/tests green.
+4. Multi-step features (preview/execute, draft/publish) — every path needs a test or explicit QA step.
+
+Common prod misses to avoid: `database.sql` is **not** `mssql` (no `Transaction`); `Agencies.AgencyName`; `Enrollments` often has no `TenantId`.
+
+## Enforcement
+
+`.cursor/hooks.json` mirrors Claude Code hooks:
+
+- **Blocks:** Material-UI / non-Lucide imports, SQL writes without `@DryRun`
+- **Warns:** missing `requireTenantAccess` on routes, raw Tailwind `blue-*` on buttons
+
+## Session context
+
+Read `memory-bank/activeContext.md` and `memory-bank/progress.md` at the start of factory work (see `memory-bank.mdc`).

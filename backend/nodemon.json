@@ -1,0 +1,7 @@
+{
+  "ext": "js,json",
+  "ignore": [".git", "node_modules", "logs", "**/*.log", "uploads", "tmp", "coverage"],
+  "delay": 2000,
+  "signal": "SIGTERM",
+  "killTimeout": 8000
+}

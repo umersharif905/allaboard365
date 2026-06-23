@@ -1,0 +1,98 @@
+Database Design Questions:  (Answers are bullet pointed with '-')
+MarketPlace vs Products Relationship:
+
+Should we create a separate MarketPlace table, or extend the existing Products table?
+I'm thinking MarketPlace could be a configuration/settings table that references Products, or should it be the main product catalog?
+- Let's keep Products and use that as the main table for the "MarketPlace".
+
+
+Product Access/Subscription Model:
+
+Do we need a ProductSubscriptions or TenantProductAccess table to track which tenants have requested/been approved for specific products?
+How do we track the approval workflow (Pending, Approved, Denied)?
+- ProductSubscriptions table makes sense.
+- Yes (Pending, Approved, Denied) is perfect
+- Use this table to manage discounts that are offered by the product owner to the subscriber
+	- Discount effective date and End date
+
+
+Age Banding Structure:
+
+Should age bands be a separate table ProductAgeBands with ProductId, MinAge, MaxAge, Price?
+Or JSON field in the product table?
+- I'm thinking ProductPricing should be in a separate table, each age band will have a different price
+- Pricing could also be state to state or vary based on other criteria (unknown), we should make it flexible with several (5-10) configurable fields. 
+
+
+Location Requirements:
+
+Separate ProductStates table or JSON array of state codes?
+- Add this as JSON to the ProductPricing table as list of states this product can be sold in as this price point 
+
+
+Bundles:
+
+ProductBundles table with BundleId and multiple ProductBundleItems records?
+How do we handle bundle pricing vs individual product pricing?
+- Bundles are a fun topic,
+- The pricing for bundles will use the ProductPricing table and accommodate for any active discounts
+- All products in the bundle should adhere to the rules as the product
+- Example if the bundle has 2 products, the pricing of product A = $100 and B = $300 and discount is 10% the NetRate to the Affiliate would be (100 + 300) - 10% = $360
+	- The affiliate can then markup the product to their MSRP to the client
+	- There are also fees that may be applied by the affiliate
+	- The affiliate also pays a service fee for using the system, example $2.50 per/client per/month
+		- Other fees may apply
+
+Functional Clarifications:
+
+User Roles:
+
+System Admins: Full CRUD on marketplace products
+	- Yes
+Product Owners (Tenants): Can they edit their own products or just view subscribers?
+	- Yes limit editing (Active Yes/No, Standard Rate w/email out to the subscribers) any other changes would require a build of a new product and decommission the 		current product
+Affiliates/Agents: Can browse, request access, view approved products?
+	- Yes they can see products that are subscribed to and approved for their affiliate parent
+
+Request Access Flow:
+
+When an affiliate requests access, do they need to provide additional info (licenses, etc.)?
+Is there a comments/notes field for approval/denial reasons?
+	- Affiliates will have their licenses, etc uploaded to their profiles, product owner will need read only access to those licenses, etc as part of the approval 			process
+
+Pricing Structure:
+
+Net Rate (to vendor)
+Override (to product owner)
+MSRP (to affiliates) - this is 'Net Rate to the affiliates'
+Discount (subscriber-specific off MSRP(again, this is 'Net Rate to the affiliates')) - Yes
+
+Should discounts be percentage or fixed amount? Time-limited?
+ - Yes Time Limited(noted above) - Fixed rate works perfectly for this and simplifies the logic.
+
+Required Data Fields:
+
+The "Required Data" section mentions SSN, DoB, etc. - is this what data the affiliate must collect from their customers when selling this product?
+ - Yes we should allow flexibility in the configuration to accomidate for several required data fields.  I would also allow for questions that only require Yes/No or Text input.  So their should be a way to define the data field type (Dropdown, Combo Multi-Select, Text Input, required or not required)
+
+
+Technical Architecture:
+
+API Endpoints Needed:
+
+GET /api/marketplace/products (with filters) - No
+POST /api/marketplace/products (admin only) - No
+POST /api/marketplace/request-access - No
+GET /api/marketplace/my-products (affiliate's approved products) - No
+
+
+Component Structure:
+
+ProductGrid/ProductList - Yes
+ProductDetail modal/page - Yes
+RequestAccess modal - This can wait to be part of the Affiliate Portal (note: an affiliate is a tenant)
+AdminProductManagement - Yes
+FilterSidebar - Yes
+
+
+

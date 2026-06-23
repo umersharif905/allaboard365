@@ -1,0 +1,16 @@
+{
+  "parserOptions": { "ecmaVersion": 2022, "sourceType": "script" },
+  "env": { "node": true, "es2022": true, "jest": true },
+  "overrides": [
+    {
+      "files": ["**/*.js"],
+      "excludedFiles": [
+        "services/pricing/pricingAuthority.service.js",
+        "utils/includedProcessingFee.js",
+        "utils/productProcessingFees.js",
+        "**/__tests__/**"
+      ],
+      "extends": "./.eslintrc.pricing.js"
+    }
+  ]
+}

@@ -1,0 +1,39 @@
+{
+  "incomplete": {
+    "success": true,
+    "data": {
+      "isCompleted": false,
+      "passwordSetupCompleted": false,
+      "memberName": "",
+      "memberEmail": ""
+    }
+  },
+  "completedPasswordPending": {
+    "success": true,
+    "data": {
+      "isCompleted": true,
+      "passwordSetupCompleted": false,
+      "memberName": "Test Enrollee",
+      "memberEmail": "test.enrollee@example.com"
+    }
+  },
+  "completedAndPasswordSet": {
+    "success": true,
+    "data": {
+      "isCompleted": true,
+      "passwordSetupCompleted": true,
+      "memberName": "Test Enrollee",
+      "memberEmail": "test.enrollee@example.com"
+    }
+  },
+  "incompleteExistingPassword": {
+    "success": true,
+    "data": {
+      "isCompleted": false,
+      "passwordSetupCompleted": true,
+      "hasExistingPassword": true,
+      "memberName": "Andrew Wyatt",
+      "memberEmail": "andrew@pcmetalfab.com"
+    }
+  }
+}

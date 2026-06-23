@@ -1,0 +1,13 @@
+{
+  "name": "allaboard-product-api-jobs",
+  "version": "1.0.0",
+  "description": "Azure Functions timer — daily POST to product-api-daily scheduled endpoint",
+  "scripts": {
+    "start": "func start",
+    "deploy": "bash ./create-and-deploy.sh"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.x"
+  }
+}

@@ -1,0 +1,131 @@
+
+# Dependencies
+node_modules
+.npm
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Build outputs
+build
+.next
+out
+.nuxt
+.output
+
+# Testing
+coverage
+.nyc_output
+test-reports/*
+!test-reports/README.md
+!test-reports/.gitkeep
+
+# Playwright test files and artifacts
+playwright/
+tests/playwright/
+test-results/
+playwright-report/
+tests/
+
+# Cypress artifacts
+frontend/cypress/videos
+frontend/cypress/screenshots
+frontend/cypress/downloads
+
+# Environment and local files
+.env
+.env.local
+oe_payment_manager/test_scripts/defaults.env
+.env.*.local
+# Azure Functions + env templates that may be copied with real secrets
+**/local.settings.json
+**/.env.example
+*.PublishSettings
+.DS_Store
+*.local
+
+# Manual replay credentials (copy from recurring-success-replay.template)
+backend/scripts/recurring-success-replay.env
+
+# IDE and editors
+.idea
+.project
+.classpath
+.c9/
+*.launch
+.settings/
+*.sublime-workspace
+
+# Logs
+logs
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+lerna-debug.log*
+
+# Misc
+.temp
+.cache
+.history
+
+# Rider
+.idea/
+
+# Backend
+backend.pid
+# Copied from repo-root shared/ by scripts/ensure-shared.js or deploy.sh
+backend/shared/
+
+frontend.pid
+
+# AI
+ai-temp/
+
+# Local-only SQL scratch (keep sql-dump/README.md tracked)
+sql-dump/*
+!sql-dump/README.md
+
+# Local DB bacpac exports (default: migrate-bacpac-with-sanitize.sh)
+db_files/*
+!db_files/README.md
+
+# Dist
+dist/
+
+# Runtime config — generated per-environment (Azure App Service env vars in prod,
+# .env / VITE_* fallback in local dev). Never commit; a committed copy overrides
+# .env and forces local dev to talk to production. See frontend/src/config/api.ts.
+frontend/public/config.json
+
+# Deployment artifacts (produced by backend/deploy.sh, frontend/deploy.sh, etc.)
+backend-deploy.zip
+frontend-deploy.zip
+*-deploy.zip
+*_deployment.zip
+*.deployment.zip
+
+# Temporary/runtime files (exports, artifacts, scratch data)
+backend/temp/
+
+# Local DB export dumps
+/exports/
+
+# One-off AI scripts kept locally for reference (not tracked)
+ai_scripts/one-offs/
+
+# AI script output artifacts
+ai_scripts/*.csv
+
+# Temporary debug scripts
+backend/check-*.js
+
+# Backoffice / credentials knowledge base (SFTP, ShareWELL DB, Azure)
+prompts/backoffice-master.md
+
+# Migration credentials (bacpac server/user/password — reference from BACPAC_EXPORT_IMPORT.md)
+docs/migration/bacpac-credentials.md
+# agent scratch dirs
+.claude/
+.superpowers/

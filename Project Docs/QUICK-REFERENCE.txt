@@ -1,0 +1,35 @@
+﻿
+OPEN-ENROLL QUICK REFERENCE
+===========================
+
+🌐 URLs:
+  • Frontend: http://localhost:5173
+  • Backend API: http://localhost:3001
+  • Style Guide: http://localhost:5173/style-guide
+  • Login Page: http://localhost:5173/login
+
+🎨 Corporate Colors:
+  • Primary: #1f8dbf (Sky Blue)
+  • Light: #d6eef8 (Light Sky)
+  • Dark: #125e82 (Midnight Blue)
+  • Success: #4caf50 (Green)
+  • Error: #e53935 (Red)
+  • Warning: #ffb300 (Gold)
+
+📁 Key Files:
+  • Frontend: src/styles/theme.css
+  • Backend: server.js, .env
+  • Auth: middleware/auth.js
+  • Routes: routes/*.js
+
+🔐 JWT Configuration:
+  • Secret: PVT_PV1H89@fYg39$
+  • Expires: 1h
+  • Refresh: 7 days
+
+🚀 Commands:
+  • Start Backend: cd backend && npm run dev
+  • Start Frontend: cd frontend && npm run dev
+  • Test API: cd backend && node test-api.js
+  • Update Styles: cd frontend && .\update-styles.ps1
+

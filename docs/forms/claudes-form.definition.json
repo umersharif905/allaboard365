@@ -1,0 +1,843 @@
+{
+  "version": 2,
+  "title": "Claude's Form",
+  "introHtml": "<p>A guided recreation of the Unshared Amount Sharing Request. Tell us what brings you here and we'll show only the steps you need.</p>",
+  "headerImage": {
+    "url": "https://allaboardstorage.blob.core.windows.net/public-form-uploads/template-headers/1CD92AF7-B6F2-4E48-A8F3-EC6316158826/C2DE2CEB-0CEF-4646-9E52-479F3A677F44/6271338f-ac6f-44d2-a310-6ec93a1e63d9.png",
+    "align": "center",
+    "maxWidth": "full"
+  },
+  "multiPage": true,
+  "preScreeningEnabled": true,
+  "pages": [
+    {
+      "id": "page_about_you",
+      "title": "About You",
+      "description": "The same details no matter what you are submitting."
+    },
+    {
+      "id": "page_surg_provider",
+      "title": "About Your Doctor & Hospital",
+      "description": "Upcoming / scheduled surgery",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_surg_details",
+      "title": "About the Surgery",
+      "description": "The procedure itself",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_surg_forms",
+      "title": "3 Forms to Sign & Send Back",
+      "description": "Required before clinical review",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_surg_records",
+      "title": "Medical Records from Your Doctor",
+      "description": "Visit notes and test results",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_post_provider",
+      "title": "About Your Doctor & Hospital",
+      "description": "Surgery already completed",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_post_bills",
+      "title": "Your Bills",
+      "description": "Itemized bills from the surgery",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_post_records",
+      "title": "Medical Records",
+      "description": "Records from the surgery",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_er_visit",
+      "title": "About Your ER Visit",
+      "description": "Emergency / urgent care",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_er_bills",
+      "title": "Your Bills",
+      "description": "Itemized bills from the visit",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_er_records",
+      "title": "Medical Records",
+      "description": "Records from the visit",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_other",
+      "title": "Tell Us What is Going On",
+      "description": "Other medical need",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_close_auth",
+      "title": "Authorization & Signature",
+      "description": "Required to process your request",
+      "defaultHidden": true
+    },
+    {
+      "id": "page_close_dd",
+      "title": "Direct Deposit",
+      "description": "How we reimburse you",
+      "defaultHidden": true
+    }
+  ],
+  "preScreening": [
+    {
+      "id": "psq_claude_router",
+      "prompt": "What brings you here today?",
+      "multiSelect": false,
+      "options": [
+        {
+          "id": "pso_surgery_upcoming",
+          "label": "I'm Having Surgery",
+          "effects": [
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_surg_provider"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_surg_details"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_surg_forms"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_surg_records"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_close_auth"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_close_dd"
+            }
+          ]
+        },
+        {
+          "id": "pso_surgery_done",
+          "label": "I Had Surgery",
+          "effects": [
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_post_provider"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_post_bills"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_post_records"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_close_auth"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_close_dd"
+            }
+          ]
+        },
+        {
+          "id": "pso_er",
+          "label": "I Had an ER Visit",
+          "effects": [
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_er_visit"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_er_bills"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_er_records"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_close_auth"
+            },
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_close_dd"
+            }
+          ]
+        },
+        {
+          "id": "pso_other",
+          "label": "It's Something Else",
+          "effects": [
+            {
+              "action": "show",
+              "targetType": "page",
+              "targetId": "page_other"
+            }
+          ]
+        }
+      ]
+    }
+  ],
+  "fields": [
+    {
+      "name": "ay_first_name",
+      "type": "first_name",
+      "label": "First name",
+      "required": true,
+      "width": "half",
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_last_name",
+      "type": "last_name",
+      "label": "Last name",
+      "required": true,
+      "width": "half",
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_dob",
+      "type": "date",
+      "label": "Date of birth",
+      "required": true,
+      "width": "half",
+      "dateDisallowFuture": true,
+      "dateDisallowToday": true,
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_member_id",
+      "type": "member_id",
+      "label": "ShareWell member ID",
+      "required": true,
+      "width": "half",
+      "helperText": "Enter the member ID from your ID card.",
+      "includeInPdf": false,
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_email",
+      "type": "email",
+      "label": "Email",
+      "required": true,
+      "width": "half",
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_phone",
+      "type": "tel",
+      "label": "Phone",
+      "required": true,
+      "width": "half",
+      "placeholder": "(000) 000-0000",
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_addr_street",
+      "type": "text",
+      "label": "Home street address",
+      "required": true,
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_addr_city",
+      "type": "text",
+      "label": "City",
+      "required": true,
+      "width": "half",
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_addr_state",
+      "type": "text",
+      "label": "State",
+      "required": true,
+      "width": "half",
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "ay_addr_zip",
+      "type": "text",
+      "label": "ZIP code",
+      "required": true,
+      "width": "half",
+      "pageId": "page_about_you"
+    },
+    {
+      "name": "surg_hero",
+      "type": "static_html",
+      "label": "Surgery intro",
+      "includeInPdf": false,
+      "contentHtml": "<div style=\"margin-bottom:8px;\"><span style=\"display:inline-block;background:#d6eef8;color:#125e82;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;\">Upcoming</span></div><p style=\"color:#4b5563;font-size:14px;line-height:1.5;margin:0;\">Tell us about your surgery before it happens. We'll review your case and work on payment ahead of time.</p>",
+      "pageId": "page_surg_provider"
+    },
+    {
+      "name": "surg_surgeon_name",
+      "type": "text",
+      "label": "Your surgeon's name",
+      "width": "half",
+      "helperText": "The doctor doing the surgery",
+      "pageId": "page_surg_provider"
+    },
+    {
+      "name": "surg_facility_name",
+      "type": "text",
+      "label": "Hospital or surgery center name",
+      "width": "half",
+      "pageId": "page_surg_provider"
+    },
+    {
+      "name": "surg_facility_addr",
+      "type": "text",
+      "label": "Hospital or surgery center address",
+      "pageId": "page_surg_provider"
+    },
+    {
+      "name": "surg_npi",
+      "type": "text",
+      "label": "Surgeon's NPI number",
+      "width": "half",
+      "helperText": "Ask the doctor's office — they'll know",
+      "pageId": "page_surg_provider"
+    },
+    {
+      "name": "surg_tax_id",
+      "type": "text",
+      "label": "Surgeon's Tax ID number",
+      "width": "half",
+      "helperText": "Ask the doctor's office — they'll know",
+      "pageId": "page_surg_provider"
+    },
+    {
+      "name": "surg_in_network",
+      "type": "radio",
+      "label": "Is your doctor in-network?",
+      "options": [
+        {
+          "value": "yes",
+          "label": "Yes"
+        },
+        {
+          "value": "no",
+          "label": "No"
+        }
+      ],
+      "helperText": "Check with your doctor's office",
+      "pageId": "page_surg_provider"
+    },
+    {
+      "name": "surg_procedure",
+      "type": "text",
+      "label": "What surgery are you having?",
+      "helperText": "Name of procedure + the procedure code if you have it",
+      "pageId": "page_surg_details"
+    },
+    {
+      "name": "surg_date",
+      "type": "date",
+      "label": "When is your surgery scheduled?",
+      "width": "half",
+      "pageId": "page_surg_details"
+    },
+    {
+      "name": "surg_estimate",
+      "type": "file",
+      "label": "Price estimate from the hospital and surgeon",
+      "includeInPdf": false,
+      "helperText": "Ask their billing department for an itemized estimate",
+      "pageId": "page_surg_details"
+    },
+    {
+      "name": "surg_switch_doctor",
+      "type": "radio",
+      "label": "Would you switch to a different doctor if we find a lower price?",
+      "options": [
+        {
+          "value": "yes",
+          "label": "Yes"
+        },
+        {
+          "value": "no",
+          "label": "No"
+        }
+      ],
+      "helperText": "Just a yes or no — no pressure",
+      "pageId": "page_surg_details"
+    },
+    {
+      "name": "surg_forms_intro",
+      "type": "static_html",
+      "label": "Forms to sign intro",
+      "includeInPdf": false,
+      "contentHtml": "<h3 style=\"font-size:18px;font-weight:600;color:#111827;margin:0 0 8px;\">The 3 forms to sign and send back</h3><p style=\"color:#4b5563;font-size:14px;line-height:1.5;margin:0 0 10px;\">Download each form, sign it, and upload it below. Your clinical review can't begin until all three are in.</p><ul style=\"color:#4b5563;font-size:14px;line-height:1.6;margin:0;padding-left:20px;\"><li><strong>HIPAA Release Form</strong> — lets us access your medical records.</li><li><strong>UA Form</strong> — confirms your share amount.</li><li><strong>Clinical Intake Form</strong> — basic health info for our review.</li></ul>",
+      "pageId": "page_surg_forms"
+    },
+    {
+      "name": "surg_hipaa_file",
+      "type": "file",
+      "label": "Upload your signed HIPAA Release Form",
+      "includeInPdf": false,
+      "helperText": "Lets us access your medical records",
+      "pageId": "page_surg_forms"
+    },
+    {
+      "name": "surg_ua_file",
+      "type": "file",
+      "label": "Upload your signed UA Form",
+      "includeInPdf": false,
+      "helperText": "Confirms your share amount",
+      "pageId": "page_surg_forms"
+    },
+    {
+      "name": "surg_clinical_file",
+      "type": "file",
+      "label": "Upload your signed Clinical Intake Form",
+      "includeInPdf": false,
+      "helperText": "Basic health info for our review",
+      "pageId": "page_surg_forms"
+    },
+    {
+      "name": "surg_visit_notes",
+      "type": "file",
+      "label": "Last 3 visit notes from your doctor",
+      "includeInPdf": false,
+      "helperText": "Ask your doctor's office to send these — they're called \"clinical dictations\"",
+      "pageId": "page_surg_records"
+    },
+    {
+      "name": "surg_test_results",
+      "type": "file",
+      "label": "Any recent test results related to this surgery",
+      "includeInPdf": false,
+      "helperText": "Labs, X-rays, MRIs, etc.",
+      "pageId": "page_surg_records"
+    },
+    {
+      "name": "surg_footer",
+      "type": "static_html",
+      "label": "Surgery footer callout",
+      "includeInPdf": false,
+      "contentHtml": "<div style=\"background:#f0fdf4;border-left:4px solid #4caf50;border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.5;color:#14532d;\"><strong>Heads up:</strong> We can't start your clinical review until we have all 3 signed forms <strong>and</strong> the last 3 visit notes from your doctor. The sooner you send these, the faster we can get to work!</div>",
+      "pageId": "page_surg_records"
+    },
+    {
+      "name": "post_hero",
+      "type": "static_html",
+      "label": "Post-surgery intro",
+      "includeInPdf": false,
+      "contentHtml": "<div style=\"margin-bottom:8px;\"><span style=\"display:inline-block;background:#dcfce7;color:#166534;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;\">Completed</span></div><p style=\"color:#4b5563;font-size:14px;line-height:1.5;margin:0;\">Your surgery is done — now let's get you reimbursed. Gather your bills and records and upload them here.</p>",
+      "pageId": "page_post_provider"
+    },
+    {
+      "name": "post_surgeon_name",
+      "type": "text",
+      "label": "Your surgeon's name",
+      "width": "half",
+      "pageId": "page_post_provider"
+    },
+    {
+      "name": "post_facility_name",
+      "type": "text",
+      "label": "Hospital or surgery center name",
+      "width": "half",
+      "pageId": "page_post_provider"
+    },
+    {
+      "name": "post_npi",
+      "type": "text",
+      "label": "Surgeon's NPI number",
+      "width": "half",
+      "helperText": "Ask the doctor's office if you don't have it",
+      "pageId": "page_post_provider"
+    },
+    {
+      "name": "post_tax_id",
+      "type": "text",
+      "label": "Surgeon's Tax ID number",
+      "width": "half",
+      "helperText": "Ask the doctor's office if you don't have it",
+      "pageId": "page_post_provider"
+    },
+    {
+      "name": "post_surgery_date",
+      "type": "date",
+      "label": "The date your surgery happened",
+      "width": "half",
+      "dateDisallowFuture": true,
+      "pageId": "page_post_provider"
+    },
+    {
+      "name": "post_procedure",
+      "type": "text",
+      "label": "What surgery did you have?",
+      "helperText": "Name of procedure + the procedure code if you have it",
+      "pageId": "page_post_provider"
+    },
+    {
+      "name": "post_bill_facility",
+      "type": "file",
+      "label": "The hospital or surgery center bill",
+      "includeInPdf": false,
+      "helperText": "Must show every charge individually — not just a total",
+      "pageId": "page_post_bills"
+    },
+    {
+      "name": "post_bill_surgeon",
+      "type": "file",
+      "label": "The surgeon's bill",
+      "includeInPdf": false,
+      "helperText": "This often comes separately from the hospital bill",
+      "pageId": "page_post_bills"
+    },
+    {
+      "name": "post_bill_anesthesia",
+      "type": "file",
+      "label": "The anesthesia bill",
+      "includeInPdf": false,
+      "helperText": "If you had anesthesia — also usually a separate bill",
+      "pageId": "page_post_bills"
+    },
+    {
+      "name": "post_bill_selfpay",
+      "type": "file",
+      "label": "Proof the bill was billed as self-pay",
+      "includeInPdf": false,
+      "helperText": "A note from billing, or a rejection letter from insurance is fine",
+      "pageId": "page_post_bills"
+    },
+    {
+      "name": "post_bill_other",
+      "type": "file",
+      "label": "Any other bills from this same surgery",
+      "includeInPdf": false,
+      "helperText": "Labs, pathology, follow-up visits related to the surgery",
+      "pageId": "page_post_bills"
+    },
+    {
+      "name": "post_surgical_report",
+      "type": "file",
+      "label": "The surgical report",
+      "includeInPdf": false,
+      "helperText": "What the surgeon documented during the procedure",
+      "pageId": "page_post_records"
+    },
+    {
+      "name": "post_discharge",
+      "type": "file",
+      "label": "Discharge paperwork",
+      "includeInPdf": false,
+      "helperText": "Only if you stayed overnight in the hospital",
+      "pageId": "page_post_records"
+    },
+    {
+      "name": "post_test_results",
+      "type": "file",
+      "label": "Any test results from this surgery",
+      "includeInPdf": false,
+      "helperText": "Labs, biopsies, imaging ordered around the time of surgery",
+      "pageId": "page_post_records"
+    },
+    {
+      "name": "post_footer",
+      "type": "static_html",
+      "label": "Post-surgery footer callout",
+      "includeInPdf": false,
+      "contentHtml": "<div style=\"background:#f0fdf4;border-left:4px solid #4caf50;border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.5;color:#14532d;\"><strong>Submit within 2 weeks of your surgery date.</strong> Don't worry if your bill says \"self-pay\" or shows an insurance rejection — that's totally normal with ShareWELL. We work with self-pay rates and reimburse you after your Unshared Amount (UA) is met.</div>",
+      "pageId": "page_post_records"
+    },
+    {
+      "name": "er_hero",
+      "type": "static_html",
+      "label": "ER intro",
+      "includeInPdf": false,
+      "contentHtml": "<div style=\"margin-bottom:8px;\"><span style=\"display:inline-block;background:#fee2e2;color:#b91c1c;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;\">Emergency</span></div><p style=\"color:#4b5563;font-size:14px;line-height:1.5;margin:0;\">You went to the ER — we've got you. Collect everything from that visit and upload it here.</p>",
+      "pageId": "page_er_visit"
+    },
+    {
+      "name": "er_hospital_name",
+      "type": "text",
+      "label": "Hospital name",
+      "width": "half",
+      "pageId": "page_er_visit"
+    },
+    {
+      "name": "er_hospital_addr",
+      "type": "text",
+      "label": "Hospital address",
+      "width": "half",
+      "pageId": "page_er_visit"
+    },
+    {
+      "name": "er_npi",
+      "type": "text",
+      "label": "Hospital's NPI number",
+      "width": "half",
+      "helperText": "Call the hospital billing department — they'll have it",
+      "pageId": "page_er_visit"
+    },
+    {
+      "name": "er_tax_id",
+      "type": "text",
+      "label": "Hospital's Tax ID number",
+      "width": "half",
+      "helperText": "Call the hospital billing department — they'll have it",
+      "pageId": "page_er_visit"
+    },
+    {
+      "name": "er_visit_date",
+      "type": "date",
+      "label": "The date you went to the ER",
+      "width": "half",
+      "dateDisallowFuture": true,
+      "pageId": "page_er_visit"
+    },
+    {
+      "name": "er_doctor_name",
+      "type": "text",
+      "label": "The ER doctor's name",
+      "width": "half",
+      "helperText": "Check your discharge paperwork if you're not sure",
+      "pageId": "page_er_visit"
+    },
+    {
+      "name": "er_reason",
+      "type": "textarea",
+      "label": "Why did you go? What was the diagnosis?",
+      "rows": 4,
+      "helperText": "You can write it in your own words — we just need a general idea",
+      "pageId": "page_er_visit"
+    },
+    {
+      "name": "er_bill_hospital",
+      "type": "file",
+      "label": "The hospital ER bill",
+      "includeInPdf": false,
+      "helperText": "Must show every charge individually — not just a total",
+      "pageId": "page_er_bills"
+    },
+    {
+      "name": "er_bill_doctor",
+      "type": "file",
+      "label": "The doctor's bill",
+      "includeInPdf": false,
+      "helperText": "ER doctors often bill separately from the hospital",
+      "pageId": "page_er_bills"
+    },
+    {
+      "name": "er_bill_selfpay",
+      "type": "file",
+      "label": "Proof the bill was billed as self-pay",
+      "includeInPdf": false,
+      "helperText": "A note from billing or an insurance rejection letter works",
+      "pageId": "page_er_bills"
+    },
+    {
+      "name": "er_bill_followup",
+      "type": "file",
+      "label": "Any follow-up bills from this same visit",
+      "includeInPdf": false,
+      "helperText": "Specialist visits, labs, or imaging that came from this ER trip",
+      "pageId": "page_er_bills"
+    },
+    {
+      "name": "er_visit_notes",
+      "type": "file",
+      "label": "Your ER visit notes",
+      "includeInPdf": false,
+      "helperText": "Ask the hospital for a copy of your records from this visit",
+      "pageId": "page_er_records"
+    },
+    {
+      "name": "er_lab_imaging",
+      "type": "file",
+      "label": "Lab or imaging results from the visit",
+      "includeInPdf": false,
+      "helperText": "Blood work, X-rays, CT scans, etc.",
+      "pageId": "page_er_records"
+    },
+    {
+      "name": "er_discharge",
+      "type": "file",
+      "label": "Your discharge instructions",
+      "includeInPdf": false,
+      "helperText": "The paperwork they gave you when you left",
+      "pageId": "page_er_records"
+    },
+    {
+      "name": "er_footer",
+      "type": "static_html",
+      "label": "ER footer callout",
+      "includeInPdf": false,
+      "contentHtml": "<div style=\"background:#f0fdf4;border-left:4px solid #4caf50;border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.5;color:#14532d;\"><strong>Submit within 2 weeks of your ER visit.</strong> If this visit led to follow-up care (like a specialist or surgery), those bills may be part of the same request. Bills showing \"self-pay\" are totally expected — that's how ShareWELL works.</div>",
+      "pageId": "page_er_records"
+    },
+    {
+      "name": "other_hero",
+      "type": "static_html",
+      "label": "Something else intro",
+      "includeInPdf": false,
+      "contentHtml": "<div style=\"margin-bottom:8px;\"><span style=\"display:inline-block;background:#f3f4f6;color:#4b5563;font-size:11px;font-weight:700;letter-spacing:0.06em;text-transform:uppercase;padding:4px 10px;border-radius:999px;\">Other</span></div><p style=\"color:#4b5563;font-size:14px;line-height:1.5;margin:0;\">No problem — fill out your info above and tell us what's going on. Someone from our team will reach out to help.</p>",
+      "pageId": "page_other"
+    },
+    {
+      "name": "other_description",
+      "type": "paragraph",
+      "label": "Tell us what's going on",
+      "rows": 10,
+      "minLength": 20,
+      "helperText": "The more detail you give us, the faster we can help.",
+      "placeholder": "Example: I had a visit with my doctor on May 10th for ongoing knee pain. My doctor wants me to have physical therapy. I have bills totaling about $800. I'm not sure if this counts as a new sharing request or if it goes with my previous one...",
+      "pageId": "page_other"
+    },
+    {
+      "name": "other_footer",
+      "type": "static_html",
+      "label": "Something else footer callout",
+      "includeInPdf": false,
+      "contentHtml": "<div style=\"background:#f0fdf4;border-left:4px solid #4caf50;border-radius:6px;padding:12px 14px;font-size:13px;line-height:1.5;color:#14532d;\"><strong>Not sure what to submit?</strong> Just describe what happened in the box above and we'll take it from there. The more detail you give us, the faster we can help.</div>",
+      "pageId": "page_other"
+    },
+    {
+      "name": "close_auth_heading",
+      "type": "static_html",
+      "label": "Authorization heading",
+      "includeInPdf": false,
+      "contentHtml": "<h3 style=\"font-size:18px;font-weight:600;color:#111827;margin:0 0 4px;\">Authorization to obtain or release medical information</h3><p style=\"color:#4b5563;font-size:13px;margin:0;\">Please read the authorization below, then enter your name and sign.</p>",
+      "pageId": "page_close_auth"
+    },
+    {
+      "name": "close_phi_terms",
+      "type": "terms",
+      "label": "I have read and agree to the authorization above",
+      "required": true,
+      "termsHtml": "<p class=\"ql-align-center\">Authorization to Obtain or Release Medical Information</p><p><strong>Protected Health Information (PHI)</strong>&nbsp;to be Used and/or Disclosed: Any and all information or records relating to the medical history, medical examinations, services rendered, or treatment given, including treatment for alcohol abuse, substance abuse, mental or emotional disorders, A.I.D.S. (Acquired Immune Deficiency Syndrome), or A.R.C (AIDS-related complex). Entities or Persons</p><p><strong>Authorized to Use or Disclose:</strong>&nbsp;U.S. Department of Health and Human Services (including the Centers for Medicare &amp; Medicaid Services and any contractors or agents, including Medicare intermediaries), any physician or other health care professional, hospital or other health care facility, counselor, therapist or any other medical or medically related facility or professional. Entities or Persons Authorized to Receive: ShareWELL Health Share&nbsp;or its agents, employees, designees, or representatives, including my ShareWELL agent or broker.</p><p><strong>Purpose of this Authorization:</strong>&nbsp;By signing this form, you will authorize ShareWELL to use and/or disclose your Protected Health Information (PHI). You also will authorize ShareWELL to obtain your Protected Health Information (PHI) from other covered entities so that we may determine payment of a claim for specified benefits involving you.</p><p><strong>I have had full opportunity to read and consider the contents of this authorization, and I understand that, by signing this authorization, I am confirming my authorization of the use and/or disclosure of my Protected Health Information, as described in this authorization</strong></p><p>A photocopy of this authorization is as valid as the original, and I and my ShareWELL&nbsp;agent or broker are entitled to receive a copy of this form. A COPY OF THIS AUTHORIZATION IS BEING PROVIDED TO YOU. YOU MAY ALSO REQUEST A COPY OF THE SIGNED AUTHORIZATION FROM US</p><p>I certify that the above statements and answers on this claim form are true and correct.</p><p><strong>WARNING:</strong>&nbsp;Any person who knowingly presents a false or fraudulent claim for payment of a loss or benefit or knowingly presents false information in an application for insurance is guilty of a crime and may be subject to fines and confinement in prison.</p>",
+      "pageId": "page_close_auth"
+    },
+    {
+      "name": "close_signer_name",
+      "type": "text",
+      "label": "Signer's full name",
+      "required": true,
+      "placeholder": "Signer's full name",
+      "pageId": "page_close_auth"
+    },
+    {
+      "name": "close_signature",
+      "type": "signature",
+      "label": "Signature",
+      "required": true,
+      "includeInPdf": true,
+      "helperText": "Sign below. A timestamp and IP hash are recorded with your signature for audit purposes (not full IP storage).",
+      "pageId": "page_close_auth"
+    },
+    {
+      "name": "close_dd_intro",
+      "type": "static_html",
+      "label": "Direct deposit intro",
+      "includeInPdf": false,
+      "contentHtml": "<h3 style=\"font-size:18px;font-weight:600;color:#111827;margin:0 0 8px;\">Your banking information (ACH direct deposit)</h3><p style=\"color:#4b5563;font-size:14px;line-height:1.5;margin:0;\">If your sharing request is approved, we'll send your reimbursement directly to your bank account via ACH direct deposit. Providing this now means you'll get paid faster — no checks, no extra steps. Your banking information is encrypted and used solely to disburse funds to you.</p>",
+      "pageId": "page_close_dd"
+    },
+    {
+      "name": "close_dd_holder",
+      "type": "text",
+      "label": "Account holder name",
+      "includeInPdf": false,
+      "helperText": "Must match the name on the bank account exactly.",
+      "placeholder": "Full name as it appears on your bank account",
+      "pageId": "page_close_dd"
+    },
+    {
+      "name": "close_dd_bank",
+      "type": "text",
+      "label": "Bank name",
+      "includeInPdf": false,
+      "width": "half",
+      "placeholder": "e.g. Chase, Wells Fargo",
+      "pageId": "page_close_dd"
+    },
+    {
+      "name": "close_dd_type",
+      "type": "select",
+      "label": "Account type",
+      "includeInPdf": false,
+      "width": "half",
+      "options": [
+        {
+          "value": "Checking",
+          "label": "Checking"
+        },
+        {
+          "value": "Savings",
+          "label": "Savings"
+        }
+      ],
+      "pageId": "page_close_dd"
+    },
+    {
+      "name": "close_dd_routing",
+      "type": "text",
+      "label": "Routing number",
+      "includeInPdf": false,
+      "width": "half",
+      "helperText": "The 9-digit number on the bottom-left of a check.",
+      "placeholder": "9-digit routing number",
+      "pageId": "page_close_dd"
+    },
+    {
+      "name": "close_dd_account",
+      "type": "text",
+      "label": "Account number",
+      "includeInPdf": false,
+      "width": "half",
+      "placeholder": "Your account number",
+      "pageId": "page_close_dd"
+    },
+    {
+      "name": "close_dd_footer",
+      "type": "static_html",
+      "label": "Direct deposit footer note",
+      "includeInPdf": false,
+      "contentHtml": "<p style=\"font-size:12px;color:#6b7280;background:#f9fafb;border:1px solid #e5e7eb;border-radius:6px;padding:8px 10px;margin-top:8px;\">🔒 Your banking details are encrypted and stored securely. They will only be used to disburse approved sharing amounts and will never be shared with third parties.</p>",
+      "pageId": "page_close_dd"
+    }
+  ],
+  "submissionPdf": {
+    "enabled": true,
+    "companyLetterhead": "ShareWell Partners\n90 Fort Wade Rd Ste 100\nPonte Verda FL 32081"
+  }
+}

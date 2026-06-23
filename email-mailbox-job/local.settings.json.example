@@ -1,0 +1,11 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+
+    "EMAIL_SUBSCRIPTION_RENEWAL_ENDPOINT_URL": "http://localhost:3001/api/scheduled-jobs/email-subscription-renewal",
+    "EMAIL_RECONCILE_ENDPOINT_URL": "http://localhost:3001/api/scheduled-jobs/email-reconcile",
+    "SCHEDULED_JOB_API_KEY": ""
+  }
+}

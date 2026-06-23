@@ -1,0 +1,9 @@
+{
+  "startedAt": "2026-04-20T09:48:51.111Z",
+  "db": "allaboard-prod",
+  "server": "allboard-prod.database.windows.net",
+  "targetEmail": "wfg.kim.harris@gmail.com",
+  "baselineEmail": "agent@allaboard365.com",
+  "packageId": "pkg-mw-001",
+  "dryRun": true
+}

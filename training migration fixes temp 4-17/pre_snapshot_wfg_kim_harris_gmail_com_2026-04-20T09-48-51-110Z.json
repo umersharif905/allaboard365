@@ -1,0 +1,46 @@
+{
+  "agent": [
+    {
+      "UserId": "43C916BA-E6B5-48BB-B6A6-D6C836AC6234",
+      "Email": "wfg.kim.harris@gmail.com",
+      "AgentId": "B4868044-F7D1-4A10-B801-59A9F3429CA2",
+      "TenantId": "1CD92AF7-B6F2-4E48-A8F3-EC6316158826",
+      "AgentStatus": "Active"
+    }
+  ],
+  "trainingCompletions": [
+    {
+      "TrainingCompletionId": "D81401C4-5045-486A-B84B-D561158661F0",
+      "ProductId": "16ACE482-845A-4BC8-9A8F-489CD1D002CE",
+      "AgentId": "B4868044-F7D1-4A10-B801-59A9F3429CA2",
+      "MemberId": null,
+      "UserId": "43C916BA-E6B5-48BB-B6A6-D6C836AC6234",
+      "AttemptNumber": 1,
+      "ScorePercent": 100,
+      "TotalQuestions": 2,
+      "CorrectAnswers": 2,
+      "CompletedAt": "2026-02-04T21:14:09.880Z",
+      "CreatedDate": "2026-02-04T21:14:09.880Z",
+      "ModifiedDate": "2026-02-04T21:14:09.880Z",
+      "AnswersDetail": null
+    },
+    {
+      "TrainingCompletionId": "BACE8DC2-C277-4070-B214-23C060B9F888",
+      "ProductId": "F165AF93-8268-448D-9DD6-F02FB338EEAE",
+      "AgentId": "B4868044-F7D1-4A10-B801-59A9F3429CA2",
+      "MemberId": null,
+      "UserId": "43C916BA-E6B5-48BB-B6A6-D6C836AC6234",
+      "AttemptNumber": 1,
+      "ScorePercent": 100,
+      "TotalQuestions": 3,
+      "CorrectAnswers": 3,
+      "CompletedAt": "2026-02-04T21:13:55.416Z",
+      "CreatedDate": "2026-02-04T21:13:55.416Z",
+      "ModifiedDate": "2026-02-04T21:13:55.416Z",
+      "AnswersDetail": null
+    }
+  ],
+  "moduleCompletions": [],
+  "quizCompletions": [],
+  "certificateAwards": []
+}

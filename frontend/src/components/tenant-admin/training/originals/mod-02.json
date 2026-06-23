@@ -1,0 +1,145 @@
+﻿{
+  "id": "mod-02",
+  "title": "Third-Party Administered Benefits",
+  "modulePurpose": "Everyday Healthcare, Preventive Services, RX Benefits, and How Networks Work\n\nCOPY-PASTE TRAINING SECTION DOCUMENT\nModule 2 — Third-Party Administered Benefits\n\nSection Purpose\nThis section teaches agents how the third-party administered (TPA) benefits portion of the MightyWELL bundle works.\nEvery MightyWELL bundle is built using two major components:\nThird-Party Administered Benefits — for everyday healthcare\nHealth Share Participation — for major medical events\nThis module focuses on the first component.\nAgents should leave this section understanding:\nwhat third-party administered benefits are\nhow everyday healthcare works\nhow preventive services work\nhow prescription benefits work\nhow in-network and out-of-network visits work\nhow reimbursement works\nhow to explain this clearly and confidently to customers\nThis is one of the most important sales sections in the entire training.\nMost customer questions will come from this part of the plan.",
+  "defaultRequired": true,
+  "attachments": [],
+  "moduleSteps": [
+    {
+      "id": "step-031",
+      "title": "Step 1 — Review Overview",
+      "subtitle": "Review Overview",
+      "copy": "The Two Parts of the Bundle\nEvery MightyWELL bundle is built using two core pieces.\nPart 1 — Third-Party Administered Benefits\n Handles everyday healthcare.\nPart 2 — Health Share Participation\n Supports major medical needs.\nThis module focuses on Part 1.\n\nWhat Are Third-Party Administered Benefits?\nThird-party administered benefits are healthcare services that are managed and coordinated by an independent administrator.\nThese services typically include:\nroutine doctor visits\nurgent care visits\nspecialist visits\npreventive services\nprescription support\neveryday healthcare needs\nThese benefits are not insurance.\nThey are structured healthcare services administered by a third-party organization.\nThis part of the bundle is designed to make routine healthcare:\nSimple\n Predictable\n Affordable\n Easy to explain\n\nThe Big Idea Agents Must Understand\nThis is the everyday healthcare portion of the bundle.\nThis is what members use most often.\nThis is what customers ask about first.\nAnd this is what you will explain in nearly every sales conversation.\n\nYou Can Go to Any Doctor You Want\nThis is one of the most important concepts to communicate clearly.\nMembers are free to visit any licensed healthcare provider they choose.\nThere are no restrictions on where members can receive care.\nTo make healthcare easier and more convenient, the program provides access to large national networks.\nThese include:\nPHCS / MultiPlan\n First Health\nThese networks include hundreds of thousands of providers nationwide.\nBut remember this:\nNetworks are there for convenience, not limitations.\n\nHow In-Network Visits Work\nIf the provider is in network, the process is simple.\nStep 1\n Show the member ID card.\nStep 2\n Pay the applicable copay.\nStep 3\n Receive care.\nThat’s it.\nMost in-network visits follow this exact process.\n\nHow Out-of-Network Visits Work\nIf the provider is not in network, the member can still receive care.\nThere is no penalty for choosing an out-of-network provider.\nHere’s how the process works.\nStep 1\n Receive care.\nStep 2\n Pay for the visit.\nMost routine visits typically cost between:\n$200 to $400\nExamples include:\nPrimary care visits\n Urgent care visits\n Specialist visits\nStep 3\n Upload the invoice in the MightyWELL app.\nThe member submits:\nThe invoice\n The date of service\n The reason for the visit\nStep 4\n Receive reimbursement.\nReimbursement is typically issued within:\nApproximately five business days\nThe reimbursement amount is:\nCovered amount minus the applicable copay.\n\nPreventive Services\nPreventive services are designed to help members stay healthy and detect health issues early.\nThese services focus on maintaining health rather than treating illness.\nExamples may include:\nAnnual wellness visits\n Routine screenings\n Preventive health evaluations\nPreventive services support long-term health and help reduce the risk of more serious medical problems.\nAgents should always refer to the official bundle guide for the exact preventive services included in each plan.\n\nPrescription (RX) Benefits\nMany MightyWELL bundles include prescription support.\nPrescription benefits help members reduce the cost of medications.\nMedication pricing may vary depending on:\nThe medication\n The pharmacy\n The specific plan\nAgents should always reference the official bundle guide for:\nMedication pricing\n Pharmacy options\n Coverage details\n\nSales Communication — Simple One-Liners\nAgents should be able to explain routine care quickly and clearly.\nUse language like this:\nYou can go to any doctor you want.\nIf they are in network, you show your card, pay your copay, and receive care.\nIf they are out of network, you pay for the visit, upload your invoice in the app, and receive reimbursement less your copay.\n\nAnother simple explanation:\nIn network is convenience.\n Out of network is flexibility.\n Either way, you can get care.\n\nAnother:\nNetworks make healthcare easier.\n They do not limit your options.\n\nAnother:\nThis part of the plan handles everyday healthcare — not major medical events.",
+      "attachments": []
+    },
+    {
+      "id": "step-032",
+      "title": "Step 2 — Instructions",
+      "subtitle": "Review Materials",
+      "copy": "Before taking the quiz, complete the following:\nReview the third-party administered benefits overview above\nOpen the bundle guide in the portal\nLocate the following information:\nPrimary care visit copay\n Urgent care visit copay\n Specialist visit copay\n Preventive services\n Prescription benefit information\nKeep the bundle guide open while taking the quiz\nThis training is open book.\nAgents are expected to use official materials when answering questions.",
+      "attachments": []
+    },
+    {
+      "id": "step-033",
+      "title": "Step 3 — Quiz",
+      "subtitle": "Take Quiz",
+      "copy": "(Open Book — 9 Questions)\n\nQuiz Questions — Module 2\nTrue or False\n Third-party administered benefits handle everyday healthcare needs.\nCorrect answer:\n True\n\nWhich of the following is part of the third-party administered benefits portion of the bundle?\nA. Doctor visits\n B. Preventive services\n C. Prescription support\n D. All of the above\nCorrect answer:\n D\n\nTrue or False\n Members are restricted to using only in-network providers.\nCorrect answer:\n False\n\nWhat is the primary purpose of provider networks?\nA. To limit where members can receive care\n B. To make healthcare more convenient\n C. To deny services outside the network\nCorrect answer:\n B\n\nTrue or False\n Networks at MightyWELL are there for convenience, not limitations.\nCorrect answer:\n True\n\nWhat happens when a member visits an out-of-network provider?\nA. The visit is denied\n B. The member pays for the visit and submits the invoice through the app\n C. The provider must join the network\nCorrect answer:\n B\n\nApproximately how long does reimbursement typically take after submitting the invoice?\nA. Same day\n B. About five business days\n C. Thirty days\nCorrect answer:\n B\n\nWhich information must be submitted when requesting reimbursement?\nA. The invoice\n B. The date of service\n C. The reason for the visit\n D. All of the above\nCorrect answer:\n D\n\nTrue or False\n Third-party administered benefits are responsible for everyday healthcare, while the health share supports major medical needs.\nCorrect answer:\n True",
+      "attachments": [],
+      "sectionQuiz": {
+        "id": "quiz-011",
+        "title": "Quiz Questions — Module 2",
+        "sectionId": "step-033",
+        "estimatedDurationMinutes": 12,
+        "quizTakes": [],
+        "questions": [
+          {
+            "id": "question-120",
+            "questionNumber": 1,
+            "questionText": "True or False\nThird-party administered benefits handle everyday healthcare needs.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-319", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-320", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-121",
+            "questionNumber": 2,
+            "questionText": "Which of the following is part of the third-party administered benefits portion of the bundle?",
+            "answerText": "All of the above",
+            "answerOrdinal": "D",
+            "answerChoices": [
+              { "id": "choice-321", "answerText": "Doctor visits", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-322", "answerText": "Preventive services", "answerTrueFalse": false, "answerOrdinal": "B" },
+              { "id": "choice-323", "answerText": "Prescription support", "answerTrueFalse": false, "answerOrdinal": "C" },
+              { "id": "choice-324", "answerText": "All of the above", "answerTrueFalse": true, "answerOrdinal": "D" }
+            ]
+          },
+          {
+            "id": "question-122",
+            "questionNumber": 3,
+            "questionText": "True or False\nMembers are restricted to using only in-network providers.",
+            "answerText": "False",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-325", "answerText": "True", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-326", "answerText": "False", "answerTrueFalse": true, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-123",
+            "questionNumber": 4,
+            "questionText": "What is the primary purpose of provider networks?",
+            "answerText": "To make healthcare more convenient",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-327", "answerText": "To limit where members can receive care", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-328", "answerText": "To make healthcare more convenient", "answerTrueFalse": true, "answerOrdinal": "B" },
+              { "id": "choice-329", "answerText": "To deny services outside the network", "answerTrueFalse": false, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-124",
+            "questionNumber": 5,
+            "questionText": "True or False\nNetworks at MightyWELL are there for convenience, not limitations.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-330", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-331", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-125",
+            "questionNumber": 6,
+            "questionText": "What happens when a member visits an out-of-network provider?",
+            "answerText": "The member pays for the visit and submits the invoice through the app",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-332", "answerText": "The visit is denied", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-333", "answerText": "The member pays for the visit and submits the invoice through the app", "answerTrueFalse": true, "answerOrdinal": "B" },
+              { "id": "choice-334", "answerText": "The provider must join the network", "answerTrueFalse": false, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-126",
+            "questionNumber": 7,
+            "questionText": "Approximately how long does reimbursement typically take after submitting the invoice?",
+            "answerText": "About five business days",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-335", "answerText": "Same day", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-336", "answerText": "About five business days", "answerTrueFalse": true, "answerOrdinal": "B" },
+              { "id": "choice-337", "answerText": "Thirty days", "answerTrueFalse": false, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-127",
+            "questionNumber": 8,
+            "questionText": "Which information must be submitted when requesting reimbursement?",
+            "answerText": "All of the above",
+            "answerOrdinal": "D",
+            "answerChoices": [
+              { "id": "choice-338", "answerText": "The invoice", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-339", "answerText": "The date of service", "answerTrueFalse": false, "answerOrdinal": "B" },
+              { "id": "choice-340", "answerText": "The reason for the visit", "answerTrueFalse": false, "answerOrdinal": "C" },
+              { "id": "choice-341", "answerText": "All of the above", "answerTrueFalse": true, "answerOrdinal": "D" }
+            ]
+          },
+          {
+            "id": "question-128",
+            "questionNumber": 9,
+            "questionText": "True or False\nThird-party administered benefits are responsible for everyday healthcare, while the health share supports major medical needs.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-342", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-343", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

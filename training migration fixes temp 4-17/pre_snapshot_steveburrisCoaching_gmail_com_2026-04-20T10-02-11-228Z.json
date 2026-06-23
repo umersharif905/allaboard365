@@ -1,0 +1,57 @@
+{
+  "agent": [
+    {
+      "UserId": "B16896FB-485C-4A2D-A615-841B87305D7F",
+      "Email": "steveburrisCoaching@gmail.com",
+      "AgentId": "E9AF3D61-C20C-46BC-98D6-256AD27581D1",
+      "TenantId": "1CD92AF7-B6F2-4E48-A8F3-EC6316158826",
+      "AgentStatus": "Active"
+    }
+  ],
+  "trainingCompletions": [
+    {
+      "TrainingCompletionId": "9AC754CB-6640-4517-BC98-D52EFB1D5442",
+      "ProductId": "F165AF93-8268-448D-9DD6-F02FB338EEAE",
+      "AgentId": "E9AF3D61-C20C-46BC-98D6-256AD27581D1",
+      "MemberId": null,
+      "UserId": "B16896FB-485C-4A2D-A615-841B87305D7F",
+      "AttemptNumber": 1,
+      "ScorePercent": 33.33,
+      "TotalQuestions": 3,
+      "CorrectAnswers": 1,
+      "CompletedAt": "2026-02-05T18:17:13.046Z",
+      "CreatedDate": "2026-02-05T18:17:13.046Z",
+      "ModifiedDate": "2026-02-05T18:17:13.046Z",
+      "AnswersDetail": null
+    }
+  ],
+  "moduleCompletions": [
+    {
+      "AgentTrainingLibraryModuleCompletionId": "5229AE8C-DEF7-4896-8203-9D00E1F58EA8",
+      "AgentId": "E9AF3D61-C20C-46BC-98D6-256AD27581D1",
+      "PackageId": "pkg-mw-001",
+      "ModuleId": "mod-0001",
+      "CompletedAt": "2026-04-04T13:04:55.720Z",
+      "CreatedDate": "2026-04-04T13:04:55.720Z",
+      "ModifiedDate": "2026-04-04T13:04:55.720Z"
+    }
+  ],
+  "quizCompletions": [
+    {
+      "AgentTrainingLibraryQuizCompletionId": "FA156168-AD5C-4F8D-BFC4-3267D464F178",
+      "AgentId": "E9AF3D61-C20C-46BC-98D6-256AD27581D1",
+      "PackageId": "pkg-mw-001",
+      "ModuleId": "mod-0001",
+      "StepId": "step-007",
+      "QuizId": "quiz-003",
+      "ScorePercent": 100,
+      "TotalQuestions": 10,
+      "CorrectAnswers": 10,
+      "AttemptCount": 1,
+      "CompletedAt": "2026-04-04T13:04:58.026Z",
+      "CreatedDate": "2026-04-04T13:04:58.026Z",
+      "ModifiedDate": "2026-04-04T13:04:58.026Z"
+    }
+  ],
+  "certificateAwards": []
+}

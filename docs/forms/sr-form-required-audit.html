@@ -1,0 +1,334 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Share Request Form — Required-Field Audit</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;0,9..144,900;1,9..144,500&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@400;500;700&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --paper:#f4efe4; --paper-2:#efe8d8;
+    --ink:#221d16; --ink-soft:#5c5142; --ink-faint:#9a8f7c;
+    --rule:#cdc2aa; --rule-soft:#ddd3bd;
+    --req:#2f6b5e; --req-bg:#e1ece4; --req-ink:#1f4a40;
+    --opt:#bd5b12; --opt-bg:#f6e3cf; --opt-ink:#7d3c0a;   /* action color */
+    --disp:#8a8170; --disp-bg:#e8e1d1;
+    --free:#7a4ea8;
+  }
+  *{box-sizing:border-box;margin:0;padding:0}
+  html{scroll-behavior:smooth}
+  body{
+    background:var(--paper);color:var(--ink);
+    font-family:"Hanken Grotesk",sans-serif;font-size:14px;line-height:1.45;
+    background-image:linear-gradient(var(--rule-soft) 1px,transparent 1px),linear-gradient(90deg,var(--rule-soft) 1px,transparent 1px);
+    background-size:32px 32px;background-position:-1px -1px;
+  }
+  .wrap{max-width:1480px;margin:0 auto;padding:48px 28px 120px}
+
+  header.mast{border:1.5px solid var(--ink);background:var(--paper-2);padding:30px 34px;position:relative;box-shadow:8px 8px 0 rgba(34,29,22,.12)}
+  .mast .kicker{font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.32em;text-transform:uppercase;color:var(--ink-soft)}
+  .mast h1{font-family:"Fraunces",serif;font-weight:900;font-size:clamp(32px,5vw,56px);line-height:.96;letter-spacing:-.02em;margin:10px 0 4px}
+  .mast h1 em{font-style:italic;font-weight:500;color:var(--ink-soft)}
+  .mast .sub{max-width:76ch;color:var(--ink-soft);font-size:15px;margin-top:12px}
+
+  /* headline stat */
+  .stat{display:flex;flex-wrap:wrap;align-items:center;gap:26px;margin-top:24px;padding-top:22px;border-top:1px solid var(--rule)}
+  .stat .big{font-family:"Fraunces",serif;font-weight:900;font-size:54px;line-height:1;color:var(--req)}
+  .stat .big small{font-size:22px;color:var(--ink-faint);font-weight:600}
+  .stat .barwrap{flex:1;min-width:260px}
+  .stat .bartop{display:flex;justify-content:space-between;font-family:"JetBrains Mono",monospace;font-size:11px;text-transform:uppercase;letter-spacing:.1em;margin-bottom:7px}
+  .stat .bartop .l{color:var(--req)} .stat .bartop .r{color:var(--opt)}
+  .bar{height:24px;border:1.5px solid var(--ink);display:flex;overflow:hidden}
+  .bar .req{background:var(--req-bg);border-right:1.5px solid var(--ink)}
+  .bar .opt{background:repeating-linear-gradient(135deg,var(--opt-bg),var(--opt-bg) 7px,#efd3b5 7px,#efd3b5 8px)}
+  .bar span{display:flex;align-items:center;justify-content:center;font-family:"JetBrains Mono",monospace;font-size:11px;font-weight:700}
+  .bar .req span,.bar .opt span{width:100%}
+
+  .legend{display:flex;flex-wrap:wrap;gap:10px;margin:26px 0 8px}
+  .lg{display:flex;gap:10px;align-items:flex-start;border:1px solid var(--rule);background:var(--paper-2);padding:9px 13px;flex:1 1 210px;min-width:210px}
+  .lg .sw{width:15px;height:15px;border:1.5px solid;flex:none;margin-top:1px}
+  .lg .ttl{font-weight:700;font-size:12.5px}.lg .dsc{font-size:11.5px;color:var(--ink-soft);line-height:1.3}
+  .lg.c-req .sw{border-color:var(--req);background:var(--req-bg)}
+  .lg.c-opt .sw{border-color:var(--opt);background:var(--opt-bg)}
+  .lg.c-disp .sw{border-color:var(--disp);background:var(--disp-bg)}
+  .lg.c-free .sw{border-color:var(--free);background:var(--paper);position:relative}
+  .lg.c-free .sw::after{content:"◖";color:var(--free);font-size:12px;position:absolute;top:-3px;left:1px}
+
+  .sect-h{font-family:"JetBrains Mono",monospace;font-size:12px;letter-spacing:.26em;text-transform:uppercase;color:var(--ink-soft);margin:42px 0 14px;display:flex;align-items:center;gap:14px}
+  .sect-h::after{content:"";flex:1;height:1px;background:var(--rule)}
+
+  /* matrix */
+  .grid-scroll{overflow-x:auto;border:1.5px solid var(--ink);background:var(--paper-2)}
+  .matrix{min-width:1180px}
+  .colgrid{display:grid;grid-template-columns:168px repeat(5,1fr)}
+  .bhead{position:sticky;top:0;z-index:6}
+  .bhead > div{border-bottom:1.5px solid var(--ink);border-left:1px solid var(--rule);background:var(--paper);padding:12px 13px 11px}
+  .bhead > div:first-child{border-left:none;background:var(--ink);color:var(--paper);display:flex;align-items:flex-end;font-family:"JetBrains Mono",monospace;font-size:10.5px;letter-spacing:.18em;text-transform:uppercase}
+  .bhead .bname{font-family:"Fraunces",serif;font-weight:600;font-size:17px;line-height:1.04;letter-spacing:-.01em}
+  .bhead .breq{display:flex;gap:6px;margin-top:9px;font-family:"JetBrains Mono",monospace;font-size:10px}
+  .bhead .breq b{padding:2px 7px;border:1px solid;font-weight:700}
+  .bhead .breq .r{color:var(--req-ink);border-color:var(--req);background:var(--req-bg)}
+  .bhead .breq .o{color:var(--opt-ink);border-color:var(--opt);background:var(--opt-bg)}
+
+  .band{border-bottom:1.5px solid var(--ink)} .band:last-child{border-bottom:none}
+  .band-title{grid-column:1 / -1;display:flex;align-items:center;gap:12px;flex-wrap:wrap;background:var(--ink);color:var(--paper);padding:8px 14px;font-family:"JetBrains Mono",monospace;font-size:11px;letter-spacing:.2em;text-transform:uppercase}
+  .band-title .seq{width:22px;height:22px;border:1px solid var(--paper);border-radius:50%;display:grid;place-items:center;font-size:10px;flex:none}
+  .band-title .scope{margin-left:auto;font-size:10px;letter-spacing:.1em;color:#cdbfa6;text-transform:none;font-style:italic}
+  .slot{display:contents}
+  .slot .rowlabel{border-top:1px solid var(--rule-soft);background:var(--paper);padding:9px 12px;display:flex;flex-direction:column;gap:3px;justify-content:center}
+  .slot .rowlabel .rl-name{font-weight:700;font-size:12px;line-height:1.15}
+  .slot .rowlabel .rl-sub{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.08em;text-transform:uppercase;color:var(--ink-faint)}
+  .cell{border-left:1px solid var(--rule-soft);border-top:1px solid var(--rule-soft);padding:8px 11px;font-size:12.5px;min-height:44px;display:flex;flex-direction:column;gap:5px;justify-content:center;position:relative}
+  .cell.req{background:var(--req-bg)} .cell.opt{background:var(--opt-bg)}
+  .cell .flabel{line-height:1.22}
+  .cell.req .flabel{color:var(--req-ink)} .cell.opt .flabel{color:var(--opt-ink);font-weight:600}
+  .cell .badge{font-family:"JetBrains Mono",monospace;font-size:8.5px;letter-spacing:.1em;font-weight:700;display:inline-flex;align-items:center;gap:4px}
+  .cell.req .badge{color:var(--req)} .cell.opt .badge{color:var(--opt)}
+  .cell .free-dot{position:absolute;top:6px;right:7px;color:var(--free);font-size:11px}
+  .cell.gap{background:repeating-linear-gradient(135deg,transparent,transparent 6px,rgba(154,143,124,.13) 6px,rgba(154,143,124,.13) 7px)}
+  .cell.gap .dash{color:var(--ink-faint);font-size:16px;font-family:"JetBrains Mono",monospace}
+  .cell.na{background:var(--paper-2)} .cell.na .nai{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.08em;color:var(--ink-faint);text-transform:uppercase}
+
+  /* shared band */
+  .shared-band{border:1.5px solid var(--ink);background:var(--paper-2);margin-bottom:14px}
+  .shared-band .sb-head{display:flex;align-items:center;gap:12px;flex-wrap:wrap;padding:10px 16px;border-bottom:1px solid var(--rule)}
+  .shared-band .sb-seq{width:22px;height:22px;border:1.5px solid var(--ink);border-radius:50%;display:grid;place-items:center;font-size:10px;font-family:"JetBrains Mono",monospace;flex:none}
+  .shared-band .sb-title{font-family:"Fraunces",serif;font-weight:600;font-size:18px}
+  .shared-band .sb-mini{margin-left:auto;display:flex;gap:6px;font-family:"JetBrains Mono",monospace;font-size:10px}
+  .shared-band .sb-mini b{padding:2px 7px;border:1px solid;font-weight:700}
+  .shared-band .sb-mini .r{color:var(--req-ink);border-color:var(--req);background:var(--req-bg)}
+  .shared-band .sb-mini .o{color:var(--opt-ink);border-color:var(--opt);background:var(--opt-bg)}
+  .shared-band .sb-fields{display:flex;flex-wrap:wrap;gap:7px;padding:13px 16px}
+  .chip{display:inline-flex;align-items:center;gap:8px;background:var(--paper);border:1px solid var(--rule);padding:5px 10px;font-size:12px;position:relative}
+  .chip.req{border-color:var(--req)} .chip.opt{border-color:var(--opt);background:var(--opt-bg)}
+  .chip .cb{font-family:"JetBrains Mono",monospace;font-size:8.5px;font-weight:700;letter-spacing:.08em}
+  .chip.req .cb{color:var(--req)} .chip.opt .cb{color:var(--opt)}
+  .chip .ct{font-family:"JetBrains Mono",monospace;font-size:9px;letter-spacing:.05em;text-transform:uppercase;color:var(--ink-faint)}
+  .chip .fd{color:var(--free);font-size:10px}
+
+  /* checklist */
+  .check{border:1.5px solid var(--ink);background:var(--paper-2)}
+  .check .ck-page{border-bottom:1px solid var(--rule)}
+  .check .ck-page:last-child{border-bottom:none}
+  .check .ck-h{display:flex;align-items:center;gap:10px;padding:9px 16px;background:var(--paper);border-bottom:1px solid var(--rule-soft)}
+  .check .ck-h .ck-t{font-weight:700;font-size:13px}
+  .check .ck-h .ck-c{margin-left:auto;font-family:"JetBrains Mono",monospace;font-size:10.5px;color:var(--opt-ink)}
+  .check .ck-row{display:flex;align-items:center;gap:11px;padding:7px 16px;border-bottom:1px dotted var(--rule-soft);font-size:13px}
+  .check .ck-row:last-child{border-bottom:none}
+  .check .box{width:15px;height:15px;border:1.5px solid var(--opt);flex:none}
+  .check .ck-lbl{flex:1}
+  .check .ck-ty{font-family:"JetBrains Mono",monospace;font-size:9.5px;text-transform:uppercase;letter-spacing:.05em;color:var(--ink-faint)}
+  .check .ck-free{font-family:"JetBrains Mono",monospace;font-size:9px;color:var(--free);border:1px solid var(--free);padding:1px 6px;letter-spacing:.04em}
+
+  footer.note{margin-top:30px;font-size:12px;color:var(--ink-soft);border-top:1px solid var(--rule);padding-top:16px;font-family:"JetBrains Mono",monospace;letter-spacing:.02em;line-height:1.7}
+  footer.note b{color:var(--ink)}
+  .pre{display:inline-block;background:var(--paper-2);border:1px solid var(--rule);padding:0 5px;color:var(--ink)}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+  <header class="mast">
+    <div class="kicker">Public Form · Required-Field Audit · testing</div>
+    <h1>Share Request Form<br><em>what's required today</em></h1>
+    <p class="sub"><b>Post-flip state.</b> Nearly every input field is now required. Only a deliberate short list stays optional: the free-text "additional / anything else" catch-alls and the provider Tax-ID fields (members rarely know a provider's TIN — back office fills it). The manual PCP fax field was removed; fax now rides on the NPI provider lookup. Display-only blocks (intro copy, callouts) are excluded; they take no input.</p>
+    <div class="stat">
+      <div class="big" id="pct">—<small>% req</small></div>
+      <div class="barwrap">
+        <div class="bartop"><span class="l" id="reqlbl">required</span><span class="r" id="optlbl">optional</span></div>
+        <div class="bar"><div class="req" id="barreq"><span id="barreqn"></span></div><div class="opt" id="baropt"><span id="baroptn"></span></div></div>
+        <div class="bartop" style="margin-top:7px;color:var(--ink-faint)"><span id="totlbl"></span><span id="freelbl"></span></div>
+      </div>
+    </div>
+  </header>
+
+  <div class="legend">
+    <div class="lg c-req"><div class="sw"></div><div><div class="ttl">Required</div><div class="dsc">Field currently has <span class="pre">required: true</span>.</div></div></div>
+    <div class="lg c-opt"><div class="sw"></div><div><div class="ttl">Optional → make required</div><div class="dsc">Currently <span class="pre">required: false</span>. The audit work list.</div></div></div>
+    <div class="lg c-free"><div class="sw"></div><div><div class="ttl">Free-text</div><div class="dsc">Text/textarea/email/phone — future min-character rule candidate.</div></div></div>
+    <div class="lg c-disp"><div class="sw"></div><div><div class="ttl">Display / consent copy</div><div class="dsc">Intro &amp; callout blocks — no input, excluded from counts.</div></div></div>
+  </div>
+
+  <div class="sect-h">Shared pages — same for every branch</div>
+  <div id="shared-top"></div>
+
+  <div class="sect-h">Branch-specific pages — required status by branch</div>
+  <div class="grid-scroll"><div class="matrix">
+    <div class="colgrid bhead" id="bhead"></div>
+    <div id="bands"></div>
+  </div></div>
+
+  <div class="sect-h">Shared — closing pages</div>
+  <div id="shared-bottom"></div>
+
+  <div class="sect-h">Conversion checklist — every optional field</div>
+  <div class="check" id="checklist"></div>
+
+  <footer class="note" id="footer"></footer>
+</div>
+
+<script>
+/* Authoritative flat list: every INPUT field (display/consent-copy excluded). */
+const ALL=[{"page":"About You","pid":"page_about_you","label":"I agree to the terms and conditions","type":"terms","req":true,"free":false},{"page":"About You","pid":"page_about_you","label":"First name","type":"first_name","req":true,"free":false},{"page":"About You","pid":"page_about_you","label":"Last name","type":"last_name","req":true,"free":false},{"page":"About You","pid":"page_about_you","label":"Date of birth","type":"date","req":true,"free":false},{"page":"About You","pid":"page_about_you","label":"ShareWell member ID","type":"member_id","req":true,"free":false},{"page":"About You","pid":"page_about_you","label":"Email","type":"email","req":true,"free":true},{"page":"About You","pid":"page_about_you","label":"Phone","type":"tel","req":true,"free":true},{"page":"About You","pid":"page_about_you","label":"Home street address","type":"text","req":true,"free":true},{"page":"About You","pid":"page_about_you","label":"City","type":"text","req":true,"free":true},{"page":"About You","pid":"page_about_you","label":"State","type":"text","req":true,"free":true},{"page":"About You","pid":"page_about_you","label":"ZIP code","type":"text","req":true,"free":true},{"page":"About You","pid":"page_about_you","label":"Relation to primary member","type":"select","req":true,"free":false},{"page":"About Your Sharing Request","pid":"page_request","label":"When did symptoms or care for this issue begin?","type":"date","req":true,"free":false},{"page":"About Your Sharing Request","pid":"page_request","label":"Is this a new condition?","type":"select","req":true,"free":false},{"page":"About Your Sharing Request","pid":"page_request","label":"Your Unshared Amount (UA) tier","type":"select","req":true,"free":false},{"page":"About Your Sharing Request","pid":"page_request","label":"Do you have other insurance?","type":"select","req":true,"free":false},{"page":"About Your Sharing Request","pid":"page_request","label":"Find your primary care provider","type":"provider_search","req":true,"free":false},{"page":"About Your Sharing Request","pid":"page_request","label":"Upload PCP office notes","type":"file","req":true,"free":false},{"page":"About Your Sharing Request","pid":"page_request","label":"Additional information you'd like to share","type":"textarea","req":false,"free":true},{"page":"About Your Doctor & Hospital","pid":"page_surg_provider","label":"Find your surgeon","type":"provider_search","req":true,"free":false},{"page":"About Your Doctor & Hospital","pid":"page_surg_provider","label":"Find your hospital or surgery center","type":"provider_search","req":true,"free":false},{"page":"About Your Doctor & Hospital","pid":"page_surg_provider","label":"Surgeon's Tax ID number","type":"text","req":false,"free":true},{"page":"About Your Doctor & Hospital","pid":"page_surg_provider","label":"Is your doctor in-network?","type":"radio","req":true,"free":false},{"page":"About the Surgery","pid":"page_surg_details","label":"What surgery are you having?","type":"text","req":true,"free":true},{"page":"About the Surgery","pid":"page_surg_details","label":"Describe in detail what happened","type":"textarea","req":true,"free":true},{"page":"About the Surgery","pid":"page_surg_details","label":"When is your surgery scheduled?","type":"date","req":true,"free":false},{"page":"About the Surgery","pid":"page_surg_details","label":"Price estimate from the hospital and surgeon","type":"file","req":true,"free":false},{"page":"About the Surgery","pid":"page_surg_details","label":"Would you switch to a different doctor if we find a lower price?","type":"radio","req":true,"free":false},{"page":"3 Forms to Sign & Send Back","pid":"page_surg_forms","label":"Upload your signed HIPAA Release Form","type":"file","req":true,"free":false},{"page":"3 Forms to Sign & Send Back","pid":"page_surg_forms","label":"Upload your signed UA Form","type":"file","req":true,"free":false},{"page":"3 Forms to Sign & Send Back","pid":"page_surg_forms","label":"Upload your signed Clinical Intake Form","type":"file","req":true,"free":false},{"page":"Medical Records from Your Doctor","pid":"page_surg_records","label":"Last 3 visit notes from your doctor","type":"file","req":true,"free":false},{"page":"Medical Records from Your Doctor","pid":"page_surg_records","label":"Any recent test results related to this surgery","type":"file","req":true,"free":false},{"page":"About Your Doctor & Hospital","pid":"page_post_provider","label":"Find your surgeon","type":"provider_search","req":true,"free":false},{"page":"About Your Doctor & Hospital","pid":"page_post_provider","label":"Find the hospital or surgery center","type":"provider_search","req":true,"free":false},{"page":"About Your Doctor & Hospital","pid":"page_post_provider","label":"Surgeon's Tax ID number","type":"text","req":false,"free":true},{"page":"About Your Doctor & Hospital","pid":"page_post_provider","label":"The date your surgery happened","type":"date","req":true,"free":false},{"page":"About Your Doctor & Hospital","pid":"page_post_provider","label":"What surgery did you have?","type":"text","req":true,"free":true},{"page":"About Your Doctor & Hospital","pid":"page_post_provider","label":"Describe in detail what happened","type":"textarea","req":true,"free":true},{"page":"Your Bills","pid":"page_post_bills","label":"The hospital or surgery center bill","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_post_bills","label":"The surgeon's bill","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_post_bills","label":"The anesthesia bill","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_post_bills","label":"Proof the bill was billed as self-pay","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_post_bills","label":"Any other bills from this same surgery","type":"file","req":false,"free":false},{"page":"Medical Records","pid":"page_post_records","label":"The surgical report","type":"file","req":true,"free":false},{"page":"Medical Records","pid":"page_post_records","label":"Discharge paperwork","type":"file","req":true,"free":false},{"page":"Medical Records","pid":"page_post_records","label":"Any test results from this surgery","type":"file","req":true,"free":false},{"page":"About Your ER Visit","pid":"page_er_visit","label":"Find the hospital","type":"provider_search","req":true,"free":false},{"page":"About Your ER Visit","pid":"page_er_visit","label":"Hospital's Tax ID number","type":"text","req":false,"free":true},{"page":"About Your ER Visit","pid":"page_er_visit","label":"The date you went to the ER","type":"date","req":true,"free":false},{"page":"About Your ER Visit","pid":"page_er_visit","label":"Find the ER doctor","type":"provider_search","req":true,"free":false},{"page":"About Your ER Visit","pid":"page_er_visit","label":"Why did you go? What was the diagnosis?","type":"textarea","req":true,"free":true},{"page":"Your Bills","pid":"page_er_bills","label":"The hospital ER bill","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_er_bills","label":"The doctor's bill","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_er_bills","label":"Proof the bill was billed as self-pay","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_er_bills","label":"Any follow-up bills from this same visit","type":"file","req":false,"free":false},{"page":"Your Bills","pid":"page_er_bills","label":"Did you apply for financial assistance (charity care) with the hospital?","type":"radio","req":true,"free":false},{"page":"Your Bills","pid":"page_er_bills","label":"I have read the note above about hospital financial assistance (charity care)","type":"terms","req":true,"free":false},{"page":"Medical Records","pid":"page_er_records","label":"Your ER visit notes","type":"file","req":true,"free":false},{"page":"Medical Records","pid":"page_er_records","label":"Lab or imaging results from the visit","type":"file","req":true,"free":false},{"page":"Medical Records","pid":"page_er_records","label":"Your discharge instructions","type":"file","req":true,"free":false},{"page":"About Your Pregnancy","pid":"page_mat_provider","label":"Where are you in your pregnancy?","type":"radio","req":true,"free":false},{"page":"About Your Pregnancy","pid":"page_mat_provider","label":"Due date or delivery date","type":"date","req":true,"free":false},{"page":"About Your Pregnancy","pid":"page_mat_provider","label":"Find your OB-GYN or midwife","type":"provider_search","req":true,"free":false},{"page":"About Your Pregnancy","pid":"page_mat_provider","label":"Find the hospital or birth center","type":"provider_search","req":true,"free":false},{"page":"About Your Pregnancy","pid":"page_mat_provider","label":"Provider's Tax ID number","type":"text","req":false,"free":true},{"page":"About Your Pregnancy","pid":"page_mat_provider","label":"Anything you'd like to tell us?","type":"textarea","req":false,"free":true},{"page":"Your Bills","pid":"page_mat_bills","label":"Prenatal care bills","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_mat_bills","label":"Delivery or hospital bills","type":"file","req":true,"free":false},{"page":"Your Bills","pid":"page_mat_bills","label":"Any other related bills","type":"file","req":false,"free":false},{"page":"Medical Records","pid":"page_mat_records","label":"Prenatal records or visit notes","type":"file","req":true,"free":false},{"page":"Medical Records","pid":"page_mat_records","label":"Lab, ultrasound, or test results","type":"file","req":true,"free":false},{"page":"Tell Us What is Going On","pid":"page_other","label":"Provider information","type":"textarea","req":true,"free":true},{"page":"Tell Us What is Going On","pid":"page_other","label":"Date of service (if known)","type":"date","req":false,"free":false},{"page":"Tell Us What is Going On","pid":"page_other","label":"Upload any documents","type":"file","req":false,"free":false},{"page":"Direct Deposit","pid":"page_close_dd","label":"Account holder name","type":"text","req":true,"free":true},{"page":"Direct Deposit","pid":"page_close_dd","label":"Bank name","type":"text","req":true,"free":true},{"page":"Direct Deposit","pid":"page_close_dd","label":"Account type","type":"select","req":true,"free":false},{"page":"Direct Deposit","pid":"page_close_dd","label":"Routing number","type":"text","req":true,"free":true},{"page":"Direct Deposit","pid":"page_close_dd","label":"Account number","type":"text","req":true,"free":true},{"page":"Authorization & Signature","pid":"page_close_auth","label":"I have read and agree to the authorization above","type":"terms","req":true,"free":false},{"page":"Authorization & Signature","pid":"page_close_auth","label":"Signer's full name","type":"text","req":true,"free":true},{"page":"Authorization & Signature","pid":"page_close_auth","label":"Signature","type":"signature","req":true,"free":false}];
+
+const BRANCHES=[
+  {id:'su', name:"I'm Having Surgery"}, {id:'sd', name:"I Had Surgery"},
+  {id:'er', name:"I Had an ER Visit"},  {id:'mat',name:"I'm Having a Baby"},
+  {id:'ot', name:"It's Something Else"},
+];
+/* which page ids each branch shows, to count its required/optional */
+const BRANCH_PAGES={
+  su:['page_about_you','page_request','page_surg_provider','page_surg_details','page_surg_forms','page_surg_records','page_close_dd','page_close_auth'],
+  sd:['page_about_you','page_request','page_post_provider','page_post_bills','page_post_records','page_close_dd','page_close_auth'],
+  er:['page_about_you','page_request','page_er_visit','page_er_bills','page_er_records','page_close_dd','page_close_auth'],
+  mat:['page_about_you','page_request','page_mat_provider','page_mat_bills','page_mat_records','page_close_dd','page_close_auth'],
+  ot:['page_about_you','page_request','page_other','page_close_auth'],
+};
+
+/* Shared full pages (req flag per field) */
+const SHARED_TOP=[
+  {seq:1,title:'About You',fields:ALL.filter(f=>f.pid==='page_about_you')},
+  {seq:2,title:'About Your Sharing Request',fields:ALL.filter(f=>f.pid==='page_request')},
+];
+const SHARED_BOTTOM=[
+  {seq:7,title:'Direct Deposit',fields:ALL.filter(f=>f.pid==='page_close_dd')},
+  {seq:8,title:'Authorization & Signature',fields:ALL.filter(f=>f.pid==='page_close_auth')},
+];
+
+/* Branch matrix: cells map branch->label; req lists branches where that cell is required. */
+const BANDS=[
+  {seq:3,arch:'Provider / Visit',members:['su','sd','er','mat','ot'],slots:[
+    {name:'Intro',type:'html',display:true,cells:{su:'Surgery intro',sd:'Post-surgery intro',er:'ER intro',mat:'Maternity intro',ot:'Something else intro'}},
+    {name:'Stage / status question',type:'radio',cells:{su:'Is your doctor in-network?',mat:'Where are you in your pregnancy?'}},
+    {name:'Primary provider',type:'provider',cells:{su:'Find your surgeon',sd:'Find your surgeon',er:'Find the ER doctor',mat:'Find your OB-GYN or midwife',ot:'Provider information (free text)'}},
+    {name:'Facility / hospital',type:'provider',cells:{su:'Find your hospital or surgery center',sd:'Find the hospital or surgery center',er:'Find the hospital',mat:'Find the hospital or birth center'}},
+    {name:'Tax ID',type:'text',opt:['su','sd','er','mat'],cells:{su:"Surgeon's Tax ID number",sd:"Surgeon's Tax ID number",er:"Hospital's Tax ID number",mat:"Provider's Tax ID number"}},
+    {name:'Date of service',type:'date',opt:['ot'],cells:{sd:'The date your surgery happened',er:'The date you went to the ER',mat:'Due date or delivery date',ot:'Date of service (if known)'}},
+    {name:'Procedure name',type:'text',cells:{sd:'What surgery did you have?'}},
+    {name:'Narrative / reason',type:'textarea',opt:['mat'],cells:{sd:'Describe in detail what happened',er:'Why did you go? What was the diagnosis?',mat:"Anything you'd like to tell us?",ot:"Tell us what's going on"}},
+    {name:'Upload documents',type:'file',opt:['ot'],cells:{ot:'Upload any documents'}},
+  ]},
+  {seq:4,arch:'Procedure Details',members:['su'],slots:[
+    {name:'Procedure name',type:'text',cells:{su:'What surgery are you having?'}},
+    {name:'Narrative',type:'textarea',cells:{su:'Describe in detail what happened'}},
+    {name:'Scheduled date',type:'date',cells:{su:'When is your surgery scheduled?'}},
+    {name:'Price estimate',type:'file',cells:{su:'Price estimate from the hospital and surgeon'}},
+    {name:'Switch-doctor offer',type:'radio',cells:{su:'Would you switch to a different doctor if we find a lower price?'}},
+  ]},
+  {seq:5,arch:'Forms to Sign',members:['su'],slots:[
+    {name:'HIPAA release',type:'file',cells:{su:'Upload your signed HIPAA Release Form'}},
+    {name:'UA form',type:'file',cells:{su:'Upload your signed UA Form'}},
+    {name:'Clinical intake',type:'file',cells:{su:'Upload your signed Clinical Intake Form'}},
+  ]},
+  {seq:6,arch:'Bills',members:['sd','er','mat'],slots:[
+    {name:'Facility bill',type:'file',cells:{sd:'The hospital or surgery center bill',er:'The hospital ER bill',mat:'Delivery or hospital bills'}},
+    {name:'Provider bill',type:'file',cells:{sd:"The surgeon's bill",er:"The doctor's bill"}},
+    {name:'Anesthesia bill',type:'file',cells:{sd:'The anesthesia bill'}},
+    {name:'Prenatal bills',type:'file',cells:{mat:'Prenatal care bills'}},
+    {name:'Self-pay proof',type:'file',cells:{sd:'Proof the bill was billed as self-pay',er:'Proof the bill was billed as self-pay'}},
+    {name:'Other / follow-up bills',type:'file',opt:['sd','er','mat'],cells:{sd:'Any other bills from this same surgery',er:'Any follow-up bills from this same visit',mat:'Any other related bills'}},
+    {name:'Financial-assistance question',type:'radio',cells:{er:'Did you apply for financial assistance (charity care)?'}},
+    {name:'Charity-care acknowledgement',type:'terms',cells:{er:'I have read the note about financial assistance'}},
+  ]},
+  {seq:7,arch:'Medical Records',members:['su','sd','er','mat'],slots:[
+    {name:'Visit notes',type:'file',cells:{su:'Last 3 visit notes from your doctor',er:'Your ER visit notes',mat:'Prenatal records or visit notes'}},
+    {name:'Surgical report',type:'file',cells:{sd:'The surgical report'}},
+    {name:'Discharge paperwork',type:'file',cells:{sd:'Discharge paperwork',er:'Your discharge instructions'}},
+    {name:'Test / lab results',type:'file',cells:{su:'Any recent test results related to this surgery',sd:'Any test results from this surgery',er:'Lab or imaging results from the visit',mat:'Lab, ultrasound, or test results'}},
+  ]},
+];
+
+/* ---------- counts ---------- */
+const totReq=ALL.filter(f=>f.req).length, totOpt=ALL.length-totReq;
+const totFree=ALL.filter(f=>f.free).length, freeOpt=ALL.filter(f=>f.free&&!f.req).length;
+const pct=Math.round(totReq/ALL.length*100);
+document.getElementById('pct').innerHTML=pct+'<small>% req</small>';
+document.getElementById('reqlbl').textContent='required · '+totReq;
+document.getElementById('optlbl').textContent=totOpt+' · optional';
+const br=document.getElementById('barreq'),bo=document.getElementById('baropt');
+br.style.flex=totReq; bo.style.flex=totOpt;
+document.getElementById('barreqn').textContent=totReq;
+document.getElementById('baroptn').textContent=totOpt;
+document.getElementById('totlbl').textContent=ALL.length+' input fields total';
+document.getElementById('freelbl').textContent=freeOpt+' free-text fields await min-length';
+
+/* ---------- shared bands ---------- */
+function sharedBand(p){
+  const r=p.fields.filter(f=>f.req).length, o=p.fields.length-r;
+  const chips=p.fields.map(f=>`<span class="chip ${f.req?'req':'opt'}">
+      <span class="cb">${f.req?'REQ':'OPT'}</span><span>${f.label}</span>
+      <span class="ct">${f.type}</span>${f.free?'<span class="fd">◖</span>':''}</span>`).join('');
+  return `<div class="shared-band"><div class="sb-head">
+      <span class="sb-seq">${p.seq}</span><span class="sb-title">${p.title}</span>
+      <span class="sb-mini"><b class="r">${r} req</b><b class="o">${o} opt</b></span></div>
+    <div class="sb-fields">${chips}</div></div>`;
+}
+document.getElementById('shared-top').innerHTML=SHARED_TOP.map(sharedBand).join('');
+document.getElementById('shared-bottom').innerHTML=SHARED_BOTTOM.map(sharedBand).join('');
+
+/* ---------- branch header with per-branch req/opt ---------- */
+function branchCounts(bid){
+  const pset=new Set(BRANCH_PAGES[bid]);
+  const fs=ALL.filter(f=>pset.has(f.pid));
+  const r=fs.filter(f=>f.req).length; return {r,o:fs.length-r};
+}
+document.getElementById('bhead').innerHTML=
+  `<div>Page&nbsp;type ↓ &nbsp;/&nbsp; Branch →</div>`+
+  BRANCHES.map(b=>{const c=branchCounts(b.id);
+    return `<div><div class="bname">${b.name}</div>
+      <span class="breq"><b class="r">${c.r} req</b><b class="o">${c.o} opt</b></span></div>`;}).join('');
+
+/* ---------- archetype bands ---------- */
+document.getElementById('bands').innerHTML=BANDS.map(band=>{
+  const onlyIn=band.members.length<5?'only in: '+band.members.map(m=>BRANCHES.find(b=>b.id===m).name).join(', '):'all five branches';
+  let html=`<div class="band"><div class="colgrid">`;
+  html+=`<div class="band-title"><span class="seq">${band.seq}</span>${band.arch}<span class="scope">${onlyIn}</span></div>`;
+  band.slots.forEach(slot=>{
+    const optSet=new Set(slot.opt||[]);
+    html+=`<div class="slot"><div class="rowlabel"><span class="rl-name">${slot.name}</span><span class="rl-sub">${slot.type}</span></div>`;
+    BRANCHES.forEach(b=>{
+      if(!band.members.includes(b.id)){ html+=`<div class="cell na"><span class="nai">— n/a —</span></div>`; return; }
+      const lbl=slot.cells[b.id];
+      if(!lbl){ html+=`<div class="cell gap"><span class="dash">—</span></div>`; return; }
+      if(slot.display){ html+=`<div class="cell"><span class="flabel" style="color:var(--disp)">${lbl}</span><span class="badge" style="color:var(--disp)">DISPLAY</span></div>`; return; }
+      const isReq=!optSet.has(b.id);
+      const free=ALL.some(f=>f.free&&f.label===lbl);
+      html+=`<div class="cell ${isReq?'req':'opt'}">
+        <span class="flabel">${lbl}</span>
+        <span class="badge">${isReq?'✓ REQUIRED':'○ OPTIONAL'}</span>
+        ${free?'<span class="free-dot">◖</span>':''}</div>`;
+    });
+    html+=`</div>`;
+  });
+  html+=`</div></div>`;
+  return html;
+}).join('');
+
+/* ---------- conversion checklist (all optional, grouped by page in form order) ---------- */
+const PAGE_ORDER=['page_about_you','page_request','page_surg_provider','page_surg_details','page_surg_forms','page_surg_records','page_post_provider','page_post_bills','page_post_records','page_er_visit','page_er_bills','page_er_records','page_mat_provider','page_mat_bills','page_mat_records','page_other','page_close_dd','page_close_auth'];
+let ck='';
+PAGE_ORDER.forEach(pid=>{
+  const opt=ALL.filter(f=>f.pid===pid&&!f.req);
+  if(!opt.length) return;
+  const title=opt[0].page;
+  ck+=`<div class="ck-page"><div class="ck-h"><span class="ck-t">${title}</span>
+      <span class="ck-c">${opt.length} to make required</span></div>`;
+  opt.forEach(f=>{ ck+=`<div class="ck-row"><span class="box"></span>
+      <span class="ck-lbl">${f.label}</span>
+      ${f.free?'<span class="ck-free">min-length?</span>':''}
+      <span class="ck-ty">${f.type}</span></div>`; });
+  ck+=`</div>`;
+});
+document.getElementById('checklist').innerHTML=ck;
+
+/* ---------- footer ---------- */
+document.getElementById('footer').innerHTML=
+  `<b>Snapshot.</b> ${totReq} of ${ALL.length} input fields are now required (${pct}%). The ${totOpt} still optional are the 7 free-text "additional / anything else / if-known" catch-alls and the 4 provider Tax-ID fields. `+
+  `Everything in the provider, bills, records, forms and direct-deposit pages is currently optional.<br>`+
+  `<b>Free-text (◖):</b> ${totFree} fields are text/textarea/email/phone — candidates for a future minimum-character rule (${freeOpt} of them also still optional). `+
+  `<b>Source:</b> share-request-form.definition.json · "FUTURE SR/PREV FORM COMBINED" v9. Counts exclude display-only intro/callout blocks.`;
+</script>
+</body>
+</html>

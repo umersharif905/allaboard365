@@ -1,0 +1,31 @@
+# Open-Enroll Rules — see .cursor/rules/
+
+> **This legacy file is deprecated.** The maintained, scoped rules live in `.cursor/rules/*.mdc`
+> (auto-attached by file type) and `CLAUDE.md` at the repo root. Read those first.
+>
+> Rule map:
+> - `.cursor/rules/ui-consistency.mdc` — frontend styling
+> - `.cursor/rules/backend-api.mdc`   — API conventions & tenant isolation
+> - `.cursor/rules/database.mdc`      — DB write policy & SQL conventions
+> - `.cursor/rules/testing.mdc`       — test strategy
+> - `.cursor/rules/core.mdc`          — operating modes
+> - `.cursor/rules/memory-bank.mdc`   — documentation workflow
+
+This file is kept only as a pointer for tools that read `.cursorrules` directly. The
+non-negotiables below are summarized here so those tools still see them — the full,
+authoritative versions are in the files above.
+
+## Critical hard rules
+
+- **Tenant isolation:** every DB query filters by `TenantId`; never bypass `requireTenantAccess`.
+- **DB writes:** no `INSERT`/`UPDATE`/`DELETE`/DDL without explicit user approval; data-modifying
+  scripts default to a dry-run/`SELECT` preview.
+- **Brand colors:** use `bg-oe-primary hover:bg-oe-dark` (and `oe-*` tokens) for interactive
+  elements. **Never** use raw Tailwind blues (`blue-600`, `blue-700`, `ring-blue-500`) — they break
+  per-tenant theming.
+- **UI stack:** Tailwind CSS · Lucide React icons · native HTML elements for all new/modified UI.
+  No CSS-in-JS, inline styles, or other UI/icon libraries. **No new Material-UI** — MUI lives in ~38
+  legacy files; leave them working and migrate only when already editing. No drive-by rewrites.
+- **API responses:** always `{ success: boolean, data?, message? }`.
+- **Tests:** Cypress for functionality features (not purely visual changes); unit tests for
+  services/utilities.

@@ -1,0 +1,76 @@
+{
+  "success": {
+    "success": true,
+    "data": {
+      "memberId": "member-new-001",
+      "userId": "user-new-001",
+      "enrollmentIds": ["enrollment-001"],
+      "enrollmentStatus": "Active",
+      "passwordSetupRequired": true
+    }
+  },
+  "successPaymentHold": {
+    "success": true,
+    "data": {
+      "memberId": "member-new-001",
+      "userId": "user-new-001",
+      "enrollmentIds": ["enrollment-001"],
+      "enrollmentStatus": "PaymentHold",
+      "passwordSetupRequired": true
+    }
+  },
+  "paymentDeclined": {
+    "success": false,
+    "error": {
+      "code": "PAYMENT_ERROR",
+      "message": "Card declined",
+      "details": "Do Not Honor"
+    }
+  },
+  "dimeDeclined": {
+    "success": false,
+    "error": {
+      "code": "DIME_DECLINED",
+      "message": "Payment declined",
+      "details": "Insufficient funds",
+      "statusCode": "51"
+    }
+  },
+  "duplicateMember": {
+    "success": false,
+    "error": {
+      "code": "DUPLICATE_MEMBER",
+      "message": "This person is already enrolled with this organization"
+    }
+  },
+  "memberInGroup": {
+    "success": false,
+    "error": {
+      "code": "MEMBER_IN_GROUP",
+      "message": "This person is already a member of a group with this organization"
+    }
+  },
+  "paymentInProgress": {
+    "success": false,
+    "error": {
+      "code": "PAYMENT_IN_PROGRESS",
+      "message": "An enrollment payment is already in progress for this email"
+    }
+  },
+  "serverError": {
+    "success": false,
+    "error": {
+      "code": "INTERNAL_ERROR",
+      "message": "An unexpected error occurred"
+    }
+  },
+  "pricingCalculationFailed": {
+    "success": false,
+    "message": "Pricing could not be calculated for this enrollment. Please verify member date of birth and try again, or contact support.",
+    "error": {
+      "code": "PRICING_CALCULATION_FAILED",
+      "reportId": "test-report-pricing-failed",
+      "details": "No pricing found for product \"GetWell Dental\" with tier EE, age 0"
+    }
+  }
+}

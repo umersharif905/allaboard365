@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>New commission payout generated — {{tenantName}}</title>
+    <style>
+        body { font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; padding: 20px; background-color: #f8f9fa; }
+        .container { background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1); overflow: hidden; }
+        .header { background-color: #1f8dbf; color: white; padding: 24px 20px; text-align: center; }
+        .logo-wrap { margin-bottom: 12px; }
+        .logo-wrap img { max-height: 56px; max-width: 240px; }
+        .header h1 { margin: 0; font-size: 22px; font-weight: 600; }
+        .content { padding: 28px; }
+        .lead { font-size: 16px; margin: 0 0 16px 0; }
+        .cta-wrap { text-align: center; margin: 28px 0; }
+        .cta { display: inline-block; background-color: #1f8dbf; color: #ffffff !important; padding: 12px 24px; border-radius: 6px; text-decoration: none; font-weight: 600; font-size: 15px; }
+        .footer { background-color: #f8f9fa; padding: 18px; text-align: center; color: #6c757d; font-size: 13px; }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="header">
+            {{#logoUrl}}
+            <div class="logo-wrap"><img src="{{logoUrl}}" alt="{{tenantName}}" /></div>
+            {{/logoUrl}}
+            <h1>New commission payout generated</h1>
+        </div>
+        <div class="content">
+            <p class="lead">Hi there,</p>
+            <p class="lead">A new commission payout has just been generated. You can check your agent portal to review the details.</p>
+            <div class="cta-wrap">
+                <a class="cta" href="{{portalUrl}}">Access portal</a>
+            </div>
+            <p style="color:#555;font-size:14px;">If the button doesn&apos;t work, copy and paste this link into your browser:<br/><span style="color:#1f8dbf;word-break:break-all;">{{portalUrl}}</span></p>
+            <p style="margin-top:20px;">— {{tenantName}}</p>
+        </div>
+        <div class="footer">
+            <p><strong>{{tenantName}}</strong></p>
+            <p>📧 {{supportEmail}}</p>
+            <p>Automated message — do not reply.</p>
+        </div>
+    </div>
+</body>
+</html>

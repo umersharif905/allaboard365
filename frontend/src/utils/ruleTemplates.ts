@@ -1,0 +1,72 @@
+// src/utils/ruleTemplates.ts
+export const ruleTemplates = {
+  medicareAdvantage: {
+    name: 'Standard Medicare Advantage Commission',
+    description: 'Standard tiered commission structure for Medicare Advantage plans',
+    entityType: 'Tier',
+    commissionType: 'Tiered',
+    tiers: [
+      { level: 0, name: 'Agent', rate: 0.05 },
+      { level: 1, name: 'GA', rate: 0.02 },
+      { level: 2, name: 'MGA', rate: 0.01 },
+      { level: 3, name: 'FMO', rate: 0.005 },
+      { level: 4, name: 'IMO', rate: 0.0025 },
+      { level: 5, name: 'NMO', rate: 0.001 },
+    ],
+    renewable: true,
+    yearlySchedule: [
+      { year: 1, rate: 1.0 },
+      { year: 2, rate: 0.5 },
+      { year: 3, rate: 0.5 },
+      { year: 4, rate: 0.5 },
+      { year: 5, rate: 0.5 },
+      { year: 6, rate: 0.5 },
+    ],
+  },
+  medicareSupplement: {
+    name: 'Medicare Supplement Commission',
+    description: 'Higher initial commission for Medicare Supplement plans',
+    entityType: 'Tier',
+    commissionType: 'Tiered',
+    tiers: [
+      { level: 0, name: 'Agent', rate: 0.10 },
+      { level: 1, name: 'GA', rate: 0.015 },
+      { level: 2, name: 'MGA', rate: 0.0075 },
+      { level: 3, name: 'FMO', rate: 0.005 },
+    ],
+    renewable: true,
+    yearlySchedule: [
+      { year: 1, rate: 1.0 },
+      { year: 2, rate: 0.05 },
+      { year: 3, rate: 0.05 },
+      { year: 4, rate: 0.05 },
+      { year: 5, rate: 0.05 },
+      { year: 6, rate: 0.05 },
+    ],
+  },
+  ancillaryFlat: {
+    name: 'Ancillary Product Flat Rate',
+    description: 'Flat dollar amount for ancillary products',
+    entityType: 'Tier',
+    commissionType: 'Flat',
+    tiers: [
+      { level: 0, name: 'Agent', flatAmount: 50 },
+      { level: 1, name: 'GA', flatAmount: 10 },
+      { level: 2, name: 'MGA', flatAmount: 5 },
+    ],
+    renewable: false,
+  },
+  volumeBasedBonus: {
+    name: 'Volume-Based Bonus Structure',
+    description: 'Additional commission based on enrollment volume',
+    entityType: 'Agent',
+    commissionType: 'Tiered',
+    bonusEligible: true,
+    bonusThresholds: [
+      { enrollments: 10, bonus: 100 },
+      { enrollments: 25, bonus: 250 },
+      { enrollments: 50, bonus: 500 },
+      { enrollments: 100, bonus: 1000 },
+    ],
+  },
+};

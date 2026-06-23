@@ -1,0 +1,10 @@
+/frontend/src/pages/[role]/  - Roles are userType
+- SysAdmin [Admin]: Dashboard, Marketplace, tenants, UserManagement, members, Accounting, settings
+- TenantAdmin: Dashboard, UserManagement, Groups, Members, Marketplace, Accounting, Settings
+- Agent: Dashboard, MemberDirectory, GroupEnrollment, SalesTools, Commissions 
+- GroupAdmin: Dashboard, EmployeeManagement, EnrollmentTools, Payment Method
+- Member: Dashboard, ProfileManagement, DependentManagement, EnrollmentWizard, Individual Payment Method (not group)
+
+Commission UI Phases:
+- Dashboard: CommissionDashboard.tsx, SummaryCards, TrendChart, RecentCommissionsTable, QuickActions
+- Rules Config: CommissionRulesManager.tsx, RulesDataGrid, RuleCreationWizard, TierRateBuilder, AdvancedRuleEditor

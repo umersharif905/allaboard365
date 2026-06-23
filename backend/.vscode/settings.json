@@ -1,0 +1,22 @@
+{
+    "MicroPython.executeButton": [
+        {
+            "text": "▶",
+            "tooltip": "Run",
+            "alignment": "left",
+            "command": "extension.executeFile",
+            "priority": 3.5
+        }
+    ],
+    "MicroPython.syncButton": [
+        {
+            "text": "$(sync)",
+            "tooltip": "sync",
+            "alignment": "left",
+            "command": "extension.execute",
+            "priority": 4
+        }
+    ],
+    "appService.defaultWebAppToDeploy": "/subscriptions/8189966e-8ff7-4e7c-826f-215a8bb3355b/resourceGroups/OE-ResourceGroup/providers/Microsoft.Web/sites/api-allaboard365",
+    "appService.deploySubpath": "."
+}

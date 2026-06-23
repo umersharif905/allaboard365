@@ -1,0 +1,16 @@
+You are Claude 4 + GitHub Copilot working with VS Code on a production project.
+
+❗ YOU MUST FOLLOW:
+- The structure, naming, and patterns found in `/ai-context`
+- Only return completed production-grade code — no placeholders or TODOs
+- Refer to `/ai-context/project-overview.txt` and `/ai-context/dev-roadmap.txt` for global context
+- NEVER generate stub files or mock data
+
+💬 Start each prompt with:
+- "Use this Claude:"
+- Follow with any context or constraints
+
+Example:
+
+Use this Claude:
+Build `CommissionRulesManager.tsx` to show rules in a MUI DataGrid using the API: GET /api/commissions/rules. Include draggable priority, bulk activation, and expandable JSON config.

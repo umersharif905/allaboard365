@@ -1,0 +1,1078 @@
+{
+  "mode": "DRY_RUN",
+  "database": "allboard-prod.database.windows.net / allaboard-prod (PROD)",
+  "tenant": {
+    "TenantId": "AE8A82A9-632D-4655-AEDA-7CB563D3A8C6",
+    "Name": "ShareWELL Health"
+  },
+  "existingCommissionGroups": 0,
+  "existingAgentsInTenant": 0,
+  "rosterAgents": 130,
+  "prerequisite": {
+    "title": "Step 1 — Reconfigure tenant commission levels (Tenant Portal → Commission Levels)",
+    "targetLadder": [
+      "SortOrder 1: Associate",
+      "SortOrder 2: Agent",
+      "SortOrder 3: Agency",
+      "SortOrder 4: GA"
+    ],
+    "actions": [
+      {
+        "action": "UPDATE_SORT_ORDER",
+        "displayName": "Associate",
+        "from": -1,
+        "to": 1,
+        "commissionLevelId": "C9A13815-B7CA-4551-9810-EC1E44492B97"
+      },
+      {
+        "action": "UPDATE_SORT_ORDER",
+        "displayName": "Agent",
+        "from": 0,
+        "to": 2,
+        "commissionLevelId": "B995E420-5534-4F8D-80E6-0648DBB5A4B5"
+      },
+      {
+        "action": "UPDATE_SORT_ORDER",
+        "displayName": "Agency",
+        "from": 1,
+        "to": 3,
+        "commissionLevelId": "83D96F37-35D4-4F03-A28C-38073A45306D"
+      },
+      {
+        "action": "UPDATE_SORT_ORDER",
+        "displayName": "GA",
+        "from": 2,
+        "to": 4,
+        "commissionLevelId": "9057DAE7-EBF0-49DF-A9DD-5F945CEF28E1"
+      },
+      {
+        "action": "DEACTIVATE",
+        "displayName": "MGA",
+        "sortOrder": 3,
+        "commissionLevelId": "9EA8B71F-FE07-4BCF-9BBD-0D87D36472B8"
+      },
+      {
+        "action": "DEACTIVATE",
+        "displayName": "IMO",
+        "sortOrder": 4,
+        "commissionLevelId": "34F3398F-8977-4742-846C-1E642DC5085C"
+      },
+      {
+        "action": "DEACTIVATE",
+        "displayName": "FMO",
+        "sortOrder": 5,
+        "commissionLevelId": "930EA9CC-0F08-48A9-8D97-518996230CA2"
+      },
+      {
+        "action": "DEACTIVATE",
+        "displayName": "Enterprise/Carrier",
+        "sortOrder": 6,
+        "commissionLevelId": "E2E93D13-3528-486A-8B93-E3574E6B88BD"
+      }
+    ]
+  },
+  "importSummary": {
+    "groupsToCreate": 9,
+    "groupsExcluded": 1,
+    "totalTieredRules": 36,
+    "agentAssignmentsPending": 130,
+    "note": "No agents in tenant yet — assignments happen after E123 agent migration"
+  },
+  "groups": [
+    {
+      "sheetName": "Global Benefits",
+      "groupName": "Global Benefits",
+      "excludeFromImport": false,
+      "upline": "Ronnie Sulimani / Global Benefits (782721)",
+      "agencies": "",
+      "dualContext": true,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 63,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 4,
+          "sample": {
+            "context": "Individual",
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 26
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell Copay MEC",
+          "tiers": 4,
+          "sample": {
+            "context": "Individual",
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 45
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell HSA MEC",
+          "tiers": 4,
+          "sample": {
+            "context": "Individual",
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 35
+              }
+            }
+          }
+        },
+        {
+          "product": "GetWell Dental",
+          "tiers": 4,
+          "sample": {
+            "context": "Individual",
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "undefined": {
+                "flatAmount": 15.7
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "2T-17 Dustin Neilson +1",
+      "groupName": "2-tier · Agency $17 Essential MO · Dustin Neilson; William Morris - Sarasota Financial Group",
+      "excludeFromImport": false,
+      "upline": "Steve Schone (785508)",
+      "agencies": "Dustin Neilson; William Morris - Sarasota Financial Group",
+      "dualContext": false,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 6,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 26
+              },
+              "ES": {
+                "flatAmount": 32
+              },
+              "EC": {
+                "flatAmount": 32
+              },
+              "EF": {
+                "flatAmount": 38
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell Copay MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 45
+              },
+              "ES": {
+                "flatAmount": 55
+              },
+              "EC": {
+                "flatAmount": 55
+              },
+              "EF": {
+                "flatAmount": 65
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell HSA MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 25
+              },
+              "ES": {
+                "flatAmount": 35
+              },
+              "EC": {
+                "flatAmount": 35
+              },
+              "EF": {
+                "flatAmount": 45
+              }
+            }
+          }
+        },
+        {
+          "product": "GetWell Dental",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "undefined": {
+                "flatAmount": 21.4
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "2T-20 365 Marketing LLC - Mark",
+      "groupName": "2-tier · Agency $20 Essential MO · 365 Marketing LLC - Mark Mattlage; Daniel Robbins; Edge Health Agency Inc. - Bill Andersen",
+      "excludeFromImport": false,
+      "upline": "Steve Schone (785508)",
+      "agencies": "365 Marketing LLC - Mark Mattlage; Daniel Robbins; Edge Health Agency Inc. - Bill Andersen",
+      "dualContext": false,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 10,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 26
+              },
+              "ES": {
+                "flatAmount": 32
+              },
+              "EC": {
+                "flatAmount": 32
+              },
+              "EF": {
+                "flatAmount": 38
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell Copay MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 45
+              },
+              "ES": {
+                "flatAmount": 55
+              },
+              "EC": {
+                "flatAmount": 55
+              },
+              "EF": {
+                "flatAmount": 65
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell HSA MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 35
+              },
+              "ES": {
+                "flatAmount": 45
+              },
+              "EC": {
+                "flatAmount": 45
+              },
+              "EF": {
+                "flatAmount": 55
+              }
+            }
+          }
+        },
+        {
+          "product": "GetWell Dental",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "undefined": {
+                "flatAmount": 15.7
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "2T-20 American Health Benefits",
+      "groupName": "2-tier · Agency $20 Essential MO · American Health Benefits Team, LLC",
+      "excludeFromImport": false,
+      "upline": "Steve Schone (785508)",
+      "agencies": "American Health Benefits Team, LLC",
+      "dualContext": false,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 1,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 26
+              },
+              "ES": {
+                "flatAmount": 32
+              },
+              "EC": {
+                "flatAmount": 32
+              },
+              "EF": {
+                "flatAmount": 38
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell Copay MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 45
+              },
+              "ES": {
+                "flatAmount": 55
+              },
+              "EC": {
+                "flatAmount": 55
+              },
+              "EF": {
+                "flatAmount": 65
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell HSA MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 35
+              },
+              "ES": {
+                "flatAmount": 45
+              },
+              "EC": {
+                "flatAmount": 45
+              },
+              "EF": {
+                "flatAmount": 55
+              }
+            }
+          }
+        },
+        {
+          "product": "GetWell Dental",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "undefined": {
+                "flatAmount": 15.7
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "2T-20 Bridge Solutions, LLC",
+      "groupName": "2-tier · Agency $20 Essential MO · Bridge Solutions, LLC",
+      "excludeFromImport": false,
+      "upline": "Steve Schone (785508)",
+      "agencies": "Bridge Solutions, LLC",
+      "dualContext": false,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 12,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 26
+              },
+              "ES": {
+                "flatAmount": 32
+              },
+              "EC": {
+                "flatAmount": 32
+              },
+              "EF": {
+                "flatAmount": 38
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell Copay MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 40
+              },
+              "ES": {
+                "flatAmount": 50
+              },
+              "EC": {
+                "flatAmount": 50
+              },
+              "EF": {
+                "flatAmount": 60
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell HSA MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 30
+              },
+              "ES": {
+                "flatAmount": 40
+              },
+              "EC": {
+                "flatAmount": 40
+              },
+              "EF": {
+                "flatAmount": 50
+              }
+            }
+          }
+        },
+        {
+          "product": "GetWell Dental",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "undefined": {
+                "flatAmount": 15.7
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "2T-20 Karen Maria Miller",
+      "groupName": "2-tier · Agency $20 Essential MO · Karen Maria Miller",
+      "excludeFromImport": false,
+      "upline": "Steve Schone (785508)",
+      "agencies": "Karen Maria Miller",
+      "dualContext": false,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 3,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 26
+              },
+              "ES": {
+                "flatAmount": 32
+              },
+              "EC": {
+                "flatAmount": 32
+              },
+              "EF": {
+                "flatAmount": 38
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell Copay MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 50
+              },
+              "ES": {
+                "flatAmount": 60
+              },
+              "EC": {
+                "flatAmount": 60
+              },
+              "EF": {
+                "flatAmount": 70
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell HSA MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 40
+              },
+              "ES": {
+                "flatAmount": 50
+              },
+              "EC": {
+                "flatAmount": 50
+              },
+              "EF": {
+                "flatAmount": 60
+              }
+            }
+          }
+        },
+        {
+          "product": "GetWell Dental",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "undefined": {
+                "flatAmount": 15.7
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "2T-21 Jose Marchan",
+      "groupName": "2-tier · Agency $21 Essential MO · Jose Marchan",
+      "excludeFromImport": false,
+      "upline": "Steve Schone (785508)",
+      "agencies": "Jose Marchan",
+      "dualContext": false,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 6,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 26
+              },
+              "ES": {
+                "flatAmount": 30
+              },
+              "EC": {
+                "flatAmount": 30
+              },
+              "EF": {
+                "flatAmount": 35
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell Copay MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 45
+              },
+              "ES": {
+                "flatAmount": 55
+              },
+              "EC": {
+                "flatAmount": 55
+              },
+              "EF": {
+                "flatAmount": 65
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell HSA MEC",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 35
+              },
+              "ES": {
+                "flatAmount": 45
+              },
+              "EC": {
+                "flatAmount": 45
+              },
+              "EF": {
+                "flatAmount": 55
+              }
+            }
+          }
+        },
+        {
+          "product": "GetWell Dental",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "undefined": {
+                "flatAmount": 15.7
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "3T-15 Mark Mattlage Individuals",
+      "groupName": "3-tier · Agency $15 Essential MO · Mark Mattlage Individuals",
+      "excludeFromImport": false,
+      "upline": "Steve Schone (785508)",
+      "agencies": "Mark Mattlage Individuals",
+      "dualContext": false,
+      "tierCount": 3,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 3",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agent",
+          "sortOrder": 2
+        }
+      ],
+      "agentCount": 10,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 3,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 26
+              },
+              "ES": {
+                "flatAmount": 32
+              },
+              "EC": {
+                "flatAmount": 32
+              },
+              "EF": {
+                "flatAmount": 38
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell Copay MEC",
+          "tiers": 3,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 45
+              },
+              "ES": {
+                "flatAmount": 55
+              },
+              "EC": {
+                "flatAmount": 55
+              },
+              "EF": {
+                "flatAmount": 65
+              }
+            }
+          }
+        },
+        {
+          "product": "Mightywell HSA MEC",
+          "tiers": 3,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 25
+              },
+              "ES": {
+                "flatAmount": 35
+              },
+              "EC": {
+                "flatAmount": 35
+              },
+              "EF": {
+                "flatAmount": 45
+              }
+            }
+          }
+        },
+        {
+          "product": "GetWell Dental",
+          "tiers": 3,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "undefined": {
+                "flatAmount": 26.4
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Scott Thompson",
+      "groupName": "Scott Thompson",
+      "excludeFromImport": false,
+      "upline": "Scott Thompson (893995)",
+      "agencies": "",
+      "dualContext": false,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 9,
+      "ruleCount": 4,
+      "rules": [
+        {
+          "product": "ShareWELL Connect *",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 58
+              },
+              "ES": {
+                "flatAmount": 78
+              },
+              "EC": {
+                "flatAmount": 78
+              },
+              "EF": {
+                "flatAmount": 98
+              }
+            }
+          }
+        },
+        {
+          "product": "ShareWELL Connect *",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 58
+              },
+              "ES": {
+                "flatAmount": 78
+              },
+              "EC": {
+                "flatAmount": 78
+              },
+              "EF": {
+                "flatAmount": 98
+              }
+            }
+          }
+        },
+        {
+          "product": "Connected Wellness",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 62.75
+              },
+              "ES": {
+                "flatAmount": 80.75
+              },
+              "EC": {
+                "flatAmount": 80.75
+              },
+              "EF": {
+                "flatAmount": 98.75
+              }
+            }
+          }
+        },
+        {
+          "product": "Connected Wellness",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 59.75
+              },
+              "ES": {
+                "flatAmount": 80.75
+              },
+              "EC": {
+                "flatAmount": 80.75
+              },
+              "EF": {
+                "flatAmount": 99.75
+              }
+            }
+          }
+        }
+      ]
+    },
+    {
+      "sheetName": "Vendor Copy-Overs",
+      "groupName": "Vendor Copy-Overs",
+      "excludeFromImport": true,
+      "upline": "Steve Schone (vendor passthrough)",
+      "agencies": "",
+      "dualContext": false,
+      "tierCount": 2,
+      "tiers": [
+        {
+          "sheetTier": "Agent Tier 2",
+          "tenantLevel": "GA",
+          "sortOrder": 4
+        },
+        {
+          "sheetTier": "Agent Tier 1",
+          "tenantLevel": "Agency",
+          "sortOrder": 3
+        }
+      ],
+      "agentCount": 8,
+      "ruleCount": 1,
+      "rules": [
+        {
+          "product": "Essential (ShareWELL)",
+          "tiers": 2,
+          "sample": {
+            "sortOrder": 4,
+            "levelName": "GA",
+            "productTiers": {
+              "EE": {
+                "flatAmount": 10
+              },
+              "ES": {
+                "flatAmount": 15
+              },
+              "EC": {
+                "flatAmount": 15
+              },
+              "EF": {
+                "flatAmount": 20
+              }
+            }
+          }
+        }
+      ]
+    }
+  ],
+  "rosterByGroup": {
+    "2T-20 365 Marketing LLC - Mark ": 10,
+    "2T-21 Jose Marchan": 6,
+    "Global Benefits": 63,
+    "Vendor Copy-Overs": 9,
+    "2T-20 American Health Benefits ": 1,
+    "Scott Thompson": 10,
+    "2T-20 Bridge Solutions, LLC": 12,
+    "3T-15 Mark Mattlage Individuals": 10,
+    "2T-17 Dustin Neilson +1": 6,
+    "2T-20 Karen Maria Miller": 3
+  },
+  "productMappingGaps": [
+    "Vision",
+    "Labs"
+  ],
+  "warnings": [
+    "Global Benefits · Sharewell Essential · Agent Tier 1: Individual vs Groups amounts differ — may need separate commission groups or manual rule split",
+    "Global Benefits · Copay MEC · Agent Tier 1: Individual vs Groups amounts differ — may need separate commission groups or manual rule split",
+    "Global Benefits · HAS MEC · Agent Tier 1: Individual vs Groups amounts differ — may need separate commission groups or manual rule split"
+  ]
+}

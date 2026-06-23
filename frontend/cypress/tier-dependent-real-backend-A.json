@@ -1,0 +1,105 @@
+{
+  "runLabel": "A",
+  "primary": {
+    "firstName": "CypressPrimaryA1776805905914",
+    "lastName": "RealBackend",
+    "email": "cypress.primary.A.1776805905914@test.local",
+    "phone": "5558675309",
+    "dateOfBirth": "1990-06-15",
+    "gender": "Female",
+    "ssn": "123456789",
+    "address": "123 Main Street",
+    "city": "Austin",
+    "state": "TX",
+    "zip": "78701",
+    "tobaccoUse": "N"
+  },
+  "request": {
+    "memberId": "",
+    "memberInfo": {
+      "firstName": "CypressPrimaryA1776805905914",
+      "lastName": "RealBackend",
+      "email": "cypress.primary.A.1776805905914@test.local",
+      "phone": "5558675309",
+      "dateOfBirth": "1990-06-15",
+      "gender": "Female",
+      "ssn": "123456789",
+      "address": "123 Main Street",
+      "city": "Austin",
+      "state": "TX",
+      "zip": "78701",
+      "tobaccoUse": "N"
+    },
+    "memberTier": "EC",
+    "selectedProducts": [
+      "8941BEE7-FAD0-4027-B234-D3331603E053"
+    ],
+    "selectedConfigs": {
+      "8941BEE7-FAD0-4027-B234-D3331603E053": null
+    },
+    "frontendPricing": [
+      {
+        "productId": "8941BEE7-FAD0-4027-B234-D3331603E053",
+        "productName": "MightyWELL CoPay (Individual)",
+        "monthlyPremium": 491.15,
+        "selectedConfig": null
+      }
+    ],
+    "frontendCalculatedAmount": 491.15,
+    "householdMembers": [
+      {
+        "firstName": "CypressAlpha1776805893423",
+        "lastName": "Collide",
+        "dateOfBirth": "2015-01-01",
+        "gender": "Male",
+        "relationship": "Child",
+        "relationshipType": "C",
+        "tier": "EC"
+      },
+      {
+        "firstName": "CypressBeta1776805893423",
+        "lastName": "Collide",
+        "dateOfBirth": "2016-02-02",
+        "gender": "Female",
+        "relationship": "Child",
+        "relationshipType": "C",
+        "tier": "EC"
+      }
+    ],
+    "effectiveDate": "2026-05-21",
+    "dependents": [
+      {
+        "firstName": "CypressAlpha1776805893423",
+        "lastName": "Collide",
+        "dateOfBirth": "2015-01-01",
+        "gender": "Male",
+        "relationship": "Child",
+        "relationshipType": "C",
+        "tier": "EC"
+      },
+      {
+        "firstName": "CypressBeta1776805893423",
+        "lastName": "Collide",
+        "dateOfBirth": "2016-02-02",
+        "gender": "Female",
+        "relationship": "Child",
+        "relationshipType": "C",
+        "tier": "EC"
+      }
+    ],
+    "acknowledgements": [],
+    "digitalSignature": "Cypress Signature",
+    "ipAddress": "127.0.0.1",
+    "userAgent": "Cypress-RealBackend-Spec",
+    "skipPaymentProcessing": true,
+    "smsConsent": false
+  },
+  "response": {
+    "status": 500,
+    "body": {
+      "success": false,
+      "message": "Failed to generate HouseholdMemberID - enrollment cannot be completed",
+      "error": "The EXECUTE permission was denied on the object 'GenerateHouseholdMemberID', database 'allaboard-testing', schema 'oe'."
+    }
+  }
+}

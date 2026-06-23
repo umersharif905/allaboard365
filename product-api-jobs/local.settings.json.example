@@ -1,0 +1,10 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "PRODUCT_API_DAILY_ENDPOINT_URL": "http://localhost:5000/api/scheduled-jobs/product-api-daily",
+    "BILLING_AUDIT_DAILY_ENDPOINT_URL": "http://localhost:5000/api/scheduled-jobs/billing-audit-daily",
+    "SCHEDULED_JOB_API_KEY": ""
+  }
+}

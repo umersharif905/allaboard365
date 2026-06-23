@@ -1,0 +1,91 @@
+{
+  "agent": [
+    {
+      "UserId": "5D2DA6A8-3D89-497D-A733-DFA1C9AF8862",
+      "Email": "chris.anderson70+12@gmail.com",
+      "AgentId": "553FE70D-1C21-4404-ACEA-621BDFDFFC2D",
+      "TenantId": "6E5788D0-F320-4D80-85A2-4F0AE579F223",
+      "AgentStatus": "Active"
+    }
+  ],
+  "trainingCompletions": [
+    {
+      "TrainingCompletionId": "3BB11700-9190-4B83-A8BB-C4E760F2117F",
+      "ProductId": "16ACE482-845A-4BC8-9A8F-489CD1D002CE",
+      "AgentId": "553FE70D-1C21-4404-ACEA-621BDFDFFC2D",
+      "MemberId": null,
+      "UserId": "5D2DA6A8-3D89-497D-A733-DFA1C9AF8862",
+      "AttemptNumber": 3,
+      "ScorePercent": 0,
+      "TotalQuestions": 2,
+      "CorrectAnswers": 0,
+      "CompletedAt": "2026-02-04T05:33:22.403Z",
+      "CreatedDate": "2026-02-04T05:33:22.403Z",
+      "ModifiedDate": "2026-02-04T05:33:22.403Z",
+      "AnswersDetail": null
+    },
+    {
+      "TrainingCompletionId": "09773762-C9B7-4F93-B8C9-54E9211AF1AE",
+      "ProductId": "F165AF93-8268-448D-9DD6-F02FB338EEAE",
+      "AgentId": "553FE70D-1C21-4404-ACEA-621BDFDFFC2D",
+      "MemberId": null,
+      "UserId": "5D2DA6A8-3D89-497D-A733-DFA1C9AF8862",
+      "AttemptNumber": 2,
+      "ScorePercent": 100,
+      "TotalQuestions": 3,
+      "CorrectAnswers": 3,
+      "CompletedAt": "2026-02-01T21:51:21.420Z",
+      "CreatedDate": "2026-02-01T21:51:21.420Z",
+      "ModifiedDate": "2026-02-01T21:51:21.420Z",
+      "AnswersDetail": null
+    },
+    {
+      "TrainingCompletionId": "F57B844E-EC89-4481-90AD-C004D88B81B1",
+      "ProductId": "F165AF93-8268-448D-9DD6-F02FB338EEAE",
+      "AgentId": "553FE70D-1C21-4404-ACEA-621BDFDFFC2D",
+      "MemberId": null,
+      "UserId": "5D2DA6A8-3D89-497D-A733-DFA1C9AF8862",
+      "AttemptNumber": 1,
+      "ScorePercent": 0,
+      "TotalQuestions": 3,
+      "CorrectAnswers": 0,
+      "CompletedAt": "2026-02-01T21:51:06.140Z",
+      "CreatedDate": "2026-02-01T21:51:06.140Z",
+      "ModifiedDate": "2026-02-01T21:51:06.140Z",
+      "AnswersDetail": null
+    },
+    {
+      "TrainingCompletionId": "5F852736-473D-4F46-BA06-896F95DE4A36",
+      "ProductId": "16ACE482-845A-4BC8-9A8F-489CD1D002CE",
+      "AgentId": "553FE70D-1C21-4404-ACEA-621BDFDFFC2D",
+      "MemberId": null,
+      "UserId": "5D2DA6A8-3D89-497D-A733-DFA1C9AF8862",
+      "AttemptNumber": 2,
+      "ScorePercent": 50,
+      "TotalQuestions": 2,
+      "CorrectAnswers": 1,
+      "CompletedAt": "2026-02-01T21:43:20.260Z",
+      "CreatedDate": "2026-02-01T21:43:20.260Z",
+      "ModifiedDate": "2026-02-01T21:43:20.260Z",
+      "AnswersDetail": null
+    },
+    {
+      "TrainingCompletionId": "C8DA2F2B-78A2-4B29-9A90-6E8E6561CA84",
+      "ProductId": "16ACE482-845A-4BC8-9A8F-489CD1D002CE",
+      "AgentId": "553FE70D-1C21-4404-ACEA-621BDFDFFC2D",
+      "MemberId": null,
+      "UserId": "5D2DA6A8-3D89-497D-A733-DFA1C9AF8862",
+      "AttemptNumber": 1,
+      "ScorePercent": 0,
+      "TotalQuestions": 2,
+      "CorrectAnswers": 0,
+      "CompletedAt": "2026-02-01T21:41:35.393Z",
+      "CreatedDate": "2026-02-01T21:41:35.393Z",
+      "ModifiedDate": "2026-02-01T21:41:35.393Z",
+      "AnswersDetail": null
+    }
+  ],
+  "moduleCompletions": [],
+  "quizCompletions": [],
+  "certificateAwards": []
+}

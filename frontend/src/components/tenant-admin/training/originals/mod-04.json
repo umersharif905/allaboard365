@@ -1,0 +1,131 @@
+﻿{
+  "id": "mod-04",
+  "title": "Networks",
+  "modulePurpose": "How to Explain Networks So Customers Feel Comfortable Saying Yes\n\nSection Purpose\nThis section teaches agents how to confidently explain how networks work within the MightyWELL bundles in a way that makes customers feel comfortable, informed, and confident moving forward.\nThis is a sales module.\nCustomers often worry about networks because they are used to being restricted in traditional systems. Your job is to explain how this model is different — clearly, simply, and confidently.\nAgents should leave this section understanding:\nMembers can go to any provider they choose\nNetworks make things easier, not restrictive\nIn-network care is simple and convenient\nOut-of-network care is still fully accessible\nNetworks are optional tools, not barriers\nThe health share does not require a network for major health events\nHow to explain networks in plain English without sounding technical\nThe goal is simple:\nMake networks sound easy, flexible, and stress-free.\nBecause when customers feel comfortable, they move forward.",
+  "defaultRequired": true,
+  "attachments": [],
+  "moduleSteps": [
+    {
+      "id": "step-034",
+      "title": "Step 1 – Review Overview",
+      "subtitle": "Review Overview",
+      "copy": "The First Thing to Say in Any Network Conversation\nStart here.\nAlways.\nYou can go to any doctor you want.\nThat sentence immediately removes fear.\nCustomers are used to being told:\n\"You must stay in-network.\"\n \"You need approval.\"\n \"You can't go there.\"\nThis model works differently.\nMembers are never trapped.\nA simple sales line:\nYou can go wherever you feel most comfortable receiving care.\n\nWhy Networks Exist\nNetworks are not rules.\nNetworks are tools.\nThey exist to make healthcare:\neasier\nsmoother\nfaster\nmore predictable\nThey help simplify billing and keep costs consistent, but they do not control where someone can go.\nA strong one-liner:\nNetworks make healthcare easier — they don't control your choices.\nAnother:\nNetworks are there for convenience, not limitations.\n\nThe Networks Available\nMembers have access to large national provider networks, including:\nPHCS MultiPlan\nFirst Health\nThese are widely used networks with thousands of providers across the country.\nBut remember the key message:\nUsing the network is helpful — not required.\nA simple way to explain it:\nThink of the network like a fast lane, not a locked gate.\n\nIn-Network Care — How to Explain It\nIf the provider is in-network:\nThe process is very simple.\nShow your member card\nPay your copay\nReceive care\nThat’s it.\nA strong sales explanation:\nIn-network is the easiest path — show your card, pay your copay, and you're done.\nAnother:\nIn-network is simple and predictable.\n\nOut-of-Network Care — How to Explain It\nIf the provider is out-of-network:\nThe process is still easy.\nReceive care\nPay for the visit\nUpload the invoice through the app\nReceive reimbursement minus your copay\nThat’s the workflow.\nA simple sales explanation:\nOut-of-network is not a problem — it's just one extra step.\nAnother:\nYou can still go anywhere — we just handle the paperwork a little differently.\n\nWhat Customers Usually Worry About\nMost customers ask:\n\"What happens if my doctor is not in-network?\"\nYour answer should be calm and confident.\nSay:\nNo problem — you can still see your doctor.\nOr:\nYou’re not stuck — you always have options.\nOr:\nWe focus on flexibility, not restrictions.\n\nTypical Visit Costs — Keep It Realistic\nMost routine visits — such as:\nurgent care\nprimary care\nspecialist visits\nare generally manageable and predictable.\nThat makes out-of-network care easy to handle.\nThe message to communicate:\nOut-of-network care is manageable, simple, and fully accessible.\n\nHow Networks Fit Into the Bundle\nRemember the structure.\nEvery bundle has two parts.\nPart one:\nEveryday healthcare handled by third-party administered benefits.\nPart two:\nProtection for major health events handled by the health share.\nHere is the key distinction:\nNetworks help with routine care.\nNetworks are not required for major health events.\nFor major health events handled through the health share:\nThere is no network limitation.\nThat flexibility is one of the strongest selling points in the entire model.\nA strong one-liner:\nFor major health events, you can pursue the best care available — no network restrictions.\n\nWhat Agents Should Never Say\nAgents must never say:\n\"You have to stay in-network.\"\n \"You can't go out-of-network.\"\n \"This works exactly like traditional insurance.\"\n \"You need permission to see a provider.\"\nThose statements create confusion and reduce trust.\n\nWhat Agents Should Say Instead\nUse confident, simple language like:\n\"You can go to any doctor you want.\"\n\"Networks make things easier, not restrictive.\"\n\"In-network is the simplest option.\"\n\"Out-of-network is still fully accessible.\"\n\"You always have the freedom to choose your provider.\"\n\"For major health events, there are no network limitations.\"\n\nThe Big Sales Message\nFlexibility builds trust.\nSimplicity builds confidence.\nConfidence closes sales.",
+      "attachments": []
+    },
+    {
+      "id": "step-035",
+      "title": "Step 2 – Review Materials",
+      "subtitle": "Review Materials",
+      "copy": "Agents should review the network tools available in the portal.\nThis includes:\nhow to check if a provider participates in a network\nhow to explain in-network vs out-of-network\nhow to guide members to upload invoices\nhow networks apply to routine care\nhow networks do not apply to major health events\nAgents should keep these materials open while completing the quiz.",
+      "attachments": []
+    },
+    {
+      "id": "step-036",
+      "title": "Step 3 – Quiz Questions",
+      "subtitle": "Take Quiz",
+      "copy": "Module 4 – Networks\n1. True or False\nMembers can go to any provider they choose.\nCorrect Answer: True\n\n2. What is the best way to describe the purpose of networks to a customer?\nA. They restrict where you can go\n B. They make healthcare easier and more convenient\n C. They prevent out-of-network care\nCorrect Answer: B\n\n3. If a provider is in-network, what is the correct process?\nA. Pay the full bill and submit paperwork\n B. Show your member card and pay your copay\n C. Call the network before the visit\nCorrect Answer: B\n\n4. If a provider is out-of-network, what should the member do?\nA. Cancel the visit\n B. Pay the bill and upload the invoice through the app\n C. Wait for approval\nCorrect Answer: B\n\n5. True or False\nOut-of-network care is still allowed and accessible.\nCorrect Answer: True\n\n6. For major health events handled through the health share, members must stay within a network.\nCorrect Answer: False\n\n7. Which statement is the best sales explanation of networks?\nA. You must stay in-network\n B. Networks are there for convenience, not limitations\n C. Out-of-network care is not available\nCorrect Answer: B\n\n8. True or False\nThe main message to customers about networks should be flexibility and choice.\nCorrect Answer: True",
+      "attachments": [],
+      "sectionQuiz": {
+        "id": "quiz-012",
+        "title": "Module 4 – Networks",
+        "sectionId": "step-036",
+        "estimatedDurationMinutes": 10,
+        "quizTakes": [],
+        "questions": [
+          {
+            "id": "question-129",
+            "questionNumber": 1,
+            "questionText": "True or False\nMembers can go to any provider they choose.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-344", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-345", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-130",
+            "questionNumber": 2,
+            "questionText": "What is the best way to describe the purpose of networks to a customer?",
+            "answerText": "They make healthcare easier and more convenient",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-346", "answerText": "They restrict where you can go", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-347", "answerText": "They make healthcare easier and more convenient", "answerTrueFalse": true, "answerOrdinal": "B" },
+              { "id": "choice-348", "answerText": "They prevent out-of-network care", "answerTrueFalse": false, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-131",
+            "questionNumber": 3,
+            "questionText": "If a provider is in-network, what is the correct process?",
+            "answerText": "Show your member card and pay your copay",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-349", "answerText": "Pay the full bill and submit paperwork", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-350", "answerText": "Show your member card and pay your copay", "answerTrueFalse": true, "answerOrdinal": "B" },
+              { "id": "choice-351", "answerText": "Call the network before the visit", "answerTrueFalse": false, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-132",
+            "questionNumber": 4,
+            "questionText": "If a provider is out-of-network, what should the member do?",
+            "answerText": "Pay the bill and upload the invoice through the app",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-352", "answerText": "Cancel the visit", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-353", "answerText": "Pay the bill and upload the invoice through the app", "answerTrueFalse": true, "answerOrdinal": "B" },
+              { "id": "choice-354", "answerText": "Wait for approval", "answerTrueFalse": false, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-133",
+            "questionNumber": 5,
+            "questionText": "True or False\nOut-of-network care is still allowed and accessible.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-355", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-356", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-134",
+            "questionNumber": 6,
+            "questionText": "For major health events handled through the health share, members must stay within a network.",
+            "answerText": "False",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-357", "answerText": "True", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-358", "answerText": "False", "answerTrueFalse": true, "answerOrdinal": "B" }
+            ]
+          },
+          {
+            "id": "question-135",
+            "questionNumber": 7,
+            "questionText": "Which statement is the best sales explanation of networks?",
+            "answerText": "Networks are there for convenience, not limitations",
+            "answerOrdinal": "B",
+            "answerChoices": [
+              { "id": "choice-359", "answerText": "You must stay in-network", "answerTrueFalse": false, "answerOrdinal": "A" },
+              { "id": "choice-360", "answerText": "Networks are there for convenience, not limitations", "answerTrueFalse": true, "answerOrdinal": "B" },
+              { "id": "choice-361", "answerText": "Out-of-network care is not available", "answerTrueFalse": false, "answerOrdinal": "C" }
+            ]
+          },
+          {
+            "id": "question-136",
+            "questionNumber": 8,
+            "questionText": "True or False\nThe main message to customers about networks should be flexibility and choice.",
+            "answerText": "True",
+            "answerOrdinal": "A",
+            "answerChoices": [
+              { "id": "choice-362", "answerText": "True", "answerTrueFalse": true, "answerOrdinal": "A" },
+              { "id": "choice-363", "answerText": "False", "answerTrueFalse": false, "answerOrdinal": "B" }
+            ]
+          }
+        ]
+      }
+    }
+  ]
+}

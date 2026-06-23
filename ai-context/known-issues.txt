@@ -1,0 +1,6 @@
+- Some commission APIs not yet connected to UI components (Phases 3–7)
+- Placeholder comments exist in commissionService backend
+- Agency CRUD APIs were recently added, need additional tests
+- Claude and Copilot must follow project standards from # OPEN-ENROLL PROJECT STANDARDS.txt
+- Role-based access requires strict enforcement using userType
+- Never bypass `requireTenantAccess` in any route

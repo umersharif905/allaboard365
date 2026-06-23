@@ -1,0 +1,13 @@
+{
+  "name": "allaboard-ledger-reconcile-job",
+  "version": "1.0.0",
+  "description": "Azure Functions — weekly DIME ledger reconcile (Sun 06:00 UTC, report-only)",
+  "scripts": {
+    "start": "func start",
+    "deploy": "bash ./create-and-deploy.sh"
+  },
+  "dependencies": {},
+  "devDependencies": {
+    "azure-functions-core-tools": "^4.x"
+  }
+}

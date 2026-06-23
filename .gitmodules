@@ -1,0 +1,6 @@
+[submodule "oe_payment_manager"]
+	path = oe_payment_manager
+	url = git@github.com:canderson70/oe_payment_manager.git
+[submodule "sharewell-csv-processor"]
+	path = sharewell-csv-processor
+	url = git@github.com:MightyWELL/sharewell-csv-processor.git

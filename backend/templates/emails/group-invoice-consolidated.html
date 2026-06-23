@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monthly Invoice - {{groupName}} - All Locations</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="700" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background-color: #1f8dbf; padding: 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Monthly Group Invoice</h1>
+              <p style="color: #e0f2fe; margin: 8px 0 0 0; font-size: 14px;">{{groupName}} - All Locations</p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td style="padding: 30px;">
+              <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px;">Dear {{contactName}},</p>
+              
+              <p style="margin: 0 0 20px 0; color: #374151; font-size: 14px; line-height: 1.6;">
+                This is your consolidated monthly benefits invoice for <strong>{{groupName}}</strong> across all {{locationCount}} locations.
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 6px; overflow: hidden; margin: 20px 0;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h2 style="margin: 0 0 16px 0; color: #111827; font-size: 18px; font-weight: 600;">Group Total</h2>
+                    
+                    <table width="100%" cellpadding="8" cellspacing="0">
+                      <tr>
+                        <td style="color: #6b7280; font-size: 14px;">Total Premium Amount</td>
+                        <td align="right" style="color: #111827; font-size: 24px; font-weight: 700;">{{grandTotal}}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #6b7280; font-size: 14px;">Total Coverage</td>
+                        <td align="right" style="color: #111827; font-size: 14px; font-weight: 500;">{{totalMembers}} members across {{totalHouseholds}} households</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #6b7280; font-size: 14px;">Invoice Date</td>
+                        <td align="right" style="color: #111827; font-size: 14px; font-weight: 500;">{{billingDate}}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #6b7280; font-size: 14px;">Payment Date</td>
+                        <td align="right" style="color: #111827; font-size: 14px; font-weight: 500;">{{paymentDate}}</td>
+                      </tr>
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <h2 style="margin: 30px 0 16px 0; color: #111827; font-size: 18px; font-weight: 600;">Location Breakdown</h2>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="border: 1px solid #e5e7eb; border-radius: 6px; overflow: hidden;">
+                <thead>
+                  <tr style="background-color: #f9fafb;">
+                    <th style="padding: 12px; text-align: left; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Location</th>
+                    <th style="padding: 12px; text-align: center; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Members / Households</th>
+                    <th style="padding: 12px; text-align: right; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Base Premium</th>
+                    <th style="padding: 12px; text-align: right; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Fees</th>
+                    <th style="padding: 12px; text-align: right; color: #6b7280; font-size: 12px; font-weight: 600; text-transform: uppercase;">Total</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {{locationBreakdown}}
+                </tbody>
+              </table>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="padding: 16px; background-color: #eff6ff; border-left: 4px solid #3b82f6; border-radius: 4px;">
+                    <p style="margin: 0; color: #1e40af; font-size: 13px; line-height: 1.5;">
+                      <strong>Note:</strong> Some locations are configured to have their premiums paid by the primary location. These charges are included in the primary location's invoice. To enable separate billing for a location, please add a payment method in the location settings.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                    <h3 style="margin: 0 0 8px 0; color: #92400e; font-size: 14px; font-weight: 600;">Payment Information</h3>
+                    <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+                      <strong>Invoice Date:</strong> {{billingDate}}<br>
+                      <strong>Payment Date:</strong> {{paymentDate}}<br>
+                      Payments will be automatically charged on <strong>{{paymentDate}}</strong> using the payment methods registered for each location. No action is required on your part.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 20px 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
+                Each location contact has received a detailed invoice for their specific location. This summary provides an overview of all billing across your organization.
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                    <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+                      <strong>Important:</strong> Please ensure all payment methods have sufficient funds available on the payment date to avoid payment failures.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 20px 0 0 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
+                If you have any questions about this invoice, please contact our support team.
+              </p>
+              
+              <p style="margin: 20px 0 0 0; color: #6b7280; font-size: 13px;">
+                Thank you for your business,<br>
+                <strong>OpenEnroll Benefits Team</strong>
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                © {{currentYear}} {{groupName}}. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
+
