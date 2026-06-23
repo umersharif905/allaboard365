@@ -4,6 +4,8 @@
   "description": "OpenEnroll Application",
   "type": "module",
   "scripts": {
+    "start": "func start",
+    "test": "jest",
     "test:enrollment:backend": "npm run test:enrollment --prefix backend",
     "test:enrollment:unit": "npm run test:enrollment:unit --prefix frontend",
     "test:enrollment:e2e": "npm run test:e2e:enrollment --prefix frontend",
@@ -11,16 +13,23 @@
     "test:e2e": "cypress run",
     "test:e2e:open": "cypress open",
     "test:env": "node test-env-vars.cjs",
-    "test:env:remote": "node test-env-vars.cjs --remote"
-  },
-  "devDependencies": {
-    "@playwright/test": "^1.55.0",
-    "cypress": "^15.0.0",
-    "typescript": "^5.0.0"
+    "test:env:remote": "node test-env-vars.cjs --remote",
+    "generate-admin-key": "node generate-admin-api-key.js",
+    "deploy": "bash ./deploy.sh",
+    "deploy:staging": "PAYMENT_MANAGER_APP_NAME=open-enroll-payment-manager-staging bash ./deploy.sh"
   },
   "dependencies": {
+    "@azure/functions": "^4.0.0",
+    "axios": "^1.6.0",
     "mssql": "^11.0.1",
     "node-fetch": "^3.3.2",
     "playwright": "^1.55.0"
+  },
+  "devDependencies": {
+    "@playwright/test": "^1.55.0",
+    "azure-functions-core-tools": "^4.x",
+    "cypress": "^15.0.0",
+    "jest": "^29.7.0",
+    "typescript": "^5.0.0"
   }
 }

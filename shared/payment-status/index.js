@@ -1,12 +1,15 @@
 'use strict';
 
 /**
+ * Vendored for Azure Functions deploy: the function app root has no repo parent, so
+ * require('../../shared/payment-status') fails on Azure. Keep in sync with
+ * ../../../shared/payment-status/index.js (repo root).
+ *
  * Single source of truth for DIME → oe.Payments status mapping and
  * "did money actually succeed?" checks. Keep in sync with index.d.ts.
  *
  * Used by: backend (dimeService, enrollment routes), oe_payment_manager (webhooks, sync).
  * Frontend ESM copy: frontend/src/constants/paymentStatus.ts (keep in sync).
- * Azure Functions vendored copy: oe_payment_manager/shared/payment-status/index.js (keep in sync).
  */
 
 /** Values that may appear in oe.Payments.Status for a successful capture */
@@ -94,6 +97,7 @@ function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
     const text = String(data.status_text ?? data.statusText ?? '');
     if (code !== '' || text !== '') {
       if (code === '00' && isDimeApprovedStatusText(text)) return 'Completed';
+      // List API often omits status_text when approved; 00 alone means success (same as webhook semantics).
       if (code === '00' && text === '') return 'Completed';
       if (code && code !== '00') return 'Failed';
     }
@@ -112,7 +116,7 @@ function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
   if (ts.includes('failed') || ts.includes('declined') || ts.includes('returned') || ts.includes('rejected')) {
     return 'Failed';
   }
-  // DIME /api/transactions list uses transaction_status like CC_CREDIT / ACH_PAYMENT_CREDIT (posted credits), not "CC Approved".
+  // List API posted-credit labels (empty status_code/text is normal on list rows).
   if (ts.includes('cc_credit') && !ts.includes('pending') && !ts.includes('rejected')) return 'Completed';
   if (
     ts.includes('ach_payment_credit') &&
@@ -122,6 +126,8 @@ function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
   ) {
     return 'Completed';
   }
+  // Settlement / sweep lines in merchant activity — not a card/ACH charge row; do not map to Pending.
+  if (ts === 'deposit') return 'Unknown';
   const statusMap = {
     completed: 'Completed',
     success: 'Completed',
@@ -137,6 +143,7 @@ function mapDimePayloadToPaymentRecordStatus(data, options = {}) {
   };
   const raw = data && typeof data === 'object' ? String(data.status || '').toLowerCase() : '';
   if (raw && statusMap[raw]) return statusMap[raw];
+  // Do not default unknown labels to Pending (caused false Pending for CC_CREDIT before explicit rules).
   return 'Unknown';
 }
 
@@ -196,13 +203,6 @@ function mapDimeSyncChargeResponseToDbStatus(data) {
   return mapChargeWebhookMappedStatusToDbStatus(mapped);
 }
 
-/**
- * recurring_payment_success for ACH fires when the debit is initiated (status_code 00, often empty
- * transaction_status). Do not persist Completed until DIME reports a settled ACH credit label.
- *
- * @param {Record<string, unknown>|null|undefined} dimePayload
- * @returns {string} oe.Payments.Status value
- */
 function mapRecurringSuccessWebhookToDbStatus(dimePayload) {
   const txType = String(
     dimePayload?.transaction_type ?? dimePayload?.transactionType ?? ''
@@ -263,10 +263,6 @@ function isSuccessfulPaymentRecordStatus(status) {
   );
 }
 
-/**
- * Lowercase set matching isSuccessfulPaymentRecordStatus after trim (CI collation-friendly SQL).
- * Keep aligned with the lower-branch checks in {@link isSuccessfulPaymentRecordStatus}.
- */
 const SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL = Object.freeze([
   'completed',
   'approval',
@@ -276,32 +272,21 @@ const SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL = Object.freeze([
   'paid',
 ]);
 
-/**
- * SQL expression — 0 if status is successful per {@link isSuccessfulPaymentRecordStatus}, else 1.
- * Use in ORDER BY: successful rows first when combined with p.PaymentDate DESC.
- * @param {string} columnRef e.g. `p.Status`
- */
 function sqlSuccessfulPaymentOrderKeyExpr(columnRef) {
   const inList = SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL.map((s) => `N'${s}'`).join(', ');
   return `(CASE WHEN LOWER(LTRIM(RTRIM(${columnRef}))) IN (${inList}) THEN 0 ELSE 1 END)`;
 }
 
-/**
- * SQL predicate (boolean) — true when status matches {@link isSuccessfulPaymentRecordStatus} (trim + lower).
- * @param {string} columnRef e.g. `p.Status`
- */
 function sqlSuccessfulPaymentPredicate(columnRef) {
   const inList = SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL.map((s) => `N'${s}'`).join(', ');
   return `(LOWER(LTRIM(RTRIM(${columnRef}))) IN (${inList}))`;
 }
 
 /**
- * DIME recurring_payment_failed payloads (2025–2026+) send `transaction_error` + `transaction_error_code`.
- * Older samples used `failure_reason`. Prefer legacy when present so we do not overwrite a customized string.
+ * DIME recurring_payment_failed payloads send `transaction_error` + `transaction_error_code`.
+ * Older samples used `failure_reason`. Keep in sync with ../../../shared/payment-status/index.js.
  *
- * Stored shape examples: `[23] Lookup on supplied token failed...` or legacy free text.
- *
- * @param {Record<string, unknown>} data - raw `data` / webhook body subset from DIME
+ * @param {Record<string, unknown>} data
  * @returns {string}
  */
 function formatDimeRecurringFailureReasonForStorage(data) {
@@ -321,8 +306,6 @@ function formatDimeRecurringFailureReasonForStorage(data) {
   }
   if (errCode) return `[${errCode}] (no message from processor)`;
 
-  // Retry / thinner recurring_failure payloads sometimes omit transaction_error* but still send
-  // status_code + status_text (same pattern as charge webhooks — docs/dime-webhook-format.md).
   const chargeFallback = formatDimeChargeFailureReasonForStorage(data);
   if (chargeFallback) return chargeFallback;
 
@@ -330,8 +313,7 @@ function formatDimeRecurringFailureReasonForStorage(data) {
 }
 
 /**
- * One-time CC / ACH charge webhooks: synthesize a single human-readable decline line when `failure_reason` is empty.
- * Align with fields DIME commonly sends (status_code, status_text, transaction_error, etc.).
+ * CC/ACH charge decline webhooks — align with docs/oe_payment_manager/dime-webhook-format.md.
  *
  * @param {Record<string, unknown>} data
  * @returns {string}
@@ -386,122 +368,7 @@ function isDimePostedCreditTransactionStatus(transactionStatus) {
   return false;
 }
 
-/**
- * Best-effort processor transaction correlation on recurring failures (often absent on declines).
- *
- * @param {Record<string, unknown>} data
- * @returns {string|null}
- */
-function normalizeDimeRecurringProcessorTransactionId(data) {
-  if (!data || typeof data !== 'object') return null;
-  const id =
-    data.transaction_id ??
-    data.transactionNumber ??
-    data.transaction_number ??
-    data.processor_transaction_id ??
-    null;
-  if (id == null || String(id).trim() === '') return null;
-  return String(id).trim();
-}
-
-/**
- * Some DIME webhook bodies include a billing / retry attempt ordinal (field names vary).
- * Use for member-facing copy (e.g. "retry attempt 3") when persisted AttemptNumber is not yet set.
- *
- * @param {Record<string, unknown>} data
- * @returns {number|null}
- */
-function extractDimePaymentRetryAttemptFromPayload(data) {
-  if (!data || typeof data !== 'object') return null;
-  const keys = [
-    'attempt_number',
-    'attemptNumber',
-    'billing_attempt_number',
-    'billingAttemptNumber',
-    'retry_attempt_number',
-    'retryAttemptNumber',
-    'recurrence_attempt',
-    'recurrenceAttempt',
-    'payment_attempt_number',
-    'paymentAttemptNumber',
-    'installment_attempt',
-    'installmentAttempt'
-  ];
-  for (const k of keys) {
-    if (!Object.prototype.hasOwnProperty.call(data, k)) continue;
-    const v = data[k];
-    if (v == null || v === '') continue;
-    const n = parseInt(String(v).trim(), 10);
-    if (Number.isFinite(n) && n >= 1) return n;
-  }
-  return null;
-}
-
-/** Copy webhook root fields minus envelope keys (flattened payloads / empty nested `data`). */
-function stripDimeWebhookEnvelope(raw) {
-  const data = { .../** @type {Record<string, unknown>} */ (raw) };
-  delete data.event_type;
-  delete data.eventType;
-  delete data.type;
-  delete data.data;
-  return data;
-}
-
-/**
- * Normalize inbound DIME payloads from either OpenEnveloped `{ event_type, data }` posts or flattened
- * root-level payloads (`type`, `schedule_id`, `transaction_number`, …).
- * Keeps oe_payment_manager and backend aligned with docs/oe_payment_manager/dime-webhook-format.md.
- *
- * @param {Record<string, unknown>} raw
- * @returns {{ eventType: string; data: Record<string, unknown> }}
- */
-function normalizeInboundRecurringWebhookBody(raw) {
-  if (!raw || typeof raw !== 'object') return { eventType: '', data: {} };
-
-  /** @type {string} */
-  let eventType = '';
-  /** @type {Record<string, unknown>} */
-  let data = {};
-
-  if (
-    typeof raw.event_type === 'string' &&
-    raw.event_type.trim() !== '' &&
-    raw.data != null &&
-    typeof raw.data === 'object'
-  ) {
-    eventType = raw.event_type.trim();
-    const inner = { .../** @type {Record<string, unknown>} */ (raw.data) };
-    /** DIME may send `{ event_type, data: {} }` with declines on the JSON root (`transaction_error*`). */
-    data = Object.keys(inner).length > 0 ? inner : stripDimeWebhookEnvelope(raw);
-  } else if (typeof raw.event_type === 'string' && raw.event_type.trim() !== '') {
-    eventType = raw.event_type.trim();
-    data = stripDimeWebhookEnvelope(raw);
-  } else if (typeof raw.eventType === 'string' && raw.eventType.trim() !== '') {
-    eventType = raw.eventType.trim();
-    data = stripDimeWebhookEnvelope(raw);
-  } else if (typeof raw.type === 'string' && raw.type.trim() !== '') {
-    eventType = raw.type.trim();
-    data = stripDimeWebhookEnvelope(raw);
-  } else {
-    if (
-      raw.data &&
-      typeof raw.data === 'object' &&
-      Object.keys(/** @type {Record<string, unknown>} */ (raw.data)).length > 0
-    ) {
-      data = { .../** @type {Record<string, unknown>} */ (raw.data) };
-    } else {
-      data = stripDimeWebhookEnvelope(raw);
-    }
-  }
-
-  if (eventType === 'recurring_payment_success') eventType = 'recurring_payment.success';
-  if (eventType === 'recurring_payment_failed') eventType = 'recurring_payment.failed';
-
-  return { eventType, data };
-}
-
 module.exports = {
-  normalizeInboundRecurringWebhookBody,
   isDimeChargeApproved,
   shouldTreatRecurringSuccessWebhookAsDeclined,
   isDimePendingFlagTrue,
@@ -511,14 +378,11 @@ module.exports = {
   mapRecurringSuccessWebhookToDbStatus,
   mapDimeRowToPaymentRecordStatus,
   isSuccessfulPaymentRecordStatus,
-  formatDimeRecurringFailureReasonForStorage,
-  formatDimeChargeFailureReasonForStorage,
-  isDimePostedCreditTransactionStatus,
-  normalizeDimeRecurringProcessorTransactionId,
-  extractDimePaymentRetryAttemptFromPayload,
   SUCCESSFUL_PAYMENT_RECORD_STATUSES: SUCCESSFUL_PAYMENT_RECORD_STATUSES_EXACT,
   SUCCESSFUL_PAYMENT_RECORD_STATUSES_LOWER_SQL,
   sqlSuccessfulPaymentOrderKeyExpr,
   sqlSuccessfulPaymentPredicate,
+  formatDimeRecurringFailureReasonForStorage,
+  formatDimeChargeFailureReasonForStorage,
+  isDimePostedCreditTransactionStatus,
 };
-

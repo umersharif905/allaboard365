@@ -1,0 +1,6 @@
+# Generated test output files
+test-invoice-output.html
+
+# Test results
+*.log
+

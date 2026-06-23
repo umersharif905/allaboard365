@@ -1,0 +1,22 @@
+{
+  "IsEncrypted": false,
+  "Values": {
+    "AzureWebJobsStorage": "UseDevelopmentStorage=true",
+    "FUNCTIONS_WORKER_RUNTIME": "node",
+    "DB_USER": "your_db_user",
+    "DB_PASSWORD": "your_db_password",
+    "DB_SERVER": "your_db_server.database.windows.net",
+    "DB_NAME": "OpenEnroll",
+    "DIME_API_KEY": "your_dime_api_key",
+    "DIME_SID": "your_dime_sid",
+    "DIME_BASE_URL": "https://api.dimepay.com",
+    "DIME_WEBHOOK_SECRET": "your_webhook_secret",
+    "ADMIN_API_KEY": "your_admin_api_key_generate_with_crypto",
+    "NODE_ENV": "development",
+    "DIME_STATUS_AUDIT_LOOKBACK_HOURS": "168",
+    "DIME_STATUS_AUDIT_LIMIT": "500",
+    "DIME_STATUS_AUDIT_TIMER_DISABLED": "true",
+    "DIME_STATUS_AUDIT_TENANT_IDS": ""
+  }
+}
+

@@ -1,0 +1,26 @@
+{
+  "version": "2.0",
+  "logging": {
+    "applicationInsights": {
+      "samplingSettings": {
+        "isEnabled": true
+      }
+    },
+    "logLevel": {
+      "default": "Information",
+      "Function": "Information"
+    }
+  },
+  "functionTimeout": "00:10:00",
+  "extensions": {
+    "http": {
+      "routePrefix": "api"
+    },
+    "sql": {
+      "MaxBatchSize": 100,
+      "PollingIntervalMs": 1000,
+      "MaxChangesPerWorker": 1000
+    }
+  }
+}
+

@@ -1,0 +1,206 @@
+{
+  "info": {
+    "name": "Azure Functions - Payment Manager",
+    "description": "Test collection for OpenEnroll Payment Manager Azure Functions",
+    "schema": "https://schema.getpostman.com/json/collection/v2.1.0/collection.json"
+  },
+  "item": [
+    {
+      "name": "Manual Trigger - Production",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "a2fb9635baeaab58f1c8887b90ebb61c13664c7a5a1bf490d112757928930b6c",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/manual-run",
+          "protocol": "https",
+          "host": [
+            "oe-payment-manager-fyerfvdyb3atffhj",
+            "eastus2-01",
+            "azurewebsites",
+            "net"
+          ],
+          "path": [
+            "api",
+            "manual-run"
+          ]
+        },
+        "description": "Manually trigger the monthly payment scheduler. This will process all active groups."
+      }
+    },
+    {
+      "name": "Manual Trigger - Local",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "x-api-key",
+            "value": "a2fb9635baeaab58f1c8887b90ebb61c13664c7a5a1bf490d112757928930b6c",
+            "type": "text"
+          },
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "url": {
+          "raw": "http://localhost:7071/api/manual-run",
+          "protocol": "http",
+          "host": [
+            "localhost"
+          ],
+          "port": "7071",
+          "path": [
+            "api",
+            "manual-run"
+          ]
+        },
+        "description": "Test the manual trigger on local Azure Functions instance."
+      }
+    },
+    {
+      "name": "Webhook - Test Event (Production)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_type\": \"test\",\n  \"data\": {\n    \"test\": true\n  }\n}"
+        },
+        "url": {
+          "raw": "https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/webhooks/dime",
+          "protocol": "https",
+          "host": [
+            "oe-payment-manager-fyerfvdyb3atffhj",
+            "eastus2-01",
+            "azurewebsites",
+            "net"
+          ],
+          "path": [
+            "api",
+            "webhooks",
+            "dime"
+          ]
+        },
+        "description": "Test the webhook processor endpoint."
+      }
+    },
+    {
+      "name": "Webhook - Payment Success (Production)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "x-dime-signature",
+            "value": "sha256=test_signature",
+            "type": "text",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_type\": \"recurring_payment.success\",\n  \"data\": {\n    \"schedule_id\": \"schedule-test-123\",\n    \"transaction_id\": \"txn-test-456\",\n    \"amount\": 299.99,\n    \"status\": \"success\"\n  }\n}"
+        },
+        "url": {
+          "raw": "https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/webhooks/dime",
+          "protocol": "https",
+          "host": [
+            "oe-payment-manager-fyerfvdyb3atffhj",
+            "eastus2-01",
+            "azurewebsites",
+            "net"
+          ],
+          "path": [
+            "api",
+            "webhooks",
+            "dime"
+          ]
+        },
+        "description": "Simulate a payment success webhook from DIME."
+      }
+    },
+    {
+      "name": "Webhook - Payment Failed (Production)",
+      "request": {
+        "method": "POST",
+        "header": [
+          {
+            "key": "Content-Type",
+            "value": "application/json",
+            "type": "text"
+          },
+          {
+            "key": "x-dime-signature",
+            "value": "sha256=test_signature",
+            "type": "text",
+            "disabled": true
+          }
+        ],
+        "body": {
+          "mode": "raw",
+          "raw": "{\n  \"event_type\": \"recurring_payment.failed\",\n  \"data\": {\n    \"schedule_id\": \"schedule-test-123\",\n    \"transaction_id\": \"txn-test-789\",\n    \"amount\": 299.99,\n    \"status\": \"failed\",\n    \"failure_reason\": \"Insufficient funds\"\n  }\n}"
+        },
+        "url": {
+          "raw": "https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/api/webhooks/dime",
+          "protocol": "https",
+          "host": [
+            "oe-payment-manager-fyerfvdyb3atffhj",
+            "eastus2-01",
+            "azurewebsites",
+            "net"
+          ],
+          "path": [
+            "api",
+            "webhooks",
+            "dime"
+          ]
+        },
+        "description": "Simulate a payment failure webhook from DIME."
+      }
+    },
+    {
+      "name": "Health Check (Production)",
+      "request": {
+        "method": "GET",
+        "header": [],
+        "url": {
+          "raw": "https://oe-payment-manager-fyerfvdyb3atffhj.eastus2-01.azurewebsites.net/",
+          "protocol": "https",
+          "host": [
+            "oe-payment-manager-fyerfvdyb3atffhj",
+            "eastus2-01",
+            "azurewebsites",
+            "net"
+          ],
+          "path": [
+            ""
+          ]
+        },
+        "description": "Check if the Azure Function App is online."
+      }
+    }
+  ]
+}
+

@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Monthly Invoice - {{locationName}}</title>
+</head>
+<body style="margin: 0; padding: 0; font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif; background-color: #f3f4f6;">
+  <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f3f4f6; padding: 20px 0;">
+    <tr>
+      <td align="center">
+        <table width="600" cellpadding="0" cellspacing="0" style="background-color: #ffffff; border-radius: 8px; overflow: hidden; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <tr>
+            <td style="background-color: #f59e0b; padding: 30px; text-align: center;">
+              <h1 style="color: #ffffff; margin: 0; font-size: 24px; font-weight: 600;">Monthly Benefits Invoice</h1>
+              <p style="color: #fef3c7; margin: 8px 0 0 0; font-size: 14px;">{{locationName}}</p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td style="padding: 30px;">
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 0 0 20px 0;">
+                <tr>
+                  <td style="padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                    <h3 style="margin: 0 0 8px 0; color: #92400e; font-size: 16px; font-weight: 600;">Notice: No Payment Method on File</h3>
+                    <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+                      This location does not have a valid payment method configured. Your premium will be charged to the <strong>primary group location's</strong> payment account.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 0 0 20px 0; color: #374151; font-size: 16px;">Dear {{contactName}},</p>
+              
+              <p style="margin: 0 0 20px 0; color: #374151; font-size: 14px; line-height: 1.6;">
+                This is your monthly benefits invoice for <strong>{{locationName}}</strong>. The amount shown below will be included in the primary location's billing.
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="background-color: #f9fafb; border-radius: 6px; overflow: hidden; margin: 20px 0;">
+                <tr>
+                  <td style="padding: 20px;">
+                    <h2 style="margin: 0 0 16px 0; color: #111827; font-size: 18px; font-weight: 600;">Invoice Summary</h2>
+                    
+                    <table width="100%" cellpadding="8" cellspacing="0">
+                      <tr>
+                        <td style="color: #6b7280; font-size: 14px;">Premium Amount</td>
+                        <td align="right" style="color: #111827; font-size: 18px; font-weight: 600;">{{totalAmount}}</td>
+                      </tr>
+                      <tr>
+                        <td style="color: #6b7280; font-size: 14px;">Coverage</td>
+                        <td align="right" style="color: #111827; font-size: 14px; font-weight: 500;">{{memberCount}} members across {{householdCount}} households</td>
+                      </tr>
+                      {{#processingFees}}
+                      <tr>
+                        <td colspan="2" style="padding-top: 12px; border-top: 1px solid #e5e7eb;">
+                          <table width="100%" cellpadding="4" cellspacing="0">
+                            <tr>
+                              <td style="color: #6b7280; font-size: 13px;">Base Premium:</td>
+                              <td align="right" style="color: #374151; font-size: 13px;">{{basePremium}}</td>
+                            </tr>
+                            <tr>
+                              <td style="color: #6b7280; font-size: 13px;">Processing Fees:</td>
+                              <td align="right" style="color: #374151; font-size: 13px;">{{processingFees}}</td>
+                            </tr>
+                          </table>
+                        </td>
+                      </tr>
+                      {{/processingFees}}
+                    </table>
+                  </td>
+                </tr>
+              </table>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="padding: 16px; background-color: #fef2f2; border-left: 4px solid #ef4444; border-radius: 4px;">
+                    <h3 style="margin: 0 0 8px 0; color: #991b1b; font-size: 14px; font-weight: 600;">Payment Will Be Charged to Primary Location</h3>
+                    <p style="margin: 0; color: #991b1b; font-size: 13px; line-height: 1.5;">
+                      This premium is included in the primary group location's total cost because this location does not have a valid payment method on file.<br><br>
+                      <strong>Invoice Date:</strong> {{billingDate}}<br>
+                      <strong>Payment Date:</strong> {{paymentDate}}<br>
+                      <strong>Payment Method:</strong> PRIMARY LOCATION's payment method
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 20px 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
+                To enable direct billing for this location, please add a payment method in your location settings. This will allow your location to be billed separately from the primary location.
+              </p>
+              
+              <table width="100%" cellpadding="0" cellspacing="0" style="margin: 20px 0;">
+                <tr>
+                  <td style="padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 4px;">
+                    <p style="margin: 0; color: #92400e; font-size: 13px; line-height: 1.5;">
+                      <strong>Important:</strong> Payment will be automatically charged on {{paymentDate}} using the PRIMARY LOCATION's payment method. No action is required on your part.
+                    </p>
+                  </td>
+                </tr>
+              </table>
+              
+              <p style="margin: 20px 0 0 0; color: #6b7280; font-size: 13px; line-height: 1.6;">
+                If you have any questions about this invoice, please contact your group administrator.
+              </p>
+              
+              <p style="margin: 20px 0 0 0; color: #6b7280; font-size: 13px;">
+                Thank you,<br>
+                <strong>{{groupName}}</strong>
+              </p>
+            </td>
+          </tr>
+          
+          <tr>
+            <td style="background-color: #f9fafb; padding: 20px; text-align: center; border-top: 1px solid #e5e7eb;">
+              <p style="margin: 0; color: #9ca3af; font-size: 12px;">
+                © {{currentYear}} {{groupName}}. All rights reserved.
+              </p>
+            </td>
+          </tr>
+        </table>
+      </td>
+    </tr>
+  </table>
+</body>
+</html>
