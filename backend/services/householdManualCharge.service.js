@@ -4,6 +4,7 @@
  */
 const { sql } = require('../config/database');
 const PaymentDatabaseService = require('./paymentDatabaseService');
+const PaymentGatewayService = require('./paymentGatewayService');
 const DimeService = require('./dimeService');
 const encryptionService = require('./encryptionService');
 const { resolveAchRoutingForCharge } = require('../utils/achRouting');
@@ -222,6 +223,11 @@ async function executeHouseholdManualCharge(pool, opts) {
     customerId: dimeCustomerId,
     amount: chargeAmount,
     description: chargeDesc,
+    memberId:        primary.MemberId,
+    paymentMethodId: mpm.PaymentMethodId,
+    invoiceId:       targetInvoiceId || null,
+    householdId:     householdId,       // ← must be here
+    agentId:         primary.AgentId || null,
     invoiceNumber,
     paymentMethodType,
     idempotencyKey,
@@ -230,6 +236,12 @@ async function executeHouseholdManualCharge(pool, opts) {
     billingCity: (mpm.BillingCity && String(mpm.BillingCity).trim()) || undefined,
     billingState: (mpm.BillingState && String(mpm.BillingState).trim()) || undefined,
     billingZip: (mpm.BillingZip && String(mpm.BillingZip).trim()) || undefined,
+    firstName: (mpm.CardholderName || '').split(' ')[0] || '',
+    lastName:  (mpm.CardholderName || '').split(' ').slice(1).join(' ') || '',
+    address:   (mpm.BillingAddress && String(mpm.BillingAddress).trim()) || '',
+    city:      (mpm.BillingCity    && String(mpm.BillingCity).trim())    || '',
+    state:     (mpm.BillingState   && String(mpm.BillingState).trim())   || '',
+    zip:       (mpm.BillingZip     && String(mpm.BillingZip).trim())     || '',
   };
 
   if (paymentMethodType === 'ACH') {
@@ -276,17 +288,21 @@ async function executeHouseholdManualCharge(pool, opts) {
     paymentPayload.bankName = mpm.BankName || 'Bank';
     paymentPayload.billingFirstName = nameParts[0] || '';
     paymentPayload.billingLastName = (nameParts.slice(1).join(' ') || '').trim();
-  } else {
-    paymentPayload.paymentMethodId = mpm.ProcessorPaymentMethodId;
-    paymentPayload.paymentMethodToken = mpm.ProcessorToken ? String(mpm.ProcessorToken).trim() : undefined;
-    paymentPayload.cardholderName = (mpm.CardholderName && String(mpm.CardholderName).trim()) || undefined;
-  }
+    } else {
+      paymentPayload.processorPaymentMethodId = mpm.ProcessorPaymentMethodId;
+      paymentPayload.paymentMethodToken = mpm.ProcessorToken ? String(mpm.ProcessorToken).trim() : undefined;
+      paymentPayload.cardholderName = (mpm.CardholderName && String(mpm.CardholderName).trim()) || undefined;
+    }
 
-  let paymentResult = await DimeService.processPayment(paymentPayload, tenantId);
-  const tokenLookupFailure = isDimeStoredTokenLookupFailure(paymentResult);
-  const hasEncryptedPan = !!mpm.CardNumberEncrypted;
+    const activeProcessor = await PaymentGatewayService.getActiveProcessor(tenantId);
+    const isDimeProcessor = activeProcessor !== 'nmi';
 
-  if (paymentMethodType === 'Card' && (!paymentResult.success || !paymentResult.transactionId) && tokenLookupFailure && mpm.CardNumberEncrypted) {
+    let paymentResult = await PaymentGatewayService.processPayment(paymentPayload, tenantId);
+
+    const tokenLookupFailure = isDimeProcessor && isDimeStoredTokenLookupFailure(paymentResult);
+    const hasEncryptedPan = !!mpm.CardNumberEncrypted;
+
+  if (isDimeProcessor && paymentMethodType === 'Card' && (!paymentResult.success || !paymentResult.transactionId) && tokenLookupFailure && mpm.CardNumberEncrypted) {
     try {
       const decrypted = encryptionService.decryptPaymentData({
         cardNumberEncrypted: mpm.CardNumberEncrypted,
@@ -350,6 +366,7 @@ async function executeHouseholdManualCharge(pool, opts) {
       console.error('❌ manual charge: PAN retry failed:', panErr?.message || panErr);
     }
   } else if (
+    isDimeProcessor &&
     paymentMethodType === 'Card' &&
     (!paymentResult.success || !paymentResult.transactionId) &&
     tokenLookupFailure &&
@@ -457,35 +474,41 @@ async function executeHouseholdManualCharge(pool, opts) {
   }
 
   let stored;
-  try {
-    stored = await PaymentDatabaseService.storePaymentRecord({
-      enrollmentId: null,
-      householdId,
-      amount: chargeAmount,
-      status: recordStatus,
-      paymentMethod: paymentMethodType,
-      processorTransactionId: paymentResult.transactionId,
-      processorResponse: paymentResult.processorResponse
-        ? JSON.stringify(paymentResult.processorResponse)
-        : null,
-      paymentDate: new Date(),
-      agentId,
-      tenantId,
-      invoiceId: chargeNowInvoiceId,
-      createdBy: actingUserId || null,
-    });
-  } catch (storeErr) {
-    console.error('❌ manual charge: storePaymentRecord failed after DIME success:', storeErr?.message || storeErr);
-    return {
-      ok: false,
-      statusCode: 500,
-      body: {
-        success: false,
-        message:
-          'Payment was approved by the processor but we could not save the payment record. Contact support with your bank statement if a charge appears.',
-      },
-    };
-  }
+
+    if (isDimeProcessor) {
+      try {
+        stored = await PaymentDatabaseService.storePaymentRecord({
+          enrollmentId: null,
+          householdId,
+          amount: chargeAmount,
+          status: recordStatus,
+          paymentMethod: paymentMethodType,
+          processorTransactionId: paymentResult.transactionId,
+          processorResponse: paymentResult.processorResponse
+            ? JSON.stringify(paymentResult.processorResponse)
+            : null,
+          paymentDate: new Date(),
+          agentId,
+          tenantId,
+          invoiceId: chargeNowInvoiceId,
+          createdBy: actingUserId || null,
+        });
+      } catch (storeErr) {
+        console.error('❌ manual charge: storePaymentRecord failed after DIME success:', storeErr?.message || storeErr);
+        return {
+          ok: false,
+          statusCode: 500,
+          body: {
+            success: false,
+            message: 'Payment was approved by the processor but we could not save the payment record. Contact support with your bank statement if a charge appears.',
+          },
+        };
+      }
+    } else {
+      // NMI already inserted its own record in NmiService.processPayment — skip storePaymentRecord
+      stored = { PaymentId: paymentResult.transactionId || `NMI-${Date.now()}` };
+      console.log('✅ NMI: skipping storePaymentRecord, already saved. transactionId:', paymentResult.transactionId);
+    }
 
   const invoiceService = require('./invoiceService');
   let dimeRecurringSynced = false;
